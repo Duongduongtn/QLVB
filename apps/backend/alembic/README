@@ -1,0 +1,11 @@
+Migrations — Alembic.
+
+- Tạo migration mới:   alembic revision --autogenerate -m "mo ta"
+- Chạy lên đầu:        alembic upgrade head
+- Lùi 1 bước:          alembic downgrade -1
+- Xem lịch sử:         alembic history --verbose
+
+Quy tắc:
+- KHÔNG sửa migration đã merge vào main → tạo migration mới.
+- Migration phải reversible (downgrade chạy được).
+- Seed (2 units + admin) đặt trong migration cuối cùng của bộ initial.

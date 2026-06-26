@@ -1,0 +1,61 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//d/Du_An/impeccable/**)",
+      "Read(//d/Du_An/_references/agent-skills/skills/code-review-and-quality/**)",
+      "Read(//d/Du_An/_references/agent-skills/skills/test-driven-development/**)",
+      "Read(//d/Du_An/_references/everything-claude-code/.agents/skills/e2e-testing/**)",
+      "Read(//d/Du_An/_references/everything-claude-code/.agents/skills/backend-patterns/**)",
+      "Read(//d/Du_An/_references/everything-claude-code/.agents/skills/frontend-patterns/**)",
+      "Read(//d/Du_An/_references/everything-claude-code/.kiro/skills/database-migrations/**)",
+      "Read(//d/Du_An/_references/everything-claude-code/.kiro/skills/python-patterns/**)",
+      "Read(//d/Du_An/_references/md2html/**)",
+      "Read(//d/Du_An/_references/agent-skills/skills/frontend-ui-engineering/**)",
+      "Read(//d/Du_An/_references/agent-skills/skills/api-and-interface-design/**)",
+      "Read(//d/Du_An/_references/agent-skills/skills/documentation-and-adrs/**)",
+      "Read(//d/Du_An/_references/agentmemory/plugin/skills/recall/**)",
+      "Read(//d/Du_An/_references/thue-tncn-vietnam/**)",
+      "Read(//d/Du_An/_references/everything-claude-code/.agents/skills/security-review/**)",
+      "Read(//d/Du_An/_references/everything-claude-code/.kiro/skills/docker-patterns/**)",
+      "Read(//d/Du_An/_references/everything-claude-code/.kiro/skills/postgres-patterns/**)",
+      "Read(//d/Du_An/_references/everything-claude-code/.kiro/skills/python-testing/**)",
+      "Read(//d/Du_An/_references/agent-skills/skills/debugging-and-error-recovery/**)",
+      "Read(//d/Du_An/_references/antigravity-awesome-skills/plugins/antigravity-awesome-skills-claude/skills/form-cro/**)",
+      "Read(//d/Du_An/_references/antigravity-awesome-skills/plugins/antigravity-awesome-skills-claude/skills/fp-react/**)",
+      "Read(//d/Du_An/_references/antigravity-awesome-skills/plugins/antigravity-awesome-skills-claude/skills/azure-ai-document-intelligence-py/**)",
+      "Read(//d/Du_An/_references/antigravity-awesome-skills/plugins/antigravity-awesome-skills-claude/skills/fastapi-pro/**)",
+      "Read(//d/Du_An/_references/antigravity-awesome-skills/plugins/antigravity-awesome-skills-claude/skills/django-pro/**)",
+      "Read(//d/Du_An/_references/everything-claude-code/.kiro/skills/deployment-patterns/**)",
+      "Read(//d/Du_An/_references/andrej-karpathy-skills/skills/karpathy-guidelines/**)",
+      "Read(//d/Du_An/_references/everything-claude-code/.agents/skills/tdd-workflow/**)",
+      "Read(//d/Du_An/_references/everything-claude-code/.agents/skills/api-design/**)",
+      "Read(//d/Du_An/_references/everything-claude-code/.agents/skills/eval-harness/**)",
+      "Read(//d/Du_An/_references/antigravity-awesome-skills/plugins/antigravity-awesome-skills-claude/skills/react-best-practices/**)",
+      "Read(//d/Du_An/_references/antigravity-awesome-skills/plugins/antigravity-awesome-skills-claude/skills/shadcn/**)",
+      "Read(//d/Du_An/_references/antigravity-awesome-skills/plugins/antigravity-awesome-skills-claude/skills/tanstack-query-expert/**)",
+      "Read(//d/Du_An/_references/antigravity-awesome-skills/plugins/antigravity-awesome-skills-claude/skills/typescript-pro/**)",
+      "Read(//d/Du_An/_references/agent-skills/skills/incremental-implementation/**)",
+      "Read(//d/Du_An/_references/antigravity-awesome-skills/plugins/antigravity-awesome-skills-claude/skills/e2e-testing/**)",
+      "Read(//d/Du_An/_references/antigravity-awesome-skills/plugins/antigravity-awesome-skills-claude/skills/api-security-best-practices/**)",
+      "Read(//d/Du_An/_references/agent-skills/skills/using-agent-skills/**)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\Admin\\AppData\\Local\\Temp\\shdt-deploy\\.github\\workflows"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/hook.mjs\"",
+            "timeout": 5,
+            "statusMessage": "Checking UI changes"
+          }
+        ]
+      }
+    ]
+  }
+}

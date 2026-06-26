@@ -1,0 +1,53 @@
+# ─────────────────────────────────────────────────────────
+# Worker image — LibreOffice + PaddleOCR + rembg cài sẵn.
+# Cách ly mạng (xem docker-compose) — TDD §2.4 trust boundary.
+# Share codebase với backend (cùng pyproject) — chỉ thay entrypoint.
+# ─────────────────────────────────────────────────────────
+FROM python:3.11-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    TZ=Asia/Ho_Chi_Minh \
+    DEBIAN_FRONTEND=noninteractive
+
+# LibreOffice + dependencies cho PaddleOCR + rembg
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        libpq-dev \
+        libreoffice \
+        libreoffice-l10n-vi \
+        fonts-liberation \
+        fonts-dejavu \
+        libgl1 \
+        libglib2.0-0 \
+        libsm6 \
+        libxext6 \
+        libxrender1 \
+        ca-certificates \
+        tzdata \
+        curl \
+    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+RUN useradd --create-home --shell /bin/bash qlcv
+
+COPY apps/backend/pyproject.toml /app/
+RUN pip install --upgrade pip && pip install -e .[dev]
+
+COPY apps/backend /app
+
+# Pre-download model PaddleOCR `vie` để không tải runtime (offline-safe)
+# Bỏ comment khi sẵn sàng cho prod:
+# RUN python -c "from paddleocr import PaddleOCR; PaddleOCR(lang='vi', use_angle_cls=True)"
+
+RUN mkdir -p /var/qlcv/storage && chown -R qlcv:qlcv /var/qlcv /app
+USER qlcv
+
+# Mặc định chạy worker. Beat container override CMD.
+CMD ["celery", "-A", "app.core.celery_app:celery", "worker", \
+     "--loglevel=info", \
+     "--concurrency=2", \
+     "-Q", "default,convert,ocr,rembg,zip,r2"]

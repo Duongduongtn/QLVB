@@ -1,0 +1,150 @@
+[project]
+name = "qlcv-backend"
+version = "0.1.0"
+description = "QLCV — Backend FastAPI + Celery worker (chia sẻ codebase)"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    # Web framework
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "gunicorn>=23.0",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "python-multipart>=0.0.12",
+
+    # Auth + session
+    "bcrypt>=4.2",
+    "itsdangerous>=2.2",
+
+    # DB + migration
+    "sqlalchemy>=2.0",
+    "alembic>=1.14",
+    "psycopg[binary]>=3.2",
+
+    # Cache + broker + queue
+    "redis>=5.2",
+    "celery>=5.4",
+
+    # PDF + OCR + xử lý ảnh + ký số
+    "pymupdf>=1.24",
+    "paddleocr>=2.9",
+    "paddlepaddle>=2.6",
+    "rembg>=2.0",
+    "opencv-python-headless>=4.10",
+    "pyhanko>=0.25",
+    "pyhanko-certvalidator>=0.26",
+    "pillow>=11.0",
+
+    # Storage R2 (S3 API)
+    "boto3>=1.35",
+
+    # Crypto envelope
+    "cryptography>=43.0",
+
+    # Excel report
+    "openpyxl>=3.1",
+
+    # Web Push
+    "pywebpush>=2.0",
+
+    # Logging + observability
+    "structlog>=24.4",
+    "sentry-sdk[fastapi,celery]>=2.18",
+
+    # Utils
+    "python-dateutil>=2.9",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
+    "factory-boy>=3.3",
+    "freezegun>=1.5",
+    "ruff>=0.7",
+    "black>=24.10",
+    "isort>=5.13",
+    "mypy>=1.13",
+    "types-redis",
+    "types-python-dateutil",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+# ─────────────────────────────────────────────
+# Ruff — lint nhanh
+# ─────────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # isort
+    "B",        # bugbear
+    "UP",       # pyupgrade
+    "SIM",      # simplify
+    "TID",      # tidy imports
+    "RUF",      # ruff-specific
+]
+ignore = [
+    "E501",  # line-length — để black/format quyết
+    "B008",  # function-call-in-default (FastAPI Depends)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"alembic/versions/*.py" = ["E", "F", "I"]
+"tests/**/*.py" = ["S101"]  # cho phép assert
+
+# ─────────────────────────────────────────────
+# Black + isort
+# ─────────────────────────────────────────────
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+# ─────────────────────────────────────────────
+# Mypy
+# ─────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.11"
+strict = true
+plugins = ["pydantic.mypy"]
+exclude = ["alembic/versions/", "tests/"]
+
+[[tool.mypy.overrides]]
+module = [
+    "fitz.*", "paddleocr.*", "rembg.*", "cv2.*",
+    "pyhanko.*", "pywebpush.*", "boto3.*",
+]
+ignore_missing_imports = true
+
+# ─────────────────────────────────────────────
+# Pytest
+# ─────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+]
+markers = [
+    "unit: pure logic không phụ thuộc IO",
+    "integration: cần DB/Redis thật",
+    "slow: chạy lâu (OCR, convert)",
+]

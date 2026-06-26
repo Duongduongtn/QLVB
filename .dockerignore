@@ -1,0 +1,20 @@
+# Loại file/khỏi context build Docker — giảm size + tránh leak secret
+**/node_modules
+**/dist
+**/__pycache__
+**/.venv
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.vite
+**/.cache
+.git
+.github
+docs
+ui-demo
+*.md
+.env
+.env.*
+!.env.example
+test-results
+playwright-report

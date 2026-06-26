@@ -1,0 +1,921 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>QLCV - Sổ công văn đi · 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Alumni+Sans+Pinstripe&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+:root {
+  /* Paper / surfaces — same warm-neutral light family, tighter palette */
+  --paper: oklch(96.5% 0.010 92);          /* page ground — warm off-white */
+  --paper-raised: oklch(98.5% 0.006 92);   /* hover surface, panels */
+  --paper-sink: oklch(93% 0.014 92);       /* sidebar */
+  --rule: oklch(25% 0.02 92 / 0.14);
+  --rule-strong: oklch(25% 0.02 92 / 0.38);
+
+  /* Ink ramp */
+  --ink: oklch(16% 0.02 92);
+  --ink-body: oklch(28% 0.018 92);
+  --ink-muted: oklch(48% 0.014 92);
+  --ink-faint: oklch(62% 0.010 92);
+
+  /* Brand */
+  --kinpaku: oklch(82% 0.20 80);
+  --kinpaku-deep: oklch(58% 0.10 78);
+  --kinpaku-soft: oklch(94% 0.05 84);
+
+  /* Verdigris patina (creative addition — used sparingly for secondary highlight) */
+  --patina: oklch(64% 0.09 188);
+  --patina-soft: oklch(94% 0.035 188);
+
+  /* Units */
+  --unit-gdnn: oklch(50% 0.10 188);
+  --unit-dvdl: oklch(42% 0.11 295);
+
+  /* States */
+  --success: oklch(42% 0.11 145);
+  --danger: oklch(50% 0.16 30);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  background: var(--paper);
+  color: var(--ink-body);
+  margin: 0;
+}
+body {
+  font-family: 'Be Vietnam Pro', 'Avenir Next', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "ss01", "cv11";
+}
+
+.font-display { font-family: 'Alumni Sans Pinstripe', serif; }
+.font-mono { font-family: 'JetBrains Mono', SFMono-Regular, Consolas, monospace; font-feature-settings: "tnum"; }
+.font-serif { font-family: 'Newsreader', Georgia, serif; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: var(--rule-strong); border-radius: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::selection { background: var(--kinpaku-soft); color: var(--ink); }
+:focus-visible { outline: 1.5px solid var(--rule-strong); outline-offset: 3px; border-radius: 2px; }
+
+/* === LAYOUT === */
+.shell { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+
+/* === SIDEBAR — minimal, text-first === */
+.aside {
+  background: var(--paper-sink);
+  border-right: 1px solid var(--rule);
+  padding: 36px 24px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+.brand {
+  display: flex; align-items: baseline; gap: 10px;
+  margin-bottom: 48px;
+}
+.brand-mark {
+  width: 22px; height: 22px;
+  background: var(--kinpaku);
+  position: relative;
+  transform: rotate(45deg);
+  flex-shrink: 0;
+}
+.brand-mark::after {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  background: var(--paper);
+}
+.brand-text {
+  font-family: 'Alumni Sans Pinstripe', serif;
+  font-size: 1.5rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink);
+  line-height: 1;
+}
+.brand-sub {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.22em;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  display: block;
+  margin-top: 2px;
+}
+
+.nav-section { margin-bottom: 28px; }
+.nav-section-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.22em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  margin-bottom: 14px;
+  padding-left: 2px;
+}
+.nav-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 2px;
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: var(--ink-body);
+  cursor: pointer;
+  text-decoration: none;
+  transition: color .12s ease;
+  border-bottom: 1px solid transparent;
+  position: relative;
+}
+.nav-link:hover { color: var(--ink); }
+.nav-link[data-active="true"] {
+  color: var(--ink);
+  font-weight: 500;
+}
+.nav-link[data-active="true"]::before {
+  content: '';
+  position: absolute;
+  left: -24px; top: 50%;
+  transform: translateY(-50%);
+  width: 12px; height: 1px;
+  background: var(--kinpaku-deep);
+}
+.nav-link .count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+.nav-link[data-active="true"] .count { color: var(--kinpaku-deep); }
+.nav-sublink {
+  display: block;
+  padding: 4px 2px 4px 18px;
+  font-size: 0.83rem;
+  color: var(--ink-muted);
+  text-decoration: none;
+  cursor: pointer;
+}
+.nav-sublink:hover { color: var(--ink-body); }
+
+/* === MAIN === */
+.main {
+  padding: 40px 56px 80px;
+  max-width: 1280px;
+  width: 100%;
+}
+
+/* Top utility bar — slim, inline */
+.top-bar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding-bottom: 24px;
+  margin-bottom: 48px;
+  border-bottom: 1px solid var(--rule);
+}
+.unit-tabs { display: flex; align-items: baseline; gap: 18px; }
+.unit-tab {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-muted);
+  cursor: pointer;
+  padding-bottom: 4px;
+  border-bottom: 1px solid transparent;
+  text-decoration: none;
+  transition: color .12s ease;
+}
+.unit-tab:hover { color: var(--ink-body); }
+.unit-tab[data-active="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--kinpaku);
+}
+.unit-tab[data-active="true"][data-unit="gdnn"] { border-bottom-color: var(--unit-gdnn); }
+.unit-tab[data-active="true"][data-unit="dvdl"] { border-bottom-color: var(--unit-dvdl); }
+.unit-tab .ct {
+  font-size: 0.7rem;
+  color: var(--ink-faint);
+  margin-left: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.spacer { flex: 1; }
+
+.searchbox {
+  position: relative;
+  min-width: 320px;
+}
+.searchbox input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--rule);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82rem;
+  padding: 6px 56px 6px 22px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color .12s ease;
+}
+.searchbox input::placeholder { color: var(--ink-faint); font-style: italic; font-family: 'Newsreader', serif; }
+.searchbox input:focus { border-bottom-color: var(--kinpaku-deep); }
+.searchbox .sb-icon {
+  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 14px; height: 14px; color: var(--ink-muted);
+}
+.searchbox .sb-kbd {
+  position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+  font-family: 'JetBrains Mono', monospace; font-size: 0.7rem;
+  color: var(--ink-faint);
+  letter-spacing: 0.06em;
+}
+
+.icon-link {
+  width: 28px; height: 28px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--ink-muted);
+  cursor: pointer;
+  position: relative;
+}
+.icon-link:hover { color: var(--ink); }
+.icon-link .dot {
+  position: absolute;
+  top: 2px; right: 2px;
+  width: 5px; height: 5px;
+  background: var(--danger);
+  border-radius: 999px;
+}
+
+.usr {
+  display: flex; align-items: center; gap: 10px;
+  cursor: pointer;
+  padding: 4px 0 4px 12px;
+  border-left: 1px solid var(--rule);
+}
+.usr-name {
+  font-size: 0.85rem;
+  color: var(--ink);
+  font-weight: 500;
+  line-height: 1.1;
+}
+.usr-role {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  display: block;
+  margin-top: 2px;
+}
+
+/* === Editorial masthead === */
+.masthead {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 48px;
+  margin-bottom: 56px;
+}
+.masthead-left .year {
+  font-family: 'Alumni Sans Pinstripe', serif;
+  font-size: 7rem;
+  line-height: 0.85;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+  font-weight: 400;
+}
+.masthead-left .year .ord {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.9rem;
+  vertical-align: top;
+  color: var(--ink-muted);
+  margin-left: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.masthead-left .h1 {
+  font-family: 'Newsreader', Georgia, serif;
+  font-weight: 400;
+  font-size: 1.6rem;
+  font-style: italic;
+  color: var(--ink-body);
+  margin-top: 14px;
+  font-feature-settings: "ss01";
+}
+.masthead-right {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.metric-row {
+  display: flex;
+  gap: 32px;
+  justify-content: flex-end;
+  border-top: 1px solid var(--rule);
+  padding-top: 14px;
+  margin-top: 6px;
+}
+.metric {
+  text-align: right;
+}
+.metric-value {
+  font-family: 'Alumni Sans Pinstripe', serif;
+  font-size: 2.4rem;
+  line-height: 1;
+  color: var(--ink);
+}
+.metric-value.muted { color: var(--ink-muted); }
+.metric-value.gold { color: var(--kinpaku-deep); }
+.metric-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  margin-top: 6px;
+}
+
+/* === Action row === */
+.action-row {
+  display: flex; align-items: center; gap: 16px;
+  margin-bottom: 32px;
+}
+.filter-chips {
+  display: flex; align-items: center; gap: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  color: var(--ink-body);
+  flex-wrap: wrap;
+}
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px 5px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  cursor: pointer;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  transition: border-color .12s ease, background .12s ease;
+}
+.chip:hover { border-color: var(--rule-strong); }
+.chip .k { color: var(--ink-muted); }
+.chip .v { color: var(--ink); font-weight: 500; }
+.chip[data-active="true"] {
+  border-color: var(--kinpaku-deep);
+  background: var(--kinpaku-soft);
+}
+.chip-reset {
+  padding: 5px 0;
+  background: transparent; border: none; cursor: pointer;
+  color: var(--ink-muted);
+  font-family: inherit; font-size: inherit;
+  text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px;
+  text-decoration-color: var(--ink-faint);
+}
+.chip-reset:hover { color: var(--ink); }
+
+.action-spacer { flex: 1; }
+
+.btn-line {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent;
+  border: none;
+  color: var(--ink-body);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--ink-body);
+}
+.btn-line:hover { color: var(--ink); border-bottom-color: var(--ink); }
+.btn-solid {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--ink);
+  color: var(--paper);
+  border: none;
+  border-radius: 2px;
+  padding: 10px 18px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .12s ease;
+}
+.btn-solid:hover { background: var(--kinpaku-deep); }
+.btn-solid .plus {
+  width: 14px; height: 14px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+/* === LEDGER (table) === */
+.ledger {
+  border-top: 1.5px solid var(--ink);
+}
+.ledger-head {
+  display: grid;
+  grid-template-columns: 24px 90px 1fr 100px 60px 130px 100px 110px 30px;
+  align-items: end;
+  gap: 24px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--rule);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.ledger-head .center { text-align: center; }
+.ledger-row {
+  display: grid;
+  grid-template-columns: 24px 90px 1fr 100px 60px 130px 100px 110px 30px;
+  align-items: center;
+  gap: 24px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--rule);
+  transition: background .12s ease;
+}
+.ledger-row:hover { background: var(--paper-raised); }
+.ledger-row .check { display: inline-flex; }
+.ledger-row .num-cv {
+  font-family: 'Alumni Sans Pinstripe', serif;
+  font-size: 2rem;
+  line-height: 0.95;
+  color: var(--ink);
+  letter-spacing: 0.01em;
+}
+.ledger-row .num-cv .denom {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  color: var(--ink-faint);
+  display: block;
+  margin-top: 6px;
+  font-feature-settings: "tnum";
+  text-transform: uppercase;
+}
+.ledger-row .subject {
+  font-family: 'Newsreader', Georgia, serif;
+  font-size: 1.02rem;
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--ink);
+  font-feature-settings: "ss01";
+}
+.ledger-row .subject .reply {
+  display: block;
+  margin-top: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem;
+  font-style: normal;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.ledger-row .signer {
+  font-size: 0.88rem;
+  color: var(--ink-body);
+}
+.ledger-row .signer-role {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  display: block;
+  margin-top: 2px;
+}
+.ledger-row .date {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  color: var(--ink-body);
+  font-variant-numeric: tabular-nums;
+}
+.ledger-row .date.empty { color: var(--ink-faint); }
+.ledger-row .type {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  text-align: center;
+}
+
+/* Unit marker — vertical bar + label */
+.unit-marker {
+  display: flex; flex-direction: column; align-items: flex-start;
+  gap: 6px;
+  position: relative;
+}
+.unit-marker::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 4px; bottom: 4px;
+  width: 2px;
+}
+.unit-marker.gdnn::before { background: var(--unit-gdnn); }
+.unit-marker.dvdl::before { background: var(--unit-dvdl); }
+.unit-marker .ul {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.66rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  padding-left: 12px;
+}
+.unit-marker.gdnn .ul { color: var(--unit-gdnn); }
+.unit-marker.dvdl .ul { color: var(--unit-dvdl); }
+.unit-marker .uf {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6rem;
+  color: var(--ink-faint);
+  padding-left: 12px;
+  letter-spacing: 0.08em;
+}
+
+/* Status — minimalist dot + label */
+.status {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.status .pip { width: 6px; height: 6px; border-radius: 999px; flex-shrink: 0; }
+.status.draft { color: var(--ink-muted); }
+.status.draft .pip { background: var(--ink-faint); border: 1px solid var(--ink-muted); box-sizing: border-box; }
+.status.published { color: var(--success); }
+.status.published .pip { background: var(--success); }
+.status.cancelled { color: var(--danger); text-decoration: line-through; text-decoration-thickness: 1px; text-decoration-color: var(--danger); }
+.status.cancelled .pip { background: transparent; border: 1px solid var(--danger); }
+
+/* Checkbox — square hairline */
+.qcheck {
+  appearance: none;
+  width: 14px; height: 14px;
+  border: 1px solid var(--rule-strong);
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  border-radius: 2px;
+}
+.qcheck:hover { border-color: var(--ink-body); }
+.qcheck:checked { background: var(--ink); border-color: var(--ink); }
+.qcheck:checked::after {
+  content: '';
+  position: absolute;
+  left: 3px; top: 0px;
+  width: 5px; height: 9px;
+  border-right: 1.5px solid var(--paper);
+  border-bottom: 1.5px solid var(--paper);
+  transform: rotate(45deg);
+}
+
+/* Row actions — visible icon, no menu chrome */
+.row-act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px; height: 24px;
+  color: var(--ink-faint);
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  border-radius: 2px;
+}
+.row-act:hover { color: var(--ink); background: var(--paper-raised); }
+
+/* === Footer / pagination === */
+.colophon {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid var(--rule);
+}
+.colophon-left {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+}
+.colophon-left .em { color: var(--ink); font-weight: 500; }
+.pages {
+  display: flex; align-items: center; gap: 4px;
+}
+.pages button {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82rem;
+  color: var(--ink-body);
+  padding: 4px 10px;
+  border-radius: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.pages button:hover { color: var(--ink); background: var(--paper-raised); }
+.pages button[data-active="true"] {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom: 1px solid var(--kinpaku-deep);
+  border-radius: 0;
+}
+.pages button.nav {
+  width: 28px; height: 28px;
+  padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--ink-muted);
+}
+
+/* Marginalia note (editorial accent — tiny mono note in masthead) */
+.marginalia {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  color: var(--ink-muted);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+/* Responsive — collapse sidebar at < 1100 (lightweight, this is desktop-first ledger) */
+@media (max-width: 1100px) {
+  .shell { grid-template-columns: 1fr; }
+  .aside { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--rule); }
+  .main { padding: 32px 28px; }
+  .masthead { grid-template-columns: 1fr; gap: 24px; }
+  .ledger-head, .ledger-row { grid-template-columns: 24px 80px 1fr 90px 60px 110px 90px 100px 28px; gap: 16px; }
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- SIDEBAR -->
+  <aside class="aside">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true"></div>
+      <div>
+        <div class="brand-text">QLCV</div>
+        <span class="brand-sub">Thành Đạt</span>
+      </div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-title">Chính</div>
+      <a class="nav-link"><span>Việc của tôi</span><span class="count">7</span></a>
+      <a class="nav-link" data-active="true"><span>Công văn đi</span><span class="count">247</span></a>
+      <a class="nav-link"><span>Công văn đến</span><span class="count">3</span></a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-title">Nghiệp vụ</div>
+      <a class="nav-link"><span>Danh bạ</span><span class="count">42</span></a>
+      <a class="nav-link"><span>Mộc &amp; Chữ ký</span></a>
+      <a class="nav-sublink">Mộc</a>
+      <a class="nav-sublink">Chữ ký</a>
+      <a class="nav-sublink">Hồ sơ ký</a>
+      <a class="nav-link"><span>Tag</span></a>
+      <a class="nav-link"><span>Tìm kiếm</span></a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-title">Hệ thống</div>
+      <a class="nav-link"><span>Cấu hình</span></a>
+      <a class="nav-link"><span>Người dùng</span></a>
+      <a class="nav-link"><span>Báo cáo</span></a>
+      <a class="nav-link"><span>Audit log</span></a>
+      <a class="nav-link"><span>Thùng rác</span></a>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- TOP UTILITY BAR -->
+    <div class="top-bar">
+      <div class="unit-tabs">
+        <a class="unit-tab" data-active="true" data-unit="all">Tất cả <span class="ct">247</span></a>
+        <a class="unit-tab" data-unit="gdnn">GDNN <span class="ct">152</span></a>
+        <a class="unit-tab" data-unit="dvdl">DVDL <span class="ct">95</span></a>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="searchbox">
+        <i data-lucide="search" class="sb-icon"></i>
+        <input type="search" placeholder="tìm theo số, trích yếu, người ký…" />
+        <span class="sb-kbd">⌘K</span>
+      </div>
+
+      <a class="icon-link" aria-label="Thông báo">
+        <i data-lucide="bell" style="width: 16px; height: 16px;"></i>
+        <span class="dot"></span>
+      </a>
+
+      <div class="usr">
+        <div>
+          <div class="usr-name">Trần Văn Bình</div>
+          <span class="usr-role">Quản lý</span>
+        </div>
+        <i data-lucide="chevron-down" style="width: 12px; height: 12px; color: var(--ink-muted);"></i>
+      </div>
+    </div>
+
+    <!-- MASTHEAD -->
+    <header class="masthead">
+      <div class="masthead-left">
+        <div class="marginalia">Sổ công văn đi · Niên giám</div>
+        <div class="year">2026</div>
+        <p class="h1">Hai trăm bốn mươi bảy công văn đã ghi, đang chờ phát hành hoặc đã thu hồi.</p>
+      </div>
+      <div class="masthead-right">
+        <div class="metric-row">
+          <div class="metric">
+            <div class="metric-value gold">156</div>
+            <div class="metric-label">Đã phát hành</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">89</div>
+            <div class="metric-label">Đang soạn</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value muted">2</div>
+            <div class="metric-label">Đã huỷ</div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ACTION + FILTER ROW -->
+    <div class="action-row">
+      <div class="filter-chips">
+        <button class="chip" data-active="true">
+          <span class="k">đơn vị</span>
+          <span class="v">Tất cả</span>
+          <i data-lucide="chevron-down" style="width: 11px; height: 11px;"></i>
+        </button>
+        <button class="chip">
+          <span class="k">thời gian</span>
+          <span class="v">Năm 2026</span>
+          <i data-lucide="chevron-down" style="width: 11px; height: 11px;"></i>
+        </button>
+        <button class="chip">
+          <span class="k">loại</span>
+          <span class="v">Tất cả</span>
+          <i data-lucide="chevron-down" style="width: 11px; height: 11px;"></i>
+        </button>
+        <button class="chip">
+          <span class="k">trạng thái</span>
+          <span class="v">Tất cả</span>
+          <i data-lucide="chevron-down" style="width: 11px; height: 11px;"></i>
+        </button>
+        <button class="chip">
+          <span class="k">người ký</span>
+          <span class="v">Tất cả</span>
+          <i data-lucide="chevron-down" style="width: 11px; height: 11px;"></i>
+        </button>
+        <button class="chip-reset">Đặt lại</button>
+      </div>
+
+      <div class="action-spacer"></div>
+
+      <button class="btn-line">
+        <i data-lucide="download" style="width: 14px; height: 14px;"></i>
+        Xuất Excel
+      </button>
+      <button class="btn-solid">
+        <i data-lucide="upload" style="width: 14px; height: 14px;"></i>
+        Nạp công văn mới
+      </button>
+    </div>
+
+    <!-- LEDGER -->
+    <section class="ledger" aria-label="Danh sách công văn đi">
+      <div class="ledger-head">
+        <div></div>
+        <div>STT · Số CV</div>
+        <div>Trích yếu</div>
+        <div>Đơn vị</div>
+        <div class="center">Loại</div>
+        <div>Người ký</div>
+        <div>Phát hành</div>
+        <div>Trạng thái</div>
+        <div></div>
+      </div>
+      <div id="rows"></div>
+    </section>
+
+    <!-- COLOPHON / PAGINATION -->
+    <footer class="colophon">
+      <div class="colophon-left">
+        Hiện <span class="em">1-8</span> trên <span class="em">247</span> công văn · trang <span class="em">1 / 13</span>
+      </div>
+      <nav class="pages" aria-label="Phân trang">
+        <button class="nav" aria-label="Trang trước"><i data-lucide="chevron-left" style="width: 14px; height: 14px;"></i></button>
+        <button data-active="true">1</button>
+        <button>2</button>
+        <button>3</button>
+        <button>4</button>
+        <span style="color: var(--ink-faint); padding: 0 4px;">·</span>
+        <button>13</button>
+        <button class="nav" aria-label="Trang sau"><i data-lucide="chevron-right" style="width: 14px; height: 14px;"></i></button>
+      </nav>
+    </footer>
+
+  </main>
+</div>
+
+<script>
+const rows = [
+  { num: '247', denom: '2026 · CV-GDNN-TĐ', subject: 'V/v đăng ký tham gia Hội thi tay nghề cấp tỉnh năm 2026', reply: null, unit: 'gdnn', unitFull: 'GDNN Thành Đạt', type: 'CV', signer: 'Trần Văn B', role: 'Giám đốc TT', date: '15/06/2026', status: 'published' },
+  { num: '089', denom: '2026 · CV-DVDL-TĐ', subject: 'V/v báo cáo doanh thu Quý 2 năm 2026 gửi Sở Du lịch', reply: null, unit: 'dvdl', unitFull: 'DVDL Thành Đạt', type: 'CV', signer: 'Nguyễn Thị C', role: 'Giám đốc Cty', date: '14/06/2026', status: 'published' },
+  { num: '248', denom: '2026 · TTr-GDNN-TĐ', subject: 'V/v đề xuất bổ sung kinh phí đào tạo nghề năm 2026', reply: null, unit: 'gdnn', unitFull: 'GDNN Thành Đạt', type: 'TTr', signer: 'Trần Văn B', role: 'Giám đốc TT', date: '-', status: 'draft' },
+  { num: '052', denom: '2026 · QĐ-DVDL-TĐ', subject: 'Quyết định bổ nhiệm Trưởng phòng Kinh doanh', reply: null, unit: 'dvdl', unitFull: 'DVDL Thành Đạt', type: 'QĐ', signer: 'Nguyễn Thị C', role: 'Giám đốc Cty', date: '10/06/2026', status: 'published' },
+  { num: '246', denom: '2026 · CV-GDNN-TĐ', subject: 'V/v cử cán bộ tham dự tập huấn nghiệp vụ tại Hà Nội', reply: 'Phản hồi CV đến 12/CV-TCGDNN', unit: 'gdnn', unitFull: 'GDNN Thành Đạt', type: 'CV', signer: 'Trần Văn B', role: 'Giám đốc TT', date: '08/06/2026', status: 'published' },
+  { num: '090', denom: '2026 · CV-DVDL-TĐ', subject: 'V/v rà soát hợp đồng cung cấp dịch vụ lưu trú', reply: null, unit: 'dvdl', unitFull: 'DVDL Thành Đạt', type: 'CV', signer: 'Lê Văn D', role: 'Phó GĐ Cty', date: '-', status: 'draft' },
+  { num: '245', denom: '2026 · TB-GDNN-TĐ', subject: 'Thông báo lịch nghỉ Lễ 30/4 - 1/5', reply: null, unit: 'gdnn', unitFull: 'GDNN Thành Đạt', type: 'TB', signer: 'Trần Văn B', role: 'Giám đốc TT', date: '25/04/2026', status: 'published' },
+  { num: '049', denom: '2026 · CV-DVDL-TĐ', subject: 'V/v đăng ký nhận hồ sơ ưu đãi thuế năm 2026', reply: null, unit: 'dvdl', unitFull: 'DVDL Thành Đạt', type: 'CV', signer: 'Nguyễn Thị C', role: 'Giám đốc Cty', date: '02/06/2026', status: 'cancelled' },
+];
+
+const statusInfo = {
+  draft: { cls: 'draft', label: 'Đang soạn' },
+  published: { cls: 'published', label: 'Phát hành' },
+  cancelled: { cls: 'cancelled', label: 'Đã huỷ' },
+};
+
+const unitInfo = {
+  gdnn: { label: 'GDNN', full: 'Trung tâm GDNN' },
+  dvdl: { label: 'DVDL', full: 'Cty CP DVDL' },
+};
+
+const root = document.getElementById('rows');
+root.innerHTML = rows.map(r => {
+  const s = statusInfo[r.status];
+  const u = unitInfo[r.unit];
+  const dateCls = r.date === '-' ? 'date empty' : 'date';
+  return `
+  <div class="ledger-row">
+    <div><input type="checkbox" class="qcheck" aria-label="Chọn dòng" /></div>
+    <div class="num-cv">${r.num}<span class="denom">${r.denom}</span></div>
+    <div>
+      <div class="subject">${r.subject}${r.reply ? `<span class="reply">↳ ${r.reply}</span>` : ''}</div>
+    </div>
+    <div class="unit-marker ${r.unit}">
+      <span class="ul">${u.label}</span>
+      <span class="uf">${u.full}</span>
+    </div>
+    <div class="type">${r.type}</div>
+    <div>
+      <div class="signer">${r.signer}</div>
+      <span class="signer-role">${r.role}</span>
+    </div>
+    <div><span class="${dateCls}">${r.date}</span></div>
+    <div>
+      <span class="status ${s.cls}"><span class="pip"></span>${s.label}</span>
+    </div>
+    <div>
+      <button class="row-act" aria-label="Hành động">
+        <i data-lucide="more-horizontal" style="width: 14px; height: 14px;"></i>
+      </button>
+    </div>
+  </div>`;
+}).join('');
+
+lucide.createIcons();
+
+// Unit tab interaction
+document.querySelectorAll('.unit-tab').forEach(t => {
+  t.addEventListener('click', e => {
+    e.preventDefault();
+    document.querySelectorAll('.unit-tab').forEach(o => o.removeAttribute('data-active'));
+    t.setAttribute('data-active', 'true');
+  });
+});
+
+// Search shortcut
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    document.querySelector('.searchbox input').focus();
+  }
+});
+</script>
+</body>
+</html>

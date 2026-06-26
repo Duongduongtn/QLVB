@@ -1,0 +1,51 @@
+name: Deploy (CD qua SSH)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: SSH deploy → VPS
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://qlcv.example.com   # TODO: subdomain thực
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Rsync source → VPS
+        run: |
+          rsync -az --delete \
+            --exclude '.git' --exclude 'node_modules' --exclude '__pycache__' \
+            --exclude 'apps/frontend/dist' --exclude '.venv' \
+            ./ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_DEPLOY_PATH }}"
+
+      - name: Build + restart stack
+        run: |
+          ssh "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" bash -lc "
+            set -e
+            cd '${{ secrets.VPS_DEPLOY_PATH }}'
+            docker compose -p qlcv build --pull
+            docker compose -p qlcv run --rm qlcv_backend alembic upgrade head
+            docker compose -p qlcv up -d
+            docker image prune -f
+          "
+
+      - name: Smoke test health endpoint
+        run: |
+          ssh "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            'curl -fsS http://127.0.0.1:8003/api/health'

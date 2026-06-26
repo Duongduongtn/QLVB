@@ -1,0 +1,60 @@
+# ── Impeccable ─────────────────────────────────
+.claude/settings.local.json
+.impeccable/config.local.json
+
+# ── Secrets / env ─────────────────────────────
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# ── Python ────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+*.egg-info/
+dist/
+build/
+
+# ── Node / Vite ───────────────────────────────
+node_modules/
+apps/frontend/dist/
+apps/frontend/.vite/
+apps/frontend/src/api/schema.ts
+apps/frontend/test-results/
+apps/frontend/playwright-report/
+apps/frontend/blob-report/
+
+# ── Docker ────────────────────────────────────
+# docker-compose.override.yml dùng local dev — không commit
+docker-compose.override.yml
+
+# ── IDE ───────────────────────────────────────
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+
+# ── OS ────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Logs ──────────────────────────────────────
+*.log
+logs/
+
+# ── Local storage (dev) ───────────────────────
+/storage_local/

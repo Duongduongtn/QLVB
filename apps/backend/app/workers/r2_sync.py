@@ -1,0 +1,28 @@
+"""Sync file local → Cloudflare R2 + dọn dẹp.
+
+Cron task (xem celery_app.beat_schedule):
+- purge_trash_older_than_30d: xoá vĩnh viễn record trong thùng rác sau 30 ngày.
+- reap_stuck_jobs: phát hiện job 'running' mất heartbeat → đánh failed + retry.
+"""
+
+from __future__ import annotations
+
+from app.core.celery_app import celery
+
+
+@celery.task(name="app.workers.r2_sync.upload_to_r2", bind=True, max_retries=5)
+def upload_to_r2(self, job_id: str, file_id: int) -> dict:  # noqa: ARG001
+    """TODO — push file local → R2 (cùng storage_key)."""
+    raise NotImplementedError("Implement ở giai đoạn 1")
+
+
+@celery.task(name="app.workers.r2_sync.purge_trash_older_than_30d")
+def purge_trash_older_than_30d() -> dict:
+    """Cron ngày — soft-deleted >30 ngày → xoá vĩnh viễn (giữ audit log)."""
+    raise NotImplementedError("Implement ở giai đoạn 1")
+
+
+@celery.task(name="app.workers.r2_sync.reap_stuck_jobs")
+def reap_stuck_jobs() -> dict:
+    """Cron mỗi phút — TDD §3.2: job 'running' mất heartbeat >5' → failed + retry."""
+    raise NotImplementedError("Implement ở giai đoạn 1")

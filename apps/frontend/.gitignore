@@ -1,0 +1,23 @@
+node_modules
+dist
+dist-ssr
+*.local
+.vite
+.cache
+
+# Test artifacts
+test-results
+playwright-report
+blob-report
+
+# Generated API types (regen từ openapi)
+src/api/schema.ts
+
+# Env
+.env
+.env.local
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea

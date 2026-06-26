@@ -1,0 +1,142 @@
+# QLCV stack — chạy:  docker compose -p qlcv up -d
+# Project name `qlcv` để cô lập với 6 dự án khác trên VPS chung (TDD §2.3).
+#
+# Network:
+#   - qlcv_net           : backend ↔ db ↔ redis ↔ frontend
+#   - qlcv_worker_net    : worker ↔ db ↔ redis (KHÔNG ra Internet trừ R2 — TDD §2.4)
+#   Worker bị tách khỏi qlcv_net để không gọi ngược backend / intranet.
+
+name: qlcv
+
+x-backend-env: &backend-env
+  ENVIRONMENT: ${ENVIRONMENT:-dev}
+  DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-qlcv}:${POSTGRES_PASSWORD:-qlcv}@qlcv_postgres:5432/${POSTGRES_DB:-qlcv}
+  REDIS_URL: redis://qlcv_redis:6379/0
+  MASTER_KEY_HEX: ${MASTER_KEY_HEX}
+  SENTRY_DSN: ${SENTRY_DSN:-}
+  R2_ENDPOINT: ${R2_ENDPOINT:-}
+  R2_BUCKET: ${R2_BUCKET:-}
+  R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+  R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+  VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+  VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+  VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@example.com}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  TZ: Asia/Ho_Chi_Minh
+
+services:
+  qlcv_postgres:
+    image: postgres:16-alpine
+    container_name: qlcv_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-qlcv}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-qlcv}
+      POSTGRES_DB: ${POSTGRES_DB:-qlcv}
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - qlcv_pg_data:/var/lib/postgresql/data
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:5437:5432"   # bind 127.0.0.1 — KHÔNG public
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-qlcv} -d ${POSTGRES_DB:-qlcv}"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - qlcv_net
+      - qlcv_worker_net
+
+  qlcv_redis:
+    image: redis:7-alpine
+    container_name: qlcv_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1000"]
+    volumes:
+      - qlcv_redis_data:/data
+    ports:
+      - "127.0.0.1:6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - qlcv_net
+      - qlcv_worker_net
+
+  qlcv_backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    container_name: qlcv_backend
+    restart: unless-stopped
+    environment: *backend-env
+    volumes:
+      - qlcv_storage:/var/qlcv/storage
+    depends_on:
+      qlcv_postgres:
+        condition: service_healthy
+      qlcv_redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8003:8003"
+    networks:
+      - qlcv_net
+
+  qlcv_worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+    container_name: qlcv_worker
+    restart: unless-stopped
+    environment: *backend-env
+    volumes:
+      - qlcv_storage:/var/qlcv/storage
+    depends_on:
+      qlcv_postgres:
+        condition: service_healthy
+      qlcv_redis:
+        condition: service_healthy
+    networks:
+      - qlcv_worker_net          # KHÔNG ở qlcv_net → không gọi ngược backend / intranet
+
+  qlcv_beat:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+    container_name: qlcv_beat
+    restart: unless-stopped
+    command: ["celery", "-A", "app.core.celery_app:celery", "beat", "--loglevel=info"]
+    environment: *backend-env
+    depends_on:
+      qlcv_postgres:
+        condition: service_healthy
+      qlcv_redis:
+        condition: service_healthy
+    networks:
+      - qlcv_worker_net
+
+  qlcv_frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    container_name: qlcv_frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:80"      # Nginx host route /api → backend, còn lại → đây
+    networks:
+      - qlcv_net
+
+volumes:
+  qlcv_pg_data:
+  qlcv_redis_data:
+  qlcv_storage:
+
+networks:
+  qlcv_net:
+    driver: bridge
+  qlcv_worker_net:
+    driver: bridge
+    internal: false              # cần Internet để gọi R2 (TDD §2.4 egress whitelist ở firewall)
