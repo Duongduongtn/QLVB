@@ -149,7 +149,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [USR.LGN-01] Là người dùng (Quản lý hoặc Nhân viên), tôi muốn đăng nhập bằng username + mật khẩu, để vào hệ thống QLCV thao tác công văn.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ✅ Done _(captcha-sau-3-lần defer GĐ2; đã có lockout 5/15' + fail2ban hạ tầng VPS)_
 - **Done khi**:
   - Đăng nhập đúng → redirect vào dashboard < 2 giây.
   - Đăng nhập sai → báo lỗi chung "Sai username hoặc mật khẩu".
@@ -978,7 +978,7 @@ Review qua 5 điểm và bổ sung/sửa các phần sau:
 
 | ID | Mã | Tên story | Nhóm | Ưu tiên | Trạng thái |
 |---|---|---|---|---|---|
-| USR.LGN | A1 | Đăng nhập | A | Must | ⏳ Todo |
+| USR.LGN | A1 | Đăng nhập | A | Must | ✅ Done |
 | USR.LGO | A2 | Đăng xuất | A | Must | ⏳ Todo |
 | USR.MNG | A4 | Quản lý người dùng | A | Must | ⏳ Todo |
 | CFG.UNT | B1 | Quản lý 2 đơn vị | B | Must | ⏳ Todo |
