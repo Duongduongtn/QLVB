@@ -1,7 +1,11 @@
 name: Deploy (CD qua SSH)
 
 on:
-  push:
+  # CD test-gate (QĐ #13): chỉ deploy SAU KHI workflow "Test" chạy XONG trên main.
+  # → test fail thì deploy KHÔNG chạy (đúng "test gate là cái chặn").
+  workflow_run:
+    workflows: ["Test"]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -13,12 +17,17 @@ jobs:
   deploy:
     name: SSH deploy → VPS
     runs-on: ubuntu-latest
+    # Chỉ deploy khi Test XANH — hoặc khi bấm chạy tay (workflow_dispatch)
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     environment:
       name: production
-      url: https://qlcv.example.com   # TODO: subdomain thực
+      url: https://qlvb.trungtamthanhdat.com
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # deploy đúng commit đã pass Test (fallback ref hiện tại khi chạy tay)
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
       - name: Setup SSH key
         run: |
