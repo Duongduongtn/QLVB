@@ -40,6 +40,7 @@ jobs:
       DATABASE_URL: postgresql+psycopg://qlcv:qlcv@localhost:5432/qlcv_test
       REDIS_URL: redis://localhost:6379/0
       MASTER_KEY_HEX: "0000000000000000000000000000000000000000000000000000000000000000"
+      SEED_ADMIN_PASSWORD: ci-test-only   # tránh in pass random vào log CI
 
     steps:
       - uses: actions/checkout@v4
@@ -54,6 +55,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .[dev]
+
+      - name: DB migrate (verify migration apply lên Postgres thật)
+        run: alembic upgrade head
 
       - name: Lint (ruff)
         run: ruff check .

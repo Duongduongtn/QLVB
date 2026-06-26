@@ -10,17 +10,14 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.redis_client import redis_client
-
-# Lưu ý: model User sẽ được tạo ở B3; ở đây dùng forward import để tránh circular.
+from app.models.user import User
 
 
 def current_user(
     db: Session = Depends(get_db),
     session_cookie: str | None = Cookie(default=None, alias=settings.session_cookie_name),
-):
+) -> User:
     """Đọc session từ Redis mỗi request (QĐ #1) — kick user < 5s khi bị khoá."""
-    from app.models.user import User  # local import: tránh circular ở khởi tạo
-
     if not session_cookie:
         raise HTTPException(status_code=401, detail="Chưa đăng nhập")
 
@@ -35,7 +32,7 @@ def current_user(
     return user
 
 
-def require_manager(user=Depends(current_user)):
+def require_manager(user: User = Depends(current_user)) -> User:
     if user.role != "manager":
         raise HTTPException(status_code=403, detail="Chỉ Quản lý")
     return user

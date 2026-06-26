@@ -9,7 +9,7 @@ from app.core.celery_app import celery
 
 
 @celery.task(name="app.workers.ocr.extract_text", bind=True, max_retries=3)
-def extract_text(self, job_id: str, file_id: int) -> dict:  # noqa: ARG001
+def extract_text(self, job_id: str, file_id: int) -> dict:
     """TODO §6 GĐ1 — đọc text PDF scan + check trùng + auto-fill.
 
     Returns:

@@ -9,7 +9,7 @@ from redis import Redis
 
 from app.core.config import settings
 
-redis_client: Redis = Redis.from_url(
+redis_client: Redis[str] = Redis.from_url(  # decode_responses=True → trả str
     settings.redis_url,
     decode_responses=True,
     socket_keepalive=True,

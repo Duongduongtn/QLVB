@@ -6,7 +6,7 @@ from app.core.celery_app import celery
 
 
 @celery.task(name="app.workers.sign_verify.verify_pades", bind=True, max_retries=3)
-def verify_pades(self, job_id: str, file_id: int) -> dict:  # noqa: ARG001
+def verify_pades(self, job_id: str, file_id: int) -> dict:
     """TODO E1.5 — verify chữ ký PAdES, trả {has, valid, ca, signer, signed_at, valid_until}."""
     raise NotImplementedError("Implement ở giai đoạn 1 nhóm E")
 

@@ -10,7 +10,7 @@ from app.core.celery_app import celery
 
 
 @celery.task(name="app.workers.convert.docx_to_pdf", bind=True, max_retries=3)
-def docx_to_pdf(self, job_id: str, file_id: int) -> dict:  # noqa: ARG001
+def docx_to_pdf(self, job_id: str, file_id: int) -> dict:
     """TODO §4 GĐ1 — convert .docx/.doc → PDF.
 
     Args:

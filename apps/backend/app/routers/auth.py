@@ -16,12 +16,13 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from app.core.deps import current_user
+from app.models.user import User
 
 router = APIRouter()
 
 
 @router.get("/me")
-def me(user=Depends(current_user)) -> dict[str, str | int]:
+def me(user: User = Depends(current_user)) -> dict[str, str | int]:
     return {
         "id": user.id,
         "username": user.username,

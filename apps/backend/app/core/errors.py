@@ -45,7 +45,9 @@ class ValidationFailed(AppError):
     http_status = 422
 
 
-async def app_error_handler(_: Request, exc: AppError) -> JSONResponse:
+async def app_error_handler(_: Request, exc: Exception) -> JSONResponse:
+    # FastAPI add_exception_handler yêu cầu signature nhận Exception; narrow lại AppError.
+    assert isinstance(exc, AppError)
     return JSONResponse(
         status_code=exc.http_status,
         content={"error": {"code": exc.code, "message": exc.message}},

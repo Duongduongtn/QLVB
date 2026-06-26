@@ -8,6 +8,7 @@ Run prod:
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import sentry_sdk
@@ -21,7 +22,7 @@ from app.routers import auth, health
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     configure_logging()
     if settings.sentry_dsn:
         sentry_sdk.init(

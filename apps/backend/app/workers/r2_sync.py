@@ -11,7 +11,7 @@ from app.core.celery_app import celery
 
 
 @celery.task(name="app.workers.r2_sync.upload_to_r2", bind=True, max_retries=5)
-def upload_to_r2(self, job_id: str, file_id: int) -> dict:  # noqa: ARG001
+def upload_to_r2(self, job_id: str, file_id: int) -> dict:
     """TODO — push file local → R2 (cùng storage_key)."""
     raise NotImplementedError("Implement ở giai đoạn 1")
 

@@ -128,9 +128,18 @@ exclude = ["alembic/versions/", "tests/"]
 [[tool.mypy.overrides]]
 module = [
     "fitz.*", "paddleocr.*", "rembg.*", "cv2.*",
-    "pyhanko.*", "pywebpush.*", "boto3.*",
+    "pyhanko.*", "pywebpush.*", "boto3.*", "celery.*",
 ]
 ignore_missing_imports = true
+
+# Worker stubs chưa implement + celery decorator vốn untyped → nới strict def-typing
+# cho riêng lớp worker. Siết lại (bỏ override) khi code từng story (convert/ocr/...).
+[[tool.mypy.overrides]]
+module = ["app.workers.*"]
+disallow_untyped_decorators = false
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_any_generics = false
 
 # ─────────────────────────────────────────────
 # Pytest

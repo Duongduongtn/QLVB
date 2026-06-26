@@ -29,6 +29,7 @@ build/
 
 # ── Node / Vite ───────────────────────────────
 node_modules/
+*.tsbuildinfo
 apps/frontend/dist/
 apps/frontend/.vite/
 apps/frontend/src/api/schema.ts
