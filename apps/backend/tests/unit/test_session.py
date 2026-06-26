@@ -44,6 +44,9 @@ class FakeRedis:
     def sadd(self, key: str, member: str) -> None:
         self.sets.setdefault(key, set()).add(member)
 
+    def srem(self, key: str, member: str) -> None:
+        self.sets.get(key, set()).discard(member)
+
     def delete(self, *keys: str) -> None:
         for key in keys:
             self.kv.pop(key, None)
@@ -101,6 +104,18 @@ def test_register_failure_sets_window_ttl_once() -> None:
 
     sess.register_failure(user, redis=redis)  # type: ignore[arg-type]
     assert redis.ttl[f"login_fail:{user.id}"] == sess.FAIL_WINDOW_SECONDS
+
+
+def test_destroy_session_removes_key_and_member() -> None:
+    redis = FakeRedis()
+    sid, _ = sess.create_session(5, "staff", remember=False, redis=redis)  # type: ignore[arg-type]
+    assert redis.kv.get(f"session:{sid}") is not None
+    assert sid in redis.sets["session:user:5"]
+
+    sess.destroy_session(sid, 5, redis=redis)  # type: ignore[arg-type]
+
+    assert redis.kv.get(f"session:{sid}") is None  # current_user sau đó → 401
+    assert sid not in redis.sets["session:user:5"]
 
 
 @pytest.mark.parametrize("remember", [True, False])

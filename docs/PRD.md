@@ -166,7 +166,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [USR.LGO-01] Là người dùng, tôi muốn đăng xuất khỏi hệ thống, để bảo vệ tài khoản khi xong việc/dùng máy chung.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ✅ Done
 - **Done khi**: bấm "Đăng xuất" → xoá session → redirect về trang login trong < 1 giây. Session đã đăng xuất không còn dùng để gọi API protected.
 
 #### [USR.PWD] A3. Đổi mật khẩu
@@ -979,7 +979,7 @@ Review qua 5 điểm và bổ sung/sửa các phần sau:
 | ID | Mã | Tên story | Nhóm | Ưu tiên | Trạng thái |
 |---|---|---|---|---|---|
 | USR.LGN | A1 | Đăng nhập | A | Must | ✅ Done |
-| USR.LGO | A2 | Đăng xuất | A | Must | ⏳ Todo |
+| USR.LGO | A2 | Đăng xuất | A | Must | ✅ Done |
 | USR.MNG | A4 | Quản lý người dùng | A | Must | ⏳ Todo |
 | CFG.UNT | B1 | Quản lý 2 đơn vị | B | Must | ⏳ Todo |
 | CFG.BOK | B2 | Cấu hình sổ công văn | B | Must | ⏳ Todo |

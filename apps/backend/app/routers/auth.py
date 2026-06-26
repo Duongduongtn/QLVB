@@ -20,7 +20,9 @@ from app.core.database import get_db
 from app.core.deps import current_user
 from app.models.user import User
 from app.schemas.auth import LoginRequest, UserOut
+from app.services.audit import log_action
 from app.services.auth import authenticate
+from app.services.session import destroy_session
 
 router = APIRouter()
 
@@ -72,6 +74,37 @@ def login(
         path="/",
     )
     return user
+
+
+@router.post("/logout", status_code=204)
+def logout(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> Response:
+    session_id = request.cookies.get(settings.session_cookie_name)
+    if session_id:
+        destroy_session(session_id, user.id)
+    log_action(
+        db,
+        action="logout",
+        user_id=user.id,
+        object_type="user",
+        object_id=user.id,
+        ip=_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    response = Response(status_code=204)
+    # Khớp thuộc tính với cookie lúc set (login) để mọi trình duyệt xoá chắc chắn.
+    response.delete_cookie(
+        settings.session_cookie_name,
+        path="/",
+        httponly=True,
+        secure=settings.session_secure_cookie and settings.environment != "dev",
+        samesite="strict",
+    )
+    return response
 
 
 @router.get("/me", response_model=UserOut)

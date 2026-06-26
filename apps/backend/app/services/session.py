@@ -75,3 +75,9 @@ def register_failure(user: User, *, redis: Redis[str] = redis_client) -> None:
 def clear_failures(user_id: int, *, redis: Redis[str] = redis_client) -> None:
     """Đăng nhập đúng → xoá bộ đếm sai."""
     redis.delete(_fail_key(user_id))
+
+
+def destroy_session(session_id: str, user_id: int, *, redis: Redis[str] = redis_client) -> None:
+    """Đăng xuất (A2): xoá phiên khỏi Redis → request sau không qua được current_user."""
+    redis.delete(_session_key(session_id))
+    redis.srem(_user_sessions_key(user_id), session_id)
