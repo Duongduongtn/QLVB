@@ -47,10 +47,17 @@ class FakeRedis:
     def srem(self, key: str, member: str) -> None:
         self.sets.get(key, set()).discard(member)
 
+    def smembers(self, key: str) -> set[str]:
+        return set(self.sets.get(key, set()))
+
+    def exists(self, key: str) -> int:
+        return 1 if key in self.kv else 0
+
     def delete(self, *keys: str) -> None:
         for key in keys:
             self.kv.pop(key, None)
             self.ttl.pop(key, None)
+            self.sets.pop(key, None)  # DEL cũng xoá set key (session:user:{id})
 
 
 def _make_user() -> User:
@@ -116,6 +123,29 @@ def test_destroy_session_removes_key_and_member() -> None:
 
     assert redis.kv.get(f"session:{sid}") is None  # current_user sau đó → 401
     assert sid not in redis.sets["session:user:5"]
+
+
+def test_kick_sessions_removes_all_and_returns_count() -> None:
+    redis = FakeRedis()
+    sid1, _ = sess.create_session(9, "staff", remember=False, redis=redis)  # type: ignore[arg-type]
+    sid2, _ = sess.create_session(9, "staff", remember=False, redis=redis)  # type: ignore[arg-type]
+
+    kicked = sess.kick_sessions(9, redis=redis)  # type: ignore[arg-type]
+
+    assert kicked == 2
+    assert redis.kv.get(f"session:{sid1}") is None
+    assert redis.kv.get(f"session:{sid2}") is None
+    assert redis.sets.get("session:user:9", set()) == set()
+
+
+def test_active_session_count_ignores_dead_members() -> None:
+    redis = FakeRedis()
+    sid1, _ = sess.create_session(11, "staff", remember=False, redis=redis)  # type: ignore[arg-type]
+    sid2, _ = sess.create_session(11, "staff", remember=False, redis=redis)  # type: ignore[arg-type]
+    redis.kv.pop(f"session:{sid1}")  # giả lập phiên hết TTL nhưng member còn trong set
+
+    assert sess.active_session_count(11, redis=redis) == 1  # type: ignore[arg-type]
+    assert sid2  # member còn sống
 
 
 @pytest.mark.parametrize("remember", [True, False])

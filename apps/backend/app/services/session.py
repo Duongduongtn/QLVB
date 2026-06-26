@@ -81,3 +81,21 @@ def destroy_session(session_id: str, user_id: int, *, redis: Redis[str] = redis_
     """Đăng xuất (A2): xoá phiên khỏi Redis → request sau không qua được current_user."""
     redis.delete(_session_key(session_id))
     redis.srem(_user_sessions_key(user_id), session_id)
+
+
+def kick_sessions(user_id: int, *, redis: Redis[str] = redis_client) -> int:
+    """Đẩy MỌI phiên của user ra ngay (A4: khoá/reset pass → kick < 5s).
+
+    DEL từng session:{sid} trong set + DEL luôn set. Trả số phiên đã đẩy.
+    """
+    members = redis.smembers(_user_sessions_key(user_id))
+    if members:
+        redis.delete(*[_session_key(sid) for sid in members])
+    redis.delete(_user_sessions_key(user_id))
+    return len(members)
+
+
+def active_session_count(user_id: int, *, redis: Redis[str] = redis_client) -> int:
+    """Số phiên CÒN SỐNG của user (lọc member chết do TTL hết) — cho panel chi tiết."""
+    members = redis.smembers(_user_sessions_key(user_id))
+    return sum(1 for sid in members if redis.exists(_session_key(sid)))

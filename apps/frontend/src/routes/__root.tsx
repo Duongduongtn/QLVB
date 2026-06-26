@@ -53,6 +53,14 @@ function RootLayout() {
           <div className="ml-auto flex items-center gap-4 text-sm text-slate-600">
             {user ? (
               <>
+                {user.role === 'manager' && (
+                  <Link
+                    to="/nguoi-dung"
+                    className="font-medium text-slate-700 hover:text-amber-600 [&.active]:text-amber-600"
+                  >
+                    Người dùng
+                  </Link>
+                )}
                 <span>
                   {user.full_name} · {user.role === 'manager' ? 'Quản lý' : 'Nhân viên'}
                 </span>

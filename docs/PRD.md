@@ -181,7 +181,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [USR.MNG-01] Là Quản lý, tôi muốn tạo - sửa - khoá - reset pass cho các user, để kiểm soát ai được dùng QLCV.
 - **Ưu tiên**: **Must** — đầy đủ UI ngay từ Giai đoạn 1.
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ✅ Done _(soft-delete + chặn tự-khoá/tự-xoá + Quản lý cuối (advisory lock) + kick <5s + audit)_
 - **Steps to Complete**:
   1. Vào trang "Người dùng" (chỉ Quản lý thấy).
   2. Xem danh sách user, có search + paginate.
@@ -980,7 +980,7 @@ Review qua 5 điểm và bổ sung/sửa các phần sau:
 |---|---|---|---|---|---|
 | USR.LGN | A1 | Đăng nhập | A | Must | ✅ Done |
 | USR.LGO | A2 | Đăng xuất | A | Must | ✅ Done |
-| USR.MNG | A4 | Quản lý người dùng | A | Must | ⏳ Todo |
+| USR.MNG | A4 | Quản lý người dùng | A | Must | ✅ Done |
 | CFG.UNT | B1 | Quản lý 2 đơn vị | B | Must | ⏳ Todo |
 | CFG.BOK | B2 | Cấu hình sổ công văn | B | Must | ⏳ Todo |
 | CFG.VEW | B3a | Switch view đơn vị | B | Must | ⏳ Todo |
