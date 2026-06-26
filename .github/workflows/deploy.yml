@@ -36,12 +36,17 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
 
-      - name: Rsync source → VPS
+      - name: Tạo thư mục đích trên VPS (idempotent)
+        run: |
+          ssh "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            "mkdir -p '${{ secrets.VPS_DEPLOY_PATH }}'"
+
+      - name: Rsync source → VPS (GIỮ NGUYÊN .env đã provision)
         run: |
           rsync -az --delete \
             --exclude '.git' --exclude 'node_modules' --exclude '__pycache__' \
-            --exclude 'apps/frontend/dist' --exclude '.venv' \
-            ./ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_DEPLOY_PATH }}"
+            --exclude 'apps/frontend/dist' --exclude '.venv' --exclude '.env' \
+            ./ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_DEPLOY_PATH }}/"
 
       - name: Build + restart stack
         run: |
