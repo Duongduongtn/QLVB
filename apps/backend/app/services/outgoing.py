@@ -220,6 +220,21 @@ def _load_profile_images(db: Session, profile_id: int | None) -> tuple[bytes | N
     return seal_png, sig_png
 
 
+def _default_positions(page_count: int, *, have_seal: bool, have_sig: bool) -> list[dict[str, Any]]:
+    """Vị trí mặc định khi user chưa đặt thủ công (D2 cách D editor kéo-thả defer): chữ ký
+    + mộc đè 1/3 ở góc dưới phải TRANG CUỐI (chỗ ký tên thường gặp)."""
+    pos: list[dict[str, Any]] = []
+    if have_sig:
+        pos.append(
+            {"kind": "signature", "page": page_count, "x_pct": 0.58, "y_pct": 0.74, "w_pct": 0.24, "h_pct": 0.10}
+        )
+    if have_seal:
+        pos.append(
+            {"kind": "seal", "page": page_count, "x_pct": 0.62, "y_pct": 0.68, "w_pct": 0.16, "h_pct": 0.16}
+        )
+    return pos
+
+
 def _resolve_range(opt: dict[str, Any], page_count: int) -> tuple[int, int]:
     kind = opt.get("kind")
     if kind == "all":
@@ -249,8 +264,13 @@ def render_stamped(db: Session, doc: OutgoingDocument) -> bytes:
     if sig_png is not None:
         images["signature"] = sig_png
 
-    out = pdf_stamp.stamp_images(raw, list(doc.stamp_positions or []), images)
-    page_count = pdf_stamp.pdf_page_count(out)
+    page_count = pdf_stamp.pdf_page_count(raw)
+    placements = list(doc.stamp_positions or [])
+    if not placements and images:  # chưa đặt thủ công → auto góc dưới phải trang cuối
+        placements = _default_positions(
+            page_count, have_seal="seal" in images, have_sig="signature" in images
+        )
+    out = pdf_stamp.stamp_images(raw, placements, images)
     so = doc.sealing_option or {}
 
     gl = so.get("giap_lai") or {}

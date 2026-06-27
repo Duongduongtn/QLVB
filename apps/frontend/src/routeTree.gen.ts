@@ -14,9 +14,11 @@ import { Route as MocRouteImport } from './routes/moc'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as HoSoKyRouteImport } from './routes/ho-so-ky'
 import { Route as DanhBaRouteImport } from './routes/danh-ba'
+import { Route as CongVanDiRouteImport } from './routes/cong-van-di'
 import { Route as ChuKyRouteImport } from './routes/chu-ky'
 import { Route as CauHinhRouteImport } from './routes/cau-hinh'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CongVanDiSoanRouteImport } from './routes/cong-van-di.soan'
 
 const NguoiDungRoute = NguoiDungRouteImport.update({
   id: '/nguoi-dung',
@@ -43,6 +45,11 @@ const DanhBaRoute = DanhBaRouteImport.update({
   path: '/danh-ba',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CongVanDiRoute = CongVanDiRouteImport.update({
+  id: '/cong-van-di',
+  path: '/cong-van-di',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ChuKyRoute = ChuKyRouteImport.update({
   id: '/chu-ky',
   path: '/chu-ky',
@@ -58,37 +65,48 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CongVanDiSoanRoute = CongVanDiSoanRouteImport.update({
+  id: '/soan',
+  path: '/soan',
+  getParentRoute: () => CongVanDiRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/cau-hinh': typeof CauHinhRoute
   '/chu-ky': typeof ChuKyRoute
+  '/cong-van-di': typeof CongVanDiRouteWithChildren
   '/danh-ba': typeof DanhBaRoute
   '/ho-so-ky': typeof HoSoKyRoute
   '/login': typeof LoginRoute
   '/moc': typeof MocRoute
   '/nguoi-dung': typeof NguoiDungRoute
+  '/cong-van-di/soan': typeof CongVanDiSoanRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/cau-hinh': typeof CauHinhRoute
   '/chu-ky': typeof ChuKyRoute
+  '/cong-van-di': typeof CongVanDiRouteWithChildren
   '/danh-ba': typeof DanhBaRoute
   '/ho-so-ky': typeof HoSoKyRoute
   '/login': typeof LoginRoute
   '/moc': typeof MocRoute
   '/nguoi-dung': typeof NguoiDungRoute
+  '/cong-van-di/soan': typeof CongVanDiSoanRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/cau-hinh': typeof CauHinhRoute
   '/chu-ky': typeof ChuKyRoute
+  '/cong-van-di': typeof CongVanDiRouteWithChildren
   '/danh-ba': typeof DanhBaRoute
   '/ho-so-ky': typeof HoSoKyRoute
   '/login': typeof LoginRoute
   '/moc': typeof MocRoute
   '/nguoi-dung': typeof NguoiDungRoute
+  '/cong-van-di/soan': typeof CongVanDiSoanRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -96,37 +114,44 @@ export interface FileRouteTypes {
     | '/'
     | '/cau-hinh'
     | '/chu-ky'
+    | '/cong-van-di'
     | '/danh-ba'
     | '/ho-so-ky'
     | '/login'
     | '/moc'
     | '/nguoi-dung'
+    | '/cong-van-di/soan'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/cau-hinh'
     | '/chu-ky'
+    | '/cong-van-di'
     | '/danh-ba'
     | '/ho-so-ky'
     | '/login'
     | '/moc'
     | '/nguoi-dung'
+    | '/cong-van-di/soan'
   id:
     | '__root__'
     | '/'
     | '/cau-hinh'
     | '/chu-ky'
+    | '/cong-van-di'
     | '/danh-ba'
     | '/ho-so-ky'
     | '/login'
     | '/moc'
     | '/nguoi-dung'
+    | '/cong-van-di/soan'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CauHinhRoute: typeof CauHinhRoute
   ChuKyRoute: typeof ChuKyRoute
+  CongVanDiRoute: typeof CongVanDiRouteWithChildren
   DanhBaRoute: typeof DanhBaRoute
   HoSoKyRoute: typeof HoSoKyRoute
   LoginRoute: typeof LoginRoute
@@ -171,6 +196,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DanhBaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cong-van-di': {
+      id: '/cong-van-di'
+      path: '/cong-van-di'
+      fullPath: '/cong-van-di'
+      preLoaderRoute: typeof CongVanDiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/chu-ky': {
       id: '/chu-ky'
       path: '/chu-ky'
@@ -192,13 +224,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cong-van-di/soan': {
+      id: '/cong-van-di/soan'
+      path: '/soan'
+      fullPath: '/cong-van-di/soan'
+      preLoaderRoute: typeof CongVanDiSoanRouteImport
+      parentRoute: typeof CongVanDiRoute
+    }
   }
 }
+
+interface CongVanDiRouteChildren {
+  CongVanDiSoanRoute: typeof CongVanDiSoanRoute
+}
+
+const CongVanDiRouteChildren: CongVanDiRouteChildren = {
+  CongVanDiSoanRoute: CongVanDiSoanRoute,
+}
+
+const CongVanDiRouteWithChildren = CongVanDiRoute._addFileChildren(
+  CongVanDiRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CauHinhRoute: CauHinhRoute,
   ChuKyRoute: ChuKyRoute,
+  CongVanDiRoute: CongVanDiRouteWithChildren,
   DanhBaRoute: DanhBaRoute,
   HoSoKyRoute: HoSoKyRoute,
   LoginRoute: LoginRoute,

@@ -334,7 +334,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [OUT.PUB-01] Là Quản lý/Nhân viên, tôi muốn upload file công văn → chọn đơn vị + hồ sơ ký → chèn mộc/chữ ký → cấp số → tải về PDF sẵn sàng ký số, để rút quy trình từ 30 phút (in/đóng/scan) xuống 5 phút.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⚠️ Partial (27/06/2026) — **backend xong**: tạo draft→upload PDF (mã hoá)→chèn mộc/chữ ký (PyMuPDF toạ độ %)→**cấp số atomic** (nextval) / dùng số có sẵn (unique index + sync sequence)→tải `_CHUA_KY_SO`. **Chống nhầm mộc enforce server** (profile.unit_id==doc.unit_id + active + bắt buộc hồ sơ khi cấp số). Khoá row chống double-issue, audit cả tải file. **Còn FE soạn CV** (slice sau). **Defer:** convert Word (LibreOffice-worker), verify chữ ký số đầu vào, watermark khi tải (D1.11), upload file đã ký (D1.12).
+- **Trạng thái**: ⚠️ Partial (27/06/2026) — **backend + FE wizard 7 bước XONG** (PDF-only): tải PDF→metadata→hồ sơ ký lọc đơn vị→preview chèn mộc (PyMuPDF, auto góc dưới phải trang cuối)→giáp lai/ký nháy→**xác nhận chống nhầm hiện tên đơn vị**→cấp số atomic (nextval) hoặc dùng số có sẵn (unique index + sync sequence)→tải `_CHUA_KY_SO`. Chống nhầm mộc enforce server (profile.unit_id==doc.unit_id + active + bắt buộc hồ sơ). Khoá row chống double-issue (BE) + busyRef (FE). **Defer:** convert Word (LibreOffice-worker), kéo-thả vị trí mộc thủ công (D2-D, đang auto), verify chữ ký số đầu vào, watermark khi tải (D1.11), upload file đã ký số (D1.12).
 - **Steps to Complete**:
   1. Vào "Công văn đi → Soạn mới".
   2. Upload file gốc (Word `.docx`/`.doc` hoặc PDF). Nếu Word → web convert sang PDF bằng LibreOffice headless.
@@ -432,7 +432,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [OUT.LST-01] Là người dùng, tôi muốn xem danh sách CV đi, lọc theo đơn vị/thời gian/loại/trạng thái/người ký, để tra cứu nhanh.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⚠️ Partial (27/06/2026) — **backend xong** (list filter đơn vị/trạng thái/search + paginate + detail). Cần FE sổ + bộ lọc thời gian/loại/người ký.
+- **Trạng thái**: ⚠️ Partial (27/06/2026) — **backend + FE XONG** (bảng số CV/trích yếu/đơn vị/ngày/trạng thái, search debounce, filter đơn vị+trạng thái, paginate, detail drawer). **Defer:** filter thời gian/loại/người ký/nơi nhận, xuất Excel, cột Loại/Người ký (cần BE trả kèm).
 - **Done khi**:
   - Danh sách paginate, default sort theo ngày phát hành mới nhất.
   - Filter đa tiêu chí: đơn vị, khoảng thời gian, loại văn bản, trạng thái (Draft/Đã phát hành), người ký, nơi nhận.

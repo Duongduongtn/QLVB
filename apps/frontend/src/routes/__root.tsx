@@ -66,6 +66,12 @@ function RootLayout() {
               <>
                 <UnitViewSwitcher role={user.role} />
                 <Link
+                  to="/cong-van-di"
+                  className="font-medium text-slate-700 hover:text-amber-600 [&.active]:text-amber-600"
+                >
+                  Công văn đi
+                </Link>
+                <Link
                   to="/danh-ba"
                   className="font-medium text-slate-700 hover:text-amber-600 [&.active]:text-amber-600"
                 >
