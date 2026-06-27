@@ -559,7 +559,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [INC.LST-01] Là người dùng, tôi muốn xem danh sách CV đến, lọc đa tiêu chí, để tra cứu nhanh.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ⚠️ Partial (27/06/2026) — sổ paginate (sort ngày đến mới nhất) + filter **cơ quan gửi / mức khẩn / mức mật / thời gian (năm) / trạng thái** + search số đến/ký hiệu/trích yếu; cột chữ ký số + cờ "Chỉ Quản lý xem"; drawer chi tiết + Tải PDF + toggle ẩn (Quản lý) + Huỷ vào sổ. **Defer (chờ E2/E3/D5):** filter trạng thái xử lý + đơn vị xử lý, lịch sử phân công/xử lý, link CV đi phản hồi, xuất Excel.
 - **Done khi**:
   - Danh sách paginate, default sort theo ngày đến mới nhất.
   - Filter: thời gian, cơ quan gửi, mức độ khẩn, mức độ mật, trạng thái xử lý, đơn vị xử lý.
@@ -1008,7 +1008,7 @@ Review qua 5 điểm và bổ sung/sửa các phần sau:
 | INC.ASG | E2 | Phân công xử lý | E | Must | ⏳ Todo |
 | INC.TRK | E3 | Theo dõi xử lý | E | Must | ⏳ Todo |
 | INC.ATT | E4 | Phụ lục đính kèm | E | Must | ⏳ Todo |
-| INC.LST | E5 | Danh sách + Sổ CV đến | E | Must | ⏳ Todo |
+| INC.LST | E5 | Danh sách + Sổ CV đến | E | Must | ⚠️ Partial |
 | CTC.SND | M2 | Danh bạ Cơ quan gửi (CV đến) | M | Must | ⚠️ Partial |
 | SRC.FTS | F1 | Tìm kiếm full-text | F | Must | ⏳ Todo |
 | SRC.TAG | F2 | Tag tự do | F | Must | ⏳ Todo |

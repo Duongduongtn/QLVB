@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 from contextlib import suppress
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from typing import Any
 
@@ -26,6 +26,7 @@ from app.models.incoming_document import IncomingDocument
 from app.services import numbering
 from app.services.audit import log_action
 
+_VN_TZ = timezone(timedelta(hours=7))  # Asia/Saigon — biên ngày lọc theo giờ VN
 _SIM_THRESHOLD = 0.9  # lớp 3: OCR text similarity > 90% → nghi trùng
 _SIM_SCAN_LIMIT = 200  # giới hạn số bản ghi đối chiếu similarity (chống O(N) lớn)
 _SIM_MAX_LEN = 4000  # cắt độ dài ocr_text khi so khớp (SequenceMatcher O(n·m))
@@ -257,6 +258,9 @@ def list_incoming(
     status: str | None = None,
     sender_org_id: int | None = None,
     urgency: str | None = None,
+    confidentiality: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
     q: str | None = None,
     page: int = 1,
     size: int = 20,
@@ -270,6 +274,14 @@ def list_incoming(
         conds.append(IncomingDocument.sender_org_id == sender_org_id)
     if urgency:
         conds.append(IncomingDocument.urgency == urgency)
+    if confidentiality:
+        conds.append(IncomingDocument.confidentiality == confidentiality)
+    if date_from is not None:
+        conds.append(IncomingDocument.created_at >= datetime.combine(date_from, datetime.min.time(), _VN_TZ))
+    if date_to is not None:
+        conds.append(
+            IncomingDocument.created_at < datetime.combine(date_to + timedelta(days=1), datetime.min.time(), _VN_TZ)
+        )
     if q:
         like = f"%{q.strip().replace('%', chr(92) + '%').replace('_', chr(92) + '_')}%"
         conds.append(

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Download, Inbox, Plus, Search, ShieldCheck } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Ban, ChevronLeft, ChevronRight, Download, EyeOff, Inbox, Plus, Search, ShieldCheck } from 'lucide-react';
 
 import { api, type ApiErrorEnvelope } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
@@ -49,14 +49,24 @@ function errMsg(error: unknown, fallback: string): string {
   return (error as ApiErrorEnvelope | undefined)?.error?.message ?? fallback;
 }
 
+const YEARS = (() => {
+  const y = new Date().getFullYear();
+  return [y, y - 1, y - 2];
+})();
+
 function CongVanDenPage() {
   const me = useAuth((s) => s.user);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [q, setQ] = useState('');
   const [urgency, setUrgency] = useState('all');
+  const [confid, setConfid] = useState('all');
+  const [sender, setSender] = useState('all');
+  const [year, setYear] = useState('all');
   const [status, setStatus] = useState<IncStatus | 'all'>('all');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<IncRow | null>(null);
+  const [actErr, setActErr] = useState<string | null>(null);
 
   const orgsQuery = useQuery({
     queryKey: ['organizations', 'sender-map'],
@@ -70,13 +80,17 @@ function CongVanDenPage() {
     id == null ? '—' : (orgs.find((o) => o.id === id)?.short_name ?? orgs.find((o) => o.id === id)?.full_name ?? '—');
 
   const listQuery = useQuery({
-    queryKey: ['incoming', urgency, status, q, page],
+    queryKey: ['incoming', urgency, confid, sender, year, status, q, page],
     enabled: !!me,
     queryFn: async () => {
       const { data, error } = await api.GET('/api/incoming', {
         params: {
           query: {
             urgency: urgency === 'all' ? undefined : urgency,
+            confidentiality: confid === 'all' ? undefined : confid,
+            sender_org_id: sender === 'all' ? undefined : Number(sender),
+            date_from: year === 'all' ? undefined : `${year}-01-01`,
+            date_to: year === 'all' ? undefined : `${year}-12-31`,
             status: status === 'all' ? undefined : status,
             q: q || undefined,
             page,
@@ -88,6 +102,39 @@ function CongVanDenPage() {
       return data as { items: IncRow[]; total: number };
     },
   });
+
+  const refresh = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['incoming'] });
+    setSelected(null);
+  };
+
+  const toggleManagerOnly = useMutation({
+    mutationFn: async (row: IncRow) => {
+      const { error } = await api.POST('/api/incoming/{doc_id}/manager-only', {
+        params: { path: { doc_id: row.id } },
+        body: { manager_only: !row.manager_only },
+      });
+      if (error) throw new Error(errMsg(error, 'Đổi cờ thất bại'));
+    },
+    onSuccess: refresh,
+    onError: (e: Error) => setActErr(e.message),
+  });
+
+  async function cancelDoc(row: IncRow) {
+    const reason = window.prompt('Lý do huỷ vào sổ? (giữ số đến, không tái dùng)');
+    if (reason === null) return;
+    if (!reason.trim()) {
+      setActErr('Phải nhập lý do huỷ');
+      return;
+    }
+    setActErr(null);
+    const { error } = await api.POST('/api/incoming/{doc_id}/cancel', {
+      params: { path: { doc_id: row.id } },
+      body: { reason: reason.trim() },
+    });
+    if (error) setActErr(errMsg(error, 'Huỷ thất bại'));
+    else await refresh();
+  }
 
   if (!me) return <div style={{ padding: '40px 0' }}><p className="cell-meta">Đang tải…</p></div>;
 
@@ -131,6 +178,33 @@ function CongVanDenPage() {
                 setPage(1);
               }}
             />
+            <FilterMenu
+              label="Mức độ mật:"
+              value={confid}
+              options={[{ value: 'all', label: 'Tất cả' }, ...Object.entries(CONFIDENTIALITY_LABEL).map(([value, label]) => ({ value, label }))]}
+              onChange={(v) => {
+                setConfid(v);
+                setPage(1);
+              }}
+            />
+            <FilterMenu
+              label="Cơ quan gửi:"
+              value={sender}
+              options={[{ value: 'all', label: 'Tất cả' }, ...orgs.map((o) => ({ value: String(o.id), label: o.short_name ?? o.full_name }))]}
+              onChange={(v) => {
+                setSender(v);
+                setPage(1);
+              }}
+            />
+            <FilterMenu
+              label="Thời gian:"
+              value={year}
+              options={[{ value: 'all', label: 'Tất cả' }, ...YEARS.map((y) => ({ value: String(y), label: `Năm ${y}` }))]}
+              onChange={(v) => {
+                setYear(v);
+                setPage(1);
+              }}
+            />
             <div className="relative">
               <Search size={15} className="absolute" style={{ left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-faint)' }} />
               <input
@@ -147,22 +221,29 @@ function CongVanDenPage() {
         }
       />
 
+      {actErr && (
+        <div className="card" role="alert" style={{ padding: '10px 16px', marginBottom: 16, color: 'var(--danger)', borderColor: 'var(--danger)' }}>
+          {actErr}
+        </div>
+      )}
+
       <div className="card" style={{ overflow: 'hidden' }}>
         <div className="table-scroll">
           <table className="qlcv-table">
             <thead>
               <tr>
-                <th style={{ width: 120, paddingLeft: 24 }}>Số đến</th>
+                <th style={{ width: 110, paddingLeft: 24 }}>Số đến</th>
                 <th style={{ width: 150 }}>Số ký hiệu</th>
                 <th>Trích yếu</th>
-                <th style={{ width: 160 }}>Cơ quan gửi</th>
-                <th style={{ width: 120 }}>Khẩn</th>
-                <th style={{ width: 140, paddingRight: 24 }}>Trạng thái</th>
+                <th style={{ width: 150 }}>Cơ quan gửi</th>
+                <th style={{ width: 110 }}>Khẩn</th>
+                <th style={{ width: 110 }}>Ngày đến</th>
+                <th style={{ width: 130, paddingRight: 24 }}>Trạng thái</th>
               </tr>
             </thead>
             <tbody>
               {listQuery.isLoading && (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: '32px 0', color: 'var(--ink-faint)' }}>Đang tải…</td></tr>
+                <tr><td colSpan={7} style={{ textAlign: 'center', padding: '32px 0', color: 'var(--ink-faint)' }}>Đang tải…</td></tr>
               )}
               {items.map((it) => (
                 <tr key={it.id} onClick={() => setSelected(it)} style={{ cursor: 'pointer' }}>
@@ -171,8 +252,11 @@ function CongVanDenPage() {
                   </td>
                   <td><span className="cell-mono">{it.reference_number ?? '—'}</span></td>
                   <td>
-                    <span className="subject">{it.subject ?? <span className="cell-meta">(chưa có trích yếu)</span>}</span>
-                    {it.manager_only && <Pill variant="warning">Chỉ Quản lý</Pill>}
+                    <div className="flex items-center" style={{ gap: 6 }}>
+                      {it.manager_only && <EyeOff size={14} style={{ color: 'var(--warning)', flexShrink: 0 }} aria-label="Chỉ Quản lý xem" />}
+                      <span className="subject">{it.subject ?? <span className="cell-meta">(chưa có trích yếu)</span>}</span>
+                      {it.signature_status === 'valid' && <ShieldCheck size={14} style={{ color: 'var(--success)', flexShrink: 0 }} aria-label="Đã ký số hợp lệ" />}
+                    </div>
                   </td>
                   <td><span className="cell-meta">{orgName(it.sender_org_id)}</span></td>
                   <td>
@@ -182,6 +266,7 @@ function CongVanDenPage() {
                       <Pill variant="warning" dot>{URGENCY_LABEL[it.urgency] ?? it.urgency}</Pill>
                     )}
                   </td>
+                  <td><span className="cell-meta">{fmtDate(it.created_at)}</span></td>
                   <td style={{ paddingRight: 24 }}>
                     <span className={`pill ${STATUS_PILL[it.status].cls}`}>
                       {STATUS_PILL[it.status].dot && <span className="dot" />}
@@ -208,7 +293,32 @@ function CongVanDenPage() {
         )}
       </div>
 
-      <Drawer open={!!selected} onClose={() => setSelected(null)} eyebrow="Công văn đến" title={selected?.number ?? 'Bản nháp'} width={480}>
+      <Drawer
+        open={!!selected}
+        onClose={() => setSelected(null)}
+        eyebrow="Công văn đến"
+        title={selected?.number ?? 'Bản nháp'}
+        width={480}
+        actions={
+          selected && (
+            <>
+              <button className="btn-secondary" style={{ height: 32 }} type="button" onClick={() => window.open(`/api/incoming/${selected.id}/file`, '_blank')}>
+                <Download size={13} /> Tải PDF
+              </button>
+              {me.role === 'manager' && (
+                <button className="btn-secondary" style={{ height: 32 }} type="button" disabled={toggleManagerOnly.isPending} onClick={() => toggleManagerOnly.mutate(selected)}>
+                  {selected.manager_only ? 'Bỏ ẩn' : 'Chỉ Quản lý xem'}
+                </button>
+              )}
+              {selected.status !== 'cancelled' && (
+                <button className="btn-ghost" style={{ height: 32, color: 'var(--danger)' }} type="button" onClick={() => cancelDoc(selected)}>
+                  <Ban size={13} /> Huỷ vào sổ
+                </button>
+              )}
+            </>
+          )
+        }
+      >
         {selected && (
           <>
             <div className="subject" style={{ fontWeight: 500, marginBottom: 12 }}>{selected.subject ?? '(chưa có trích yếu)'}</div>
@@ -230,9 +340,6 @@ function CongVanDenPage() {
               </InfoRow>
               <InfoRow label="Vào sổ lúc">{fmtDateTime(selected.created_at)}</InfoRow>
             </div>
-            <button className="btn-secondary" type="button" onClick={() => window.open(`/api/incoming/${selected.id}/file`, '_blank')}>
-              <Download size={14} /> Mở file gốc
-            </button>
           </>
         )}
       </Drawer>

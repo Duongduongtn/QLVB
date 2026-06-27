@@ -6,7 +6,7 @@ Upload PDF → OCR ở worker (poll) → sửa metadata → cấp số đến. C
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from urllib.parse import quote
 
 from celery.result import AsyncResult
@@ -163,6 +163,9 @@ def list_incoming(
     status: str | None = Query(default=None),
     sender_org_id: int | None = Query(default=None),
     urgency: str | None = Query(default=None),
+    confidentiality: str | None = Query(default=None),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
     q: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     size: int = Query(default=20, ge=1, le=100),
@@ -175,6 +178,9 @@ def list_incoming(
         status=status,
         sender_org_id=sender_org_id,
         urgency=urgency,
+        confidentiality=confidentiality,
+        date_from=date_from,
+        date_to=date_to,
         q=q,
         page=page,
         size=size,
