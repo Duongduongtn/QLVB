@@ -8,6 +8,7 @@ from app.models.audit_log import AuditLog
 from app.models.base import Base
 from app.models.document_type import DocumentType, NumberingRegistry
 from app.models.file import File
+from app.models.seal import Seal
 from app.models.unit import Unit
 from app.models.user import User
 
@@ -18,6 +19,7 @@ __all__ = [
     "DocumentType",
     "File",
     "NumberingRegistry",
+    "Seal",
     "Unit",
     "User",
 ]

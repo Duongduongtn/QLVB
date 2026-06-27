@@ -265,7 +265,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [SIG.SEL-01] Là Quản lý, tôi muốn upload và quản lý các con mộc của 2 đơn vị, để khi phát hành CV chọn được mộc đúng đơn vị.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ✅ Done (27/06/2026) — defer: cảnh báo "không phải dạng tròn" (edge mềm) + seed ≥1 mộc/đơn vị (dữ liệu onboarding). Tách nền = SIG.BG riêng.
 - **Done khi**:
   - Mỗi mộc lưu metadata: tên, đơn vị thuộc về (GDNN/DVDL), người upload, ngày upload, trạng thái active/inactive.
   - Mỗi đơn vị có ≥ 1 mộc gốc.
@@ -985,7 +985,7 @@ Review qua 5 điểm và bổ sung/sửa các phần sau:
 | CFG.BOK | B2 | Cấu hình sổ công văn | B | Must | ✅ Done |
 | CFG.VEW | B3a | Switch view đơn vị | B | Must | ⚠️ Partial |
 | CFG.BRD | B3b | Branding header | B | Must | ✅ Done |
-| SIG.SEL | C1 | Quản lý mộc | C | Must | ⏳ Todo |
+| SIG.SEL | C1 | Quản lý mộc | C | Must | ✅ Done |
 | SIG.SGN | C2 | Quản lý chữ ký | C | Must | ⏳ Todo |
 | SIG.BG | C3 | Tách nền tự động khi upload | C | Must | ⏳ Todo |
 | SIG.PRO | C4 | Hồ sơ ký (chống nhầm mộc) | C | Must | ⏳ Todo |

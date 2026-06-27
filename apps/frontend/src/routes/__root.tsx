@@ -74,6 +74,12 @@ function RootLayout() {
                       Cấu hình
                     </Link>
                     <Link
+                      to="/moc"
+                      className="font-medium text-slate-700 hover:text-amber-600 [&.active]:text-amber-600"
+                    >
+                      Mộc
+                    </Link>
+                    <Link
                       to="/nguoi-dung"
                       className="font-medium text-slate-700 hover:text-amber-600 [&.active]:text-amber-600"
                     >
