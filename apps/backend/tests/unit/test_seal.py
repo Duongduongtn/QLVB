@@ -51,6 +51,7 @@ class FakeDB:
         self.added: list[Any] = []
         self.deleted: list[Any] = []
         self.committed = False
+        self.rolled_back = False
 
     def get(self, model: Any, _id: Any) -> Any:
         if model in self.by_model:
@@ -67,6 +68,9 @@ class FakeDB:
 
     def commit(self) -> None:
         self.committed = True
+
+    def rollback(self) -> None:
+        self.rolled_back = True
 
     def refresh(self, _obj: Any) -> None:
         pass
@@ -144,6 +148,41 @@ def test_create_seal_saves_file_and_seal_and_audits(monkeypatch: pytest.MonkeyPa
     assert seal.is_active is True
     assert db.committed is True
     assert "seal_create" in [getattr(a, "action", None) for a in db.added]
+
+
+def test_create_seal_cleans_orphan_file_on_db_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    # DB lỗi SAU khi đã ghi ảnh → rollback + xoá ảnh mồ côi.
+    db = FakeDB(by_model={Unit: _unit()})
+    monkeypatch.setattr(
+        seal_svc,
+        "save_asset",
+        lambda *_a, **_k: storage.AssetResult(storage_key="seals/ab/x.png", sha256="h", size_bytes=9),
+    )
+
+    def _boom() -> None:
+        raise RuntimeError("DB chết giữa chừng")
+
+    db.flush = _boom  # type: ignore[method-assign]
+    deleted: list[str] = []
+    monkeypatch.setattr(seal_svc, "delete_asset", lambda key: deleted.append(key))
+
+    with pytest.raises(RuntimeError):
+        seal_svc.create_seal(
+            db,  # type: ignore[arg-type]
+            unit_id=1,
+            name="x",
+            seal_type="round",
+            data=b"\x89PNG",
+            ext="png",
+            mime="image/png",
+            original_name=None,
+            actor_id=1,
+            ip=None,
+            ua=None,
+        )
+    assert db.rolled_back is True
+    assert deleted == ["seals/ab/x.png"]
+    assert db.committed is False
 
 
 def test_update_seal_inactivate_instead_of_delete() -> None:

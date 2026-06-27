@@ -279,7 +279,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [SIG.SGN-01] Là Quản lý, tôi muốn upload và quản lý chữ ký của những người sẽ ký công văn (GĐ A, GĐ B, PGĐ C…), để khi soạn CV chọn được chữ ký đúng người.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ✅ Done (27/06/2026) — đơn vị mặc định đổi được (không gắn cứng như mộc); ≤2MB; inactive thay vì xoá. Tách nền = SIG.BG riêng.
 - **Done khi**:
   - Mỗi chữ ký lưu metadata: họ tên, chức danh, đơn vị mặc định, người upload, ngày upload, trạng thái.
   - 1 người có thể có nhiều chữ ký (cũ/mới).
@@ -309,7 +309,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [SIG.PRO-01] Là Quản lý, tôi muốn tạo các Hồ sơ ký (mỗi hồ sơ = 1 người ký + chữ ký + chức danh + đơn vị + mộc đi kèm), để khi soạn CV chỉ cần chọn 1 hồ sơ là áp dụng đầy đủ ngay, không lo nhầm mộc.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ✅ Done (27/06/2026) — chống nhầm mộc enforce 2 lớp (service seal.unit_id==unit_id + FE lọc); cảnh báo khi tham chiếu chữ ký/mộc inactive (tại trang QL; luồng soạn CV D1 sẽ surface tiếp). "Áp đủ khi chọn hồ sơ" hoàn tất ở D1.
 - **Steps to Complete**:
   1. Vào "Hồ sơ ký".
   2. "Tạo hồ sơ" → chọn đơn vị (GDNN/DVDL).
@@ -986,9 +986,9 @@ Review qua 5 điểm và bổ sung/sửa các phần sau:
 | CFG.VEW | B3a | Switch view đơn vị | B | Must | ⚠️ Partial |
 | CFG.BRD | B3b | Branding header | B | Must | ✅ Done |
 | SIG.SEL | C1 | Quản lý mộc | C | Must | ✅ Done |
-| SIG.SGN | C2 | Quản lý chữ ký | C | Must | ⏳ Todo |
+| SIG.SGN | C2 | Quản lý chữ ký | C | Must | ✅ Done |
 | SIG.BG | C3 | Tách nền tự động khi upload | C | Must | ⏳ Todo |
-| SIG.PRO | C4 | Hồ sơ ký (chống nhầm mộc) | C | Must | ⏳ Todo |
+| SIG.PRO | C4 | Hồ sơ ký (chống nhầm mộc) | C | Must | ✅ Done |
 | OUT.PUB | D1 | Luồng phát hành CV đi (cốt lõi) | D | Must | ⏳ Todo |
 | OUT.MAP | D2 | Auto map vị trí mộc/chữ ký (4 cách) | D | Must | ⏳ Todo |
 | OUT.GLA | D3 | Đóng giáp lai (3 lựa chọn) | D | Must | ⏳ Todo |

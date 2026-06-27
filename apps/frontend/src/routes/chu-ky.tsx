@@ -12,32 +12,22 @@ import { fmtDate } from '~/lib/format';
 import { MocChuKyTabs } from '~/components/MocChuKyTabs';
 import { StatusPill, UnitPill, type UnitLite } from '~/components/sign-ui';
 
-export const Route = createFileRoute('/moc')({
-  component: MocPage,
+export const Route = createFileRoute('/chu-ky')({
+  component: ChuKyPage,
 });
 
-type SealType = 'round' | 'hanging' | 'overlap';
-
-interface SealRow {
+interface SignatureRow {
   id: number;
-  unit_id: number;
-  name: string;
-  seal_type: SealType;
+  full_name: string;
+  title: string | null;
+  default_unit_id: number | null;
   file_id: number;
   uploaded_by: number | null;
   is_active: boolean;
   created_at: string;
 }
 
-const SEAL_TYPE_LABEL: Record<SealType, string> = {
-  round: 'Mộc tròn',
-  hanging: 'Mộc treo',
-  overlap: 'Mộc giáp lai',
-};
-
-const MAX_SEAL_BYTES = 5 * 1024 * 1024;
-// Nền caro nhẹ → nhận biết PNG nền trong suốt (mộc đã tách nền).
-const CHECKER = 'bg-[repeating-conic-gradient(#f1f5f9_0%_25%,#fff_0%_50%)] bg-[length:16px_16px]';
+const MAX_SIGNATURE_BYTES = 2 * 1024 * 1024;
 
 function errMsg(error: unknown, fallback: string): string {
   return (error as ApiErrorEnvelope | undefined)?.error?.message ?? fallback;
@@ -53,24 +43,23 @@ function useUnits() {
   });
 }
 
-function MocPage() {
+function ChuKyPage() {
   const me = useAuth((s) => s.user);
-  const [selected, setSelected] = useState<SealRow | null>(null);
+  const [selected, setSelected] = useState<SignatureRow | null>(null);
   const [creating, setCreating] = useState(false);
 
   const unitsQuery = useUnits();
   const units = unitsQuery.data?.items ?? [];
 
-  // Hiện cả mộc đã ngừng dùng (làm mờ) như ui-demo — UnitPill phân biệt đơn vị.
-  const sealsQuery = useQuery({
-    queryKey: ['seals', true],
+  const sigsQuery = useQuery({
+    queryKey: ['signatures', true],
     enabled: me?.role === 'manager',
     queryFn: async () => {
-      const { data, error } = await api.GET('/api/seals', {
+      const { data, error } = await api.GET('/api/signatures', {
         params: { query: { include_inactive: true } },
       });
-      if (error || !data) throw new Error(errMsg(error, 'Không tải được danh sách mộc'));
-      return data as { items: SealRow[] };
+      if (error || !data) throw new Error(errMsg(error, 'Không tải được danh sách chữ ký'));
+      return data as { items: SignatureRow[] };
     },
   });
 
@@ -89,16 +78,16 @@ function MocPage() {
     );
   }
 
-  const seals = sealsQuery.data?.items ?? [];
+  const sigs = sigsQuery.data?.items ?? [];
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">Mộc &amp; Chữ ký</p>
-          <h2 className="text-2xl font-semibold text-slate-800">Quản lý mộc</h2>
+          <h2 className="text-2xl font-semibold text-slate-800">Quản lý chữ ký</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Mỗi mộc gắn 1 đơn vị — chống nhầm khi phát hành công văn.
+            Chữ ký người ký công văn. Một người có thể có nhiều chữ ký (cũ/mới).
           </p>
         </div>
         <button
@@ -107,25 +96,25 @@ function MocPage() {
           className="flex items-center gap-2 rounded-md bg-amber-400 px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500"
         >
           <Plus size={16} />
-          Tải mộc mới
+          Tải chữ ký mới
         </button>
       </div>
 
       <MocChuKyTabs />
 
-      {sealsQuery.isLoading ? (
+      {sigsQuery.isLoading ? (
         <p className="py-10 text-center text-slate-400">Đang tải…</p>
-      ) : seals.length === 0 ? (
+      ) : sigs.length === 0 ? (
         <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-white py-12 text-center text-slate-400">
-          Chưa có mộc nào. Bấm “Tải mộc mới” để tải lên.
+          Chưa có chữ ký nào. Bấm “Tải chữ ký mới” để tải lên.
         </div>
       ) : (
-        <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {seals.map((s) => (
-            <SealCard
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {sigs.map((s) => (
+            <SignatureCard
               key={s.id}
-              seal={s}
-              unit={units.find((u) => u.id === s.unit_id)}
+              sig={s}
+              unit={units.find((u) => u.id === s.default_unit_id)}
               onClick={() => setSelected(s)}
             />
           ))}
@@ -134,22 +123,18 @@ function MocPage() {
 
       {creating && <CreateDrawer units={units} onClose={() => setCreating(false)} />}
       {selected && (
-        <EditDrawer
-          seal={selected}
-          unit={units.find((u) => u.id === selected.unit_id)}
-          onClose={() => setSelected(null)}
-        />
+        <EditDrawer signature={selected} units={units} onClose={() => setSelected(null)} />
       )}
     </div>
   );
 }
 
-function SealCard({
-  seal,
+function SignatureCard({
+  sig,
   unit,
   onClick,
 }: {
-  seal: SealRow;
+  sig: SignatureRow;
   unit: UnitLite | undefined;
   onClick: () => void;
 }) {
@@ -158,26 +143,25 @@ function SealCard({
       type="button"
       onClick={onClick}
       className={`flex flex-col rounded-lg border border-slate-200 bg-white p-4 text-left transition hover:border-amber-300 hover:shadow-sm ${
-        seal.is_active ? '' : 'opacity-60'
+        sig.is_active ? '' : 'opacity-60'
       }`}
     >
       <div className="mb-3 flex items-start justify-between gap-2">
         <UnitPill unit={unit} />
-        <StatusPill active={seal.is_active} />
+        <StatusPill active={sig.is_active} />
       </div>
-      <div className={`mb-3 flex h-24 items-center justify-center rounded-md border border-slate-100 p-2 ${CHECKER}`}>
+      <div className="mb-3 flex h-24 items-center justify-center rounded-md border border-slate-100 bg-white p-2">
         <img
-          src={`/api/seals/${seal.id}/image`}
-          alt={seal.name}
+          src={`/api/signatures/${sig.id}/image`}
+          alt={`Chữ ký ${sig.full_name}`}
           className="max-h-full max-w-full object-contain"
         />
       </div>
-      <p className="truncate font-semibold text-slate-800" title={seal.name}>
-        {seal.name}
+      <p className="truncate font-semibold text-slate-800" title={sig.full_name}>
+        {sig.full_name}
+        {sig.title ? ` — ${sig.title}` : ''}
       </p>
-      <p className="mt-0.5 text-xs text-slate-500">
-        {SEAL_TYPE_LABEL[seal.seal_type]} · Tải lên {fmtDate(seal.created_at)}
-      </p>
+      <p className="mt-0.5 text-xs text-slate-500">Tải lên {fmtDate(sig.created_at)}</p>
     </button>
   );
 }
@@ -189,7 +173,7 @@ function Drawer({ title, onClose, children }: { title: string; onClose: () => vo
       <div className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col bg-white shadow-xl">
         <div className="flex items-center justify-between border-b px-6 py-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">Mộc · Chỉnh sửa</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">Chữ ký · Chỉnh sửa</p>
             <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
           </div>
           <button type="button" onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100">
@@ -207,9 +191,9 @@ const fieldClass =
 const labelClass = 'mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500';
 
 const createSchema = z.object({
-  unit_id: z.coerce.number().int().positive('Chọn đơn vị'),
-  name: z.string().trim().min(1, 'Nhập tên mộc').max(150),
-  seal_type: z.enum(['round', 'hanging', 'overlap']),
+  full_name: z.string().trim().min(1, 'Nhập họ tên').max(150),
+  title: z.string().max(150).optional(),
+  default_unit_id: z.string(),
 });
 type CreateValues = z.infer<typeof createSchema>;
 
@@ -230,19 +214,19 @@ function CreateDrawer({ units, onClose }: { units: UnitLite[]; onClose: () => vo
     formState: { errors, isSubmitting },
   } = useForm<CreateValues>({
     resolver: zodResolver(createSchema),
-    defaultValues: { unit_id: units[0]?.id, name: '', seal_type: 'round' },
+    defaultValues: { full_name: '', title: '', default_unit_id: String(units[0]?.id ?? '') },
   });
 
   function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] ?? null;
     setServerError(null);
     if (f) {
-      if (f.size > MAX_SEAL_BYTES) {
-        setServerError('Ảnh mộc vượt quá 5MB');
+      if (f.size > MAX_SIGNATURE_BYTES) {
+        setServerError('Ảnh chữ ký vượt quá 2MB');
         return;
       }
       if (!['image/png', 'image/jpeg'].includes(f.type)) {
-        setServerError('Ảnh mộc phải là PNG hoặc JPG');
+        setServerError('Ảnh chữ ký phải là PNG hoặc JPG');
         return;
       }
     }
@@ -253,26 +237,26 @@ function CreateDrawer({ units, onClose }: { units: UnitLite[]; onClose: () => vo
   async function onSubmit(values: CreateValues) {
     setServerError(null);
     if (!fileObj) {
-      setServerError('Chọn ảnh mộc để tải lên');
+      setServerError('Chọn ảnh chữ ký để tải lên');
       return;
     }
     const form = new FormData();
-    form.append('unit_id', String(values.unit_id));
-    form.append('name', values.name);
-    form.append('seal_type', values.seal_type);
+    form.append('full_name', values.full_name);
+    if (values.title?.trim()) form.append('title', values.title.trim());
+    if (values.default_unit_id) form.append('default_unit_id', values.default_unit_id);
     form.append('file', fileObj);
-    const res = await fetch('/api/seals', { method: 'POST', body: form, credentials: 'include' });
+    const res = await fetch('/api/signatures', { method: 'POST', body: form, credentials: 'include' });
     if (!res.ok) {
       const body = (await res.json().catch(() => null)) as ApiErrorEnvelope | null;
-      setServerError(body?.error?.message ?? 'Tạo mộc thất bại');
+      setServerError(body?.error?.message ?? 'Tạo chữ ký thất bại');
       return;
     }
-    await queryClient.invalidateQueries({ queryKey: ['seals'] });
+    await queryClient.invalidateQueries({ queryKey: ['signatures'] });
     onClose();
   }
 
   return (
-    <Drawer title="Tải mộc mới" onClose={onClose}>
+    <Drawer title="Tải chữ ký mới" onClose={onClose}>
       {serverError && (
         <div role="alert" className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {serverError}
@@ -280,46 +264,40 @@ function CreateDrawer({ units, onClose }: { units: UnitLite[]; onClose: () => vo
       )}
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
         <div>
-          <label className={labelClass} htmlFor="s_unit">Đơn vị (gắn cố định, chống nhầm)</label>
-          <select id="s_unit" className={fieldClass} {...register('unit_id')}>
+          <label className={labelClass} htmlFor="g_name">Họ tên người ký</label>
+          <input id="g_name" className={fieldClass} placeholder="VD: Nguyễn Văn A" {...register('full_name')} />
+          {errors.full_name && <p className="mt-1 text-xs text-red-600">{errors.full_name.message}</p>}
+        </div>
+        <div>
+          <label className={labelClass} htmlFor="g_title">Chức danh</label>
+          <input id="g_title" className={fieldClass} placeholder="VD: Giám đốc" {...register('title')} />
+        </div>
+        <div>
+          <label className={labelClass} htmlFor="g_unit">Đơn vị mặc định</label>
+          <select id="g_unit" className={fieldClass} {...register('default_unit_id')}>
+            <option value="">— Không gán —</option>
             {units.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.short_name ?? u.full_name}
               </option>
             ))}
           </select>
-          {errors.unit_id && <p className="mt-1 text-xs text-red-600">{errors.unit_id.message}</p>}
+          <p className="mt-1 text-xs text-slate-400">Có thể đổi sau. 1 người ký được cho cả 2 đơn vị.</p>
         </div>
         <div>
-          <label className={labelClass} htmlFor="s_name">Tên mộc</label>
-          <input id="s_name" className={fieldClass} placeholder="VD: Mộc tròn GDNN" {...register('name')} />
-          {errors.name && <p className="mt-1 text-xs text-red-600">{errors.name.message}</p>}
-        </div>
-        <div>
-          <label className={labelClass} htmlFor="s_type">Loại mộc</label>
-          <select id="s_type" className={fieldClass} {...register('seal_type')}>
-            <option value="round">Mộc tròn</option>
-            <option value="hanging">Mộc treo</option>
-            <option value="overlap">Mộc giáp lai</option>
-          </select>
-        </div>
-        <div>
-          <label className={labelClass} htmlFor="s_file">Ảnh mộc (PNG/JPG ≤ 5MB)</label>
+          <label className={labelClass} htmlFor="g_file">Ảnh chữ ký (PNG/JPG ≤ 2MB)</label>
           <input
-            id="s_file"
+            id="g_file"
             type="file"
             accept="image/png,image/jpeg"
             onChange={onPickFile}
             className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium hover:file:bg-slate-200"
           />
           {preview && (
-            <div className={`mt-3 flex h-32 items-center justify-center rounded-md border border-slate-200 p-2 ${CHECKER}`}>
-              <img src={preview} alt="Xem trước mộc" className="max-h-full max-w-full object-contain" />
+            <div className="mt-3 flex h-24 items-center justify-center rounded-md border border-slate-200 bg-white p-2">
+              <img src={preview} alt="Xem trước chữ ký" className="max-h-full max-w-full object-contain" />
             </div>
           )}
-          <p className="mt-1 text-xs text-slate-400">
-            Tự động tách nền khi tải lên sẽ bổ sung ở bước Tách nền. Hiện lưu nguyên ảnh.
-          </p>
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className="rounded-md border border-slate-300 px-4 py-2 text-sm">
@@ -330,7 +308,7 @@ function CreateDrawer({ units, onClose }: { units: UnitLite[]; onClose: () => vo
             disabled={isSubmitting}
             className="rounded-md bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500 disabled:opacity-60"
           >
-            Tạo mộc
+            Tạo chữ ký
           </button>
         </div>
       </form>
@@ -338,19 +316,17 @@ function CreateDrawer({ units, onClose }: { units: UnitLite[]; onClose: () => vo
   );
 }
 
-const editSchema = z.object({
-  name: z.string().trim().min(1, 'Nhập tên mộc').max(150),
-  seal_type: z.enum(['round', 'hanging', 'overlap']),
-});
-type EditValues = z.infer<typeof editSchema>;
+// Form sửa giống hệt form tạo (trừ phần upload file) → tái dùng schema.
+const editSchema = createSchema;
+type EditValues = CreateValues;
 
 function EditDrawer({
-  seal,
-  unit,
+  signature,
+  units,
   onClose,
 }: {
-  seal: SealRow;
-  unit: UnitLite | undefined;
+  signature: SignatureRow;
+  units: UnitLite[];
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -362,82 +338,97 @@ function EditDrawer({
     formState: { errors, isSubmitting },
   } = useForm<EditValues>({
     resolver: zodResolver(editSchema),
-    defaultValues: { name: seal.name, seal_type: seal.seal_type },
+    defaultValues: {
+      full_name: signature.full_name,
+      title: signature.title ?? '',
+      default_unit_id: signature.default_unit_id ? String(signature.default_unit_id) : '',
+    },
   });
 
   function patch(body: Record<string, unknown>) {
-    return api.PATCH('/api/seals/{seal_id}', {
-      params: { path: { seal_id: seal.id } },
+    return api.PATCH('/api/signatures/{signature_id}', {
+      params: { path: { signature_id: signature.id } },
       body,
     });
   }
 
   async function onSubmit(values: EditValues) {
     setServerError(null);
-    const { error } = await patch(values);
+    const { error } = await patch({
+      full_name: values.full_name,
+      title: values.title?.trim() || null,
+      default_unit_id: values.default_unit_id ? Number(values.default_unit_id) : null,
+    });
     if (error) {
       setServerError(errMsg(error, 'Lưu thất bại'));
       return;
     }
-    await queryClient.invalidateQueries({ queryKey: ['seals'] });
+    await queryClient.invalidateQueries({ queryKey: ['signatures'] });
     onClose();
   }
 
   const toggleActive = useMutation({
     mutationFn: async () => {
-      const { error } = await patch({ is_active: !seal.is_active });
+      const { error } = await patch({ is_active: !signature.is_active });
       if (error) throw new Error(errMsg(error, 'Đổi trạng thái thất bại'));
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['seals'] });
+      await queryClient.invalidateQueries({ queryKey: ['signatures'] });
       onClose();
     },
     onError: (e: Error) => setServerError(e.message),
   });
 
   return (
-    <Drawer title={seal.name} onClose={onClose}>
+    <Drawer title={signature.full_name} onClose={onClose}>
       {serverError && (
         <div role="alert" className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {serverError}
         </div>
       )}
-      <div className={`mb-5 flex h-36 items-center justify-center rounded-md border border-slate-200 p-3 ${CHECKER}`}>
-        <img src={`/api/seals/${seal.id}/image`} alt={seal.name} className="max-h-full max-w-full object-contain" />
+      <div className="mb-5 flex h-24 items-center justify-center rounded-md border border-slate-200 bg-white p-3">
+        <img
+          src={`/api/signatures/${signature.id}/image`}
+          alt={signature.full_name}
+          className="max-h-full max-w-full object-contain"
+        />
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
         <div>
-          <label className={labelClass} htmlFor="e_name">Tên</label>
-          <input id="e_name" className={fieldClass} {...register('name')} />
-          {errors.name && <p className="mt-1 text-xs text-red-600">{errors.name.message}</p>}
+          <label className={labelClass} htmlFor="eg_name">Họ tên người ký</label>
+          <input id="eg_name" className={fieldClass} {...register('full_name')} />
+          {errors.full_name && <p className="mt-1 text-xs text-red-600">{errors.full_name.message}</p>}
         </div>
         <div>
-          <label className={labelClass} htmlFor="e_type">Loại mộc</label>
-          <select id="e_type" className={fieldClass} {...register('seal_type')}>
-            <option value="round">Mộc tròn</option>
-            <option value="hanging">Mộc treo</option>
-            <option value="overlap">Mộc giáp lai</option>
+          <label className={labelClass} htmlFor="eg_title">Chức danh</label>
+          <input id="eg_title" className={fieldClass} {...register('title')} />
+        </div>
+        <div>
+          <label className={labelClass} htmlFor="eg_unit">Đơn vị mặc định</label>
+          <select id="eg_unit" className={fieldClass} {...register('default_unit_id')}>
+            <option value="">— Không gán —</option>
+            {units.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.short_name ?? u.full_name}
+              </option>
+            ))}
           </select>
         </div>
 
         <div className="space-y-2 rounded-md border border-slate-200 p-4 text-sm">
           <div className="flex items-center justify-between">
-            <span className="text-slate-500">Đơn vị</span>
-            <UnitPill unit={unit} />
-          </div>
-          <div className="flex items-center justify-between">
             <span className="text-slate-500">Trạng thái</span>
-            <StatusPill active={seal.is_active} />
+            <StatusPill active={signature.is_active} />
           </div>
           <div className="flex items-center justify-between">
             <span className="text-slate-500">Ngày tải lên</span>
-            <span className="text-slate-700">{fmtDate(seal.created_at)}</span>
+            <span className="text-slate-700">{fmtDate(signature.created_at)}</span>
           </div>
         </div>
 
         <p className="text-xs text-slate-400">
-          Không đổi đơn vị sau khi tạo (chống nhầm mộc). Không xoá cứng — dùng “Ngừng dùng” để công văn cũ vẫn hiển thị đúng mộc.
+          Đơn vị mặc định đổi được (1 người ký cho cả 2 đơn vị). Không xoá cứng — dùng “Ngừng dùng” để công văn cũ vẫn hiển thị đúng chữ ký.
         </p>
 
         <div className="flex items-center justify-end gap-2 pt-1">
@@ -446,12 +437,12 @@ function EditDrawer({
             onClick={() => toggleActive.mutate()}
             disabled={toggleActive.isPending}
             className={`mr-auto rounded-md border px-3 py-2 text-sm disabled:opacity-60 ${
-              seal.is_active
+              signature.is_active
                 ? 'border-red-200 text-red-600 hover:bg-red-50'
                 : 'border-green-200 text-green-700 hover:bg-green-50'
             }`}
           >
-            {seal.is_active ? 'Ngừng dùng' : 'Kích hoạt'}
+            {signature.is_active ? 'Ngừng dùng' : 'Kích hoạt'}
           </button>
           <button type="button" onClick={onClose} className="rounded-md border border-slate-300 px-4 py-2 text-sm">
             Huỷ

@@ -18,7 +18,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.errors import AppError, app_error_handler
 from app.core.logging import configure_logging, logger
-from app.routers import auth, document_types, health, seals, units, users
+from app.routers import (
+    auth,
+    document_types,
+    health,
+    seals,
+    signatures,
+    signing_profiles,
+    units,
+    users,
+)
 from app.routers import settings as settings_router
 
 
@@ -67,3 +76,7 @@ app.include_router(
 )
 app.include_router(settings_router.router, prefix="/api/settings", tags=["settings"])
 app.include_router(seals.router, prefix="/api/seals", tags=["seals"])
+app.include_router(signatures.router, prefix="/api/signatures", tags=["signatures"])
+app.include_router(
+    signing_profiles.router, prefix="/api/signing-profiles", tags=["signing-profiles"]
+)

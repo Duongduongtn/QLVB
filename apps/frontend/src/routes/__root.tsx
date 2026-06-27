@@ -77,7 +77,7 @@ function RootLayout() {
                       to="/moc"
                       className="font-medium text-slate-700 hover:text-amber-600 [&.active]:text-amber-600"
                     >
-                      Mộc
+                      Mộc &amp; Chữ ký
                     </Link>
                     <Link
                       to="/nguoi-dung"

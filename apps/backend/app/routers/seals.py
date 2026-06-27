@@ -34,9 +34,11 @@ def list_seals(
     unit_id: int | None = Query(default=None),
     include_inactive: bool = Query(default=False),
     db: Session = Depends(get_db),
-    _: User = Depends(current_user),
+    user: User = Depends(current_user),
 ) -> SealListResponse:
-    items = seal_service.list_seals(db, unit_id=unit_id, include_inactive=include_inactive)
+    # Chỉ Quản lý mới xem được mộc đã ngừng (NV chỉ chọn mộc đang dùng khi soạn CV).
+    show_inactive = include_inactive and user.role == "manager"
+    items = seal_service.list_seals(db, unit_id=unit_id, include_inactive=show_inactive)
     return SealListResponse(items=[SealOut.model_validate(s) for s in items])
 
 
