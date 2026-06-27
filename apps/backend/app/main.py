@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.errors import AppError, app_error_handler
 from app.core.logging import configure_logging, logger
-from app.routers import auth, health, units, users
+from app.routers import auth, document_types, health, units, users
 
 
 @asynccontextmanager
@@ -61,3 +61,6 @@ app.include_router(health.router, prefix="/api")
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(units.router, prefix="/api/units", tags=["units"])
+app.include_router(
+    document_types.router, prefix="/api/document-types", tags=["document-types"]
+)

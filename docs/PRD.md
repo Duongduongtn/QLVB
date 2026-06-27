@@ -222,7 +222,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [CFG.BOK-01] Là Quản lý, tôi muốn cấu hình format số công văn cho từng loại văn bản và từng đơn vị, để khi phát hành CV hệ thống tự cấp số đúng nghiệp vụ.
 - **Ưu tiên**: **Must** — đầy đủ UI.
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ✅ Done _(CRUD loại VB 3 sổ + cấp số PG SEQUENCE atomic/không-lùi; biến format alias có/không dấu, {ĐƠN VỊ}=mã đơn vị; reset năm/tháng/none lazy; setval STT migrate Excel; UNIQUE (direction,unit_id,code) chặn trùng số; preview live; tab Cấu hình→Sổ công văn. 23 unit + 5 integration test (chạy trên CI Postgres). Deferred: cảnh báo "đổi format khi đã có CV" → làm cùng D1 khi bảng documents tồn tại; allocate_number sẵn cho D1.10)_
 - **Steps to Complete**:
   1. Vào "Cấu hình → Sổ công văn".
   2. Chọn tab: Sổ đi GDNN / Sổ đi DVDL / Sổ đến (chung).
@@ -982,7 +982,7 @@ Review qua 5 điểm và bổ sung/sửa các phần sau:
 | USR.LGO | A2 | Đăng xuất | A | Must | ✅ Done |
 | USR.MNG | A4 | Quản lý người dùng | A | Must | ✅ Done |
 | CFG.UNT | B1 | Quản lý 2 đơn vị | B | Must | ✅ Done |
-| CFG.BOK | B2 | Cấu hình sổ công văn | B | Must | ⏳ Todo |
+| CFG.BOK | B2 | Cấu hình sổ công văn | B | Must | ✅ Done |
 | CFG.VEW | B3a | Switch view đơn vị | B | Must | ⏳ Todo |
 | CFG.BRD | B3b | Branding header | B | Must | ⏳ Todo |
 | SIG.SEL | C1 | Quản lý mộc | C | Must | ⏳ Todo |

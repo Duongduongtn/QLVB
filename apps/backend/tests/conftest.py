@@ -28,7 +28,40 @@ def settings():
     return get_settings()
 
 
+@pytest.fixture(scope="session")
+def _db_engine():
+    """Engine tới DATABASE_URL — dò kết nối 1 LẦN/session. None nếu không có Postgres.
+
+    connect_timeout ngắn → local không chạy Postgres thì trả None nhanh (không treo chờ SYN).
+    """
+    from sqlalchemy import create_engine
+    from sqlalchemy.exc import OperationalError
+
+    from app.core.config import settings
+
+    engine = create_engine(settings.database_url, connect_args={"connect_timeout": 2})
+    try:
+        engine.connect().close()
+    except OperationalError:
+        engine.dispose()
+        return None
+    return engine
+
+
 @pytest.fixture
-def db_session() -> Iterator:
-    """Session DB cho integration test — TODO: dùng transaction rollback hoặc DB schema isolated."""
-    pytest.skip("Implement khi có Postgres test container")
+def db_session(_db_engine) -> Iterator:  # type: ignore[no-untyped-def]
+    """Session DB cho integration test — transaction rollback để cô lập (CI có Postgres)."""
+    if _db_engine is None:
+        pytest.skip("Cần Postgres (DATABASE_URL) cho integration test")
+
+    from sqlalchemy.orm import Session as SASession
+
+    conn = _db_engine.connect()
+    trans = conn.begin()
+    session = SASession(bind=conn)
+    try:
+        yield session
+    finally:
+        session.close()
+        trans.rollback()  # mọi DDL/DML (kể cả CREATE SEQUENCE) bị huỷ → cô lập test
+        conn.close()
