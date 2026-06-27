@@ -65,6 +65,12 @@ function RootLayout() {
             {user ? (
               <>
                 <UnitViewSwitcher role={user.role} />
+                <Link
+                  to="/danh-ba"
+                  className="font-medium text-slate-700 hover:text-amber-600 [&.active]:text-amber-600"
+                >
+                  Danh bạ
+                </Link>
                 {user.role === 'manager' && (
                   <>
                     <Link

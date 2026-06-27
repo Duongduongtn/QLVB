@@ -702,7 +702,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [CTC.RCV-01] Là người dùng, tôi muốn quản lý danh bạ các cơ quan/đơn vị thường nhận công văn của Thành Đạt, để khi soạn CV đi chọn nhanh nơi nhận, không phải gõ tay mỗi lần.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ✅ Done (27/06/2026) — CRUD đầy đủ (cả Quản lý + NV), tabs Nơi nhận/Cơ quan gửi, filter category Chung/GDNN/DVDL, chống trùng tên+địa chỉ, soft delete. Multi-select "gợi ý khi soạn CV" wire ở D1 (endpoint `?role=recipient&category=` đã sẵn).
 - **Steps to Complete**:
   1. Vào "Danh bạ → Nơi nhận".
   2. Xem danh sách cơ quan đã có, có search + filter (Tất cả / Chung / Riêng GDNN / Riêng DVDL).
@@ -721,7 +721,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [CTC.SND-01] Là người dùng, tôi muốn quản lý danh bạ các cơ quan thường gửi công văn đến Thành Đạt, để khi vào sổ CV đến chọn nhanh và tra cứu được lịch sử.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ⚠️ Partial (27/06/2026) — CRUD cơ quan gửi (is_sender) xong, dùng chung entity organizations. **Defer cùng E1:** autocomplete khi vào sổ, thống kê số CV/lần cuối/khẩn TB (cần incoming_documents), fuzzy-match tên + merge + auto-tạo khi vào sổ, pg_trgm GIN index.
 - **Steps to Complete**:
   1. Vào "Danh bạ → Cơ quan gửi".
   2. Xem danh sách + search + sort theo "Số CV đã gửi".
@@ -995,7 +995,7 @@ Review qua 5 điểm và bổ sung/sửa các phần sau:
 | OUT.INI | D4 | Ký nháy mỗi trang | D | Must | ⏳ Todo |
 | OUT.LNK | D5 | Liên kết CV đi với CV đến | D | Must | ⏳ Todo |
 | OUT.LST | D6 | Danh sách + Sổ CV đi | D | Must | ⏳ Todo |
-| CTC.RCV | M1 | Danh bạ Nơi nhận (CV đi) | M | Must | ⏳ Todo |
+| CTC.RCV | M1 | Danh bạ Nơi nhận (CV đi) | M | Must | ✅ Done |
 | SEC.AUD | H3 | Audit log + Soft delete + Thùng rác | H | Must | ⏳ Todo |
 
 ### Giai đoạn 2 — Đầy đủ nghiệp vụ (11 story, ~16 ngày)
@@ -1009,7 +1009,7 @@ Review qua 5 điểm và bổ sung/sửa các phần sau:
 | INC.TRK | E3 | Theo dõi xử lý | E | Must | ⏳ Todo |
 | INC.ATT | E4 | Phụ lục đính kèm | E | Must | ⏳ Todo |
 | INC.LST | E5 | Danh sách + Sổ CV đến | E | Must | ⏳ Todo |
-| CTC.SND | M2 | Danh bạ Cơ quan gửi (CV đến) | M | Must | ⏳ Todo |
+| CTC.SND | M2 | Danh bạ Cơ quan gửi (CV đến) | M | Must | ⚠️ Partial |
 | SRC.FTS | F1 | Tìm kiếm full-text | F | Must | ⏳ Todo |
 | SRC.TAG | F2 | Tag tự do | F | Must | ⏳ Todo |
 | SEC.WMK | H2 | Watermark cá nhân khi tải PDF | H | Must | ⏳ Todo |

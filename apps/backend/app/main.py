@@ -23,6 +23,7 @@ from app.routers import (
     bg_removal,
     document_types,
     health,
+    organizations,
     seals,
     signatures,
     signing_profiles,
@@ -82,3 +83,4 @@ app.include_router(
     signing_profiles.router, prefix="/api/signing-profiles", tags=["signing-profiles"]
 )
 app.include_router(bg_removal.router, prefix="/api/bg-removal", tags=["bg-removal"])
+app.include_router(organizations.router, prefix="/api/organizations", tags=["organizations"])

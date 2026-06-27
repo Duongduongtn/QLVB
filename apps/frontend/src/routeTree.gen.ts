@@ -13,6 +13,7 @@ import { Route as NguoiDungRouteImport } from './routes/nguoi-dung'
 import { Route as MocRouteImport } from './routes/moc'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as HoSoKyRouteImport } from './routes/ho-so-ky'
+import { Route as DanhBaRouteImport } from './routes/danh-ba'
 import { Route as ChuKyRouteImport } from './routes/chu-ky'
 import { Route as CauHinhRouteImport } from './routes/cau-hinh'
 import { Route as IndexRouteImport } from './routes/index'
@@ -37,6 +38,11 @@ const HoSoKyRoute = HoSoKyRouteImport.update({
   path: '/ho-so-ky',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DanhBaRoute = DanhBaRouteImport.update({
+  id: '/danh-ba',
+  path: '/danh-ba',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ChuKyRoute = ChuKyRouteImport.update({
   id: '/chu-ky',
   path: '/chu-ky',
@@ -57,6 +63,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/cau-hinh': typeof CauHinhRoute
   '/chu-ky': typeof ChuKyRoute
+  '/danh-ba': typeof DanhBaRoute
   '/ho-so-ky': typeof HoSoKyRoute
   '/login': typeof LoginRoute
   '/moc': typeof MocRoute
@@ -66,6 +73,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/cau-hinh': typeof CauHinhRoute
   '/chu-ky': typeof ChuKyRoute
+  '/danh-ba': typeof DanhBaRoute
   '/ho-so-ky': typeof HoSoKyRoute
   '/login': typeof LoginRoute
   '/moc': typeof MocRoute
@@ -76,6 +84,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/cau-hinh': typeof CauHinhRoute
   '/chu-ky': typeof ChuKyRoute
+  '/danh-ba': typeof DanhBaRoute
   '/ho-so-ky': typeof HoSoKyRoute
   '/login': typeof LoginRoute
   '/moc': typeof MocRoute
@@ -87,6 +96,7 @@ export interface FileRouteTypes {
     | '/'
     | '/cau-hinh'
     | '/chu-ky'
+    | '/danh-ba'
     | '/ho-so-ky'
     | '/login'
     | '/moc'
@@ -96,6 +106,7 @@ export interface FileRouteTypes {
     | '/'
     | '/cau-hinh'
     | '/chu-ky'
+    | '/danh-ba'
     | '/ho-so-ky'
     | '/login'
     | '/moc'
@@ -105,6 +116,7 @@ export interface FileRouteTypes {
     | '/'
     | '/cau-hinh'
     | '/chu-ky'
+    | '/danh-ba'
     | '/ho-so-ky'
     | '/login'
     | '/moc'
@@ -115,6 +127,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CauHinhRoute: typeof CauHinhRoute
   ChuKyRoute: typeof ChuKyRoute
+  DanhBaRoute: typeof DanhBaRoute
   HoSoKyRoute: typeof HoSoKyRoute
   LoginRoute: typeof LoginRoute
   MocRoute: typeof MocRoute
@@ -151,6 +164,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HoSoKyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/danh-ba': {
+      id: '/danh-ba'
+      path: '/danh-ba'
+      fullPath: '/danh-ba'
+      preLoaderRoute: typeof DanhBaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/chu-ky': {
       id: '/chu-ky'
       path: '/chu-ky'
@@ -179,6 +199,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CauHinhRoute: CauHinhRoute,
   ChuKyRoute: ChuKyRoute,
+  DanhBaRoute: DanhBaRoute,
   HoSoKyRoute: HoSoKyRoute,
   LoginRoute: LoginRoute,
   MocRoute: MocRoute,

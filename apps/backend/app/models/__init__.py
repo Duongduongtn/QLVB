@@ -8,6 +8,7 @@ from app.models.audit_log import AuditLog
 from app.models.base import Base
 from app.models.document_type import DocumentType, NumberingRegistry
 from app.models.file import File
+from app.models.organization import Organization
 from app.models.seal import Seal
 from app.models.signature import Signature
 from app.models.signing_profile import SigningProfile
@@ -21,6 +22,7 @@ __all__ = [
     "DocumentType",
     "File",
     "NumberingRegistry",
+    "Organization",
     "Seal",
     "Signature",
     "SigningProfile",
