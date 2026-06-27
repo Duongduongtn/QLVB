@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -10,6 +10,7 @@ import { api, type ApiErrorEnvelope } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
 import { fmtDate } from '~/lib/format';
 import { MocChuKyTabs } from '~/components/MocChuKyTabs';
+import { TachNenModal } from '~/components/TachNenModal';
 import { StatusPill, UnitPill, type UnitLite } from '~/components/sign-ui';
 
 export const Route = createFileRoute('/moc')({
@@ -35,7 +36,6 @@ const SEAL_TYPE_LABEL: Record<SealType, string> = {
   overlap: 'Mộc giáp lai',
 };
 
-const MAX_SEAL_BYTES = 5 * 1024 * 1024;
 // Nền caro nhẹ → nhận biết PNG nền trong suốt (mộc đã tách nền).
 const CHECKER = 'bg-[repeating-conic-gradient(#f1f5f9_0%_25%,#fff_0%_50%)] bg-[length:16px_16px]';
 
@@ -132,7 +132,7 @@ function MocPage() {
         </div>
       )}
 
-      {creating && <CreateDrawer units={units} onClose={() => setCreating(false)} />}
+      {creating && <TachNenModal kind="seal" units={units} onClose={() => setCreating(false)} />}
       {selected && (
         <EditDrawer
           seal={selected}
@@ -205,138 +205,6 @@ function Drawer({ title, onClose, children }: { title: string; onClose: () => vo
 const fieldClass =
   'w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100';
 const labelClass = 'mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500';
-
-const createSchema = z.object({
-  unit_id: z.coerce.number().int().positive('Chọn đơn vị'),
-  name: z.string().trim().min(1, 'Nhập tên mộc').max(150),
-  seal_type: z.enum(['round', 'hanging', 'overlap']),
-});
-type CreateValues = z.infer<typeof createSchema>;
-
-function CreateDrawer({ units, onClose }: { units: UnitLite[]; onClose: () => void }) {
-  const queryClient = useQueryClient();
-  const [serverError, setServerError] = useState<string | null>(null);
-  const [fileObj, setFileObj] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!preview) return;
-    return () => URL.revokeObjectURL(preview);
-  }, [preview]);
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<CreateValues>({
-    resolver: zodResolver(createSchema),
-    defaultValues: { unit_id: units[0]?.id, name: '', seal_type: 'round' },
-  });
-
-  function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0] ?? null;
-    setServerError(null);
-    if (f) {
-      if (f.size > MAX_SEAL_BYTES) {
-        setServerError('Ảnh mộc vượt quá 5MB');
-        return;
-      }
-      if (!['image/png', 'image/jpeg'].includes(f.type)) {
-        setServerError('Ảnh mộc phải là PNG hoặc JPG');
-        return;
-      }
-    }
-    setFileObj(f);
-    setPreview(f ? URL.createObjectURL(f) : null);
-  }
-
-  async function onSubmit(values: CreateValues) {
-    setServerError(null);
-    if (!fileObj) {
-      setServerError('Chọn ảnh mộc để tải lên');
-      return;
-    }
-    const form = new FormData();
-    form.append('unit_id', String(values.unit_id));
-    form.append('name', values.name);
-    form.append('seal_type', values.seal_type);
-    form.append('file', fileObj);
-    const res = await fetch('/api/seals', { method: 'POST', body: form, credentials: 'include' });
-    if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as ApiErrorEnvelope | null;
-      setServerError(body?.error?.message ?? 'Tạo mộc thất bại');
-      return;
-    }
-    await queryClient.invalidateQueries({ queryKey: ['seals'] });
-    onClose();
-  }
-
-  return (
-    <Drawer title="Tải mộc mới" onClose={onClose}>
-      {serverError && (
-        <div role="alert" className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {serverError}
-        </div>
-      )}
-      <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
-        <div>
-          <label className={labelClass} htmlFor="s_unit">Đơn vị (gắn cố định, chống nhầm)</label>
-          <select id="s_unit" className={fieldClass} {...register('unit_id')}>
-            {units.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.short_name ?? u.full_name}
-              </option>
-            ))}
-          </select>
-          {errors.unit_id && <p className="mt-1 text-xs text-red-600">{errors.unit_id.message}</p>}
-        </div>
-        <div>
-          <label className={labelClass} htmlFor="s_name">Tên mộc</label>
-          <input id="s_name" className={fieldClass} placeholder="VD: Mộc tròn GDNN" {...register('name')} />
-          {errors.name && <p className="mt-1 text-xs text-red-600">{errors.name.message}</p>}
-        </div>
-        <div>
-          <label className={labelClass} htmlFor="s_type">Loại mộc</label>
-          <select id="s_type" className={fieldClass} {...register('seal_type')}>
-            <option value="round">Mộc tròn</option>
-            <option value="hanging">Mộc treo</option>
-            <option value="overlap">Mộc giáp lai</option>
-          </select>
-        </div>
-        <div>
-          <label className={labelClass} htmlFor="s_file">Ảnh mộc (PNG/JPG ≤ 5MB)</label>
-          <input
-            id="s_file"
-            type="file"
-            accept="image/png,image/jpeg"
-            onChange={onPickFile}
-            className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium hover:file:bg-slate-200"
-          />
-          {preview && (
-            <div className={`mt-3 flex h-32 items-center justify-center rounded-md border border-slate-200 p-2 ${CHECKER}`}>
-              <img src={preview} alt="Xem trước mộc" className="max-h-full max-w-full object-contain" />
-            </div>
-          )}
-          <p className="mt-1 text-xs text-slate-400">
-            Tự động tách nền khi tải lên sẽ bổ sung ở bước Tách nền. Hiện lưu nguyên ảnh.
-          </p>
-        </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="rounded-md border border-slate-300 px-4 py-2 text-sm">
-            Huỷ
-          </button>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="rounded-md bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500 disabled:opacity-60"
-          >
-            Tạo mộc
-          </button>
-        </div>
-      </form>
-    </Drawer>
-  );
-}
 
 const editSchema = z.object({
   name: z.string().trim().min(1, 'Nhập tên mộc').max(150),

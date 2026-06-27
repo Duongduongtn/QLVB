@@ -20,6 +20,7 @@ from app.core.errors import AppError, app_error_handler
 from app.core.logging import configure_logging, logger
 from app.routers import (
     auth,
+    bg_removal,
     document_types,
     health,
     seals,
@@ -80,3 +81,4 @@ app.include_router(signatures.router, prefix="/api/signatures", tags=["signature
 app.include_router(
     signing_profiles.router, prefix="/api/signing-profiles", tags=["signing-profiles"]
 )
+app.include_router(bg_removal.router, prefix="/api/bg-removal", tags=["bg-removal"])

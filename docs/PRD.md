@@ -292,7 +292,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [SIG.BG-01] Là người upload mộc/chữ ký, tôi muốn web tự động tách nền từ ảnh chụp giấy, để không phải tự xử lý Photoshop.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ✅ Done (27/06/2026) — mộc rembg/U2Net giữ đỏ, chữ ký OpenCV threshold + slider, preview gốc/đã tách, fallback lưu ảnh gốc, tự resize ảnh lớn (cap input 20MB). Chạy ở Celery worker (lazy-import). Defer: trạng thái job qua Celery result (chưa bảng `jobs` — làm cùng Nhóm D); cold-start lần đầu nạp model ~14s (sau đó ≤5s); dọn `bg_tmp` qua beat hourly.
 - **Done khi**:
   - Mộc đỏ → dùng `rembg` (U2Net AI), giữ nguyên màu đỏ gốc.
   - Chữ ký → dùng OpenCV threshold + invert alpha, giữ nét bút mảnh.
@@ -987,7 +987,7 @@ Review qua 5 điểm và bổ sung/sửa các phần sau:
 | CFG.BRD | B3b | Branding header | B | Must | ✅ Done |
 | SIG.SEL | C1 | Quản lý mộc | C | Must | ✅ Done |
 | SIG.SGN | C2 | Quản lý chữ ký | C | Must | ✅ Done |
-| SIG.BG | C3 | Tách nền tự động khi upload | C | Must | ⏳ Todo |
+| SIG.BG | C3 | Tách nền tự động khi upload | C | Must | ✅ Done |
 | SIG.PRO | C4 | Hồ sơ ký (chống nhầm mộc) | C | Must | ✅ Done |
 | OUT.PUB | D1 | Luồng phát hành CV đi (cốt lõi) | D | Must | ⏳ Todo |
 | OUT.MAP | D2 | Auto map vị trí mộc/chữ ký (4 cách) | D | Must | ⏳ Todo |

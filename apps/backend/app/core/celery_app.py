@@ -60,4 +60,8 @@ celery.conf.beat_schedule = {
         "task": "app.workers.r2_sync.reap_stuck_jobs",
         "schedule": 60,  # mỗi phút — phát hiện job 'running' mất heartbeat
     },
+    "purge-bg-tmp-hourly": {
+        "task": "app.workers.rembg_task.purge_bg_tmp",
+        "schedule": 60 * 60,  # mỗi giờ — dọn asset tạm tách nền (preview/slider)
+    },
 }

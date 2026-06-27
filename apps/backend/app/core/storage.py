@@ -109,3 +109,23 @@ def read_asset(storage_key: str) -> bytes:
 def delete_asset(storage_key: str) -> None:
     """Xoá file asset khỏi đĩa (bỏ qua nếu đã không còn) — dọn logo cũ khi đổi."""
     _safe_path(storage_key).unlink(missing_ok=True)
+
+
+def purge_old_files(subdir: str, *, max_age_seconds: int, now: float) -> int:
+    """Xoá file trong storage_local_path/<subdir>/ cũ hơn max_age_seconds. Trả số file xoá.
+
+    Dùng dọn asset tạm phù du (vd tách nền `bg_tmp/` — preview/slider sinh nhiều file).
+    `now` truyền vào (không gọi time.time() ngầm) để test tất định. Bỏ qua nếu chưa có
+    thư mục. Defense: `subdir` không được chứa traversal.
+    """
+    if subdir.startswith(("/", "\\")) or ".." in Path(subdir).parts:
+        raise ValueError("subdir không hợp lệ")
+    root = _storage_root() / subdir
+    if not root.exists():
+        return 0
+    removed = 0
+    for path in root.rglob("*"):
+        if path.is_file() and now - path.stat().st_mtime > max_age_seconds:
+            path.unlink(missing_ok=True)
+            removed += 1
+    return removed

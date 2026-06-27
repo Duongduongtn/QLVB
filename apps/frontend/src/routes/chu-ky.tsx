@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -10,6 +10,7 @@ import { api, type ApiErrorEnvelope } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
 import { fmtDate } from '~/lib/format';
 import { MocChuKyTabs } from '~/components/MocChuKyTabs';
+import { TachNenModal } from '~/components/TachNenModal';
 import { StatusPill, UnitPill, type UnitLite } from '~/components/sign-ui';
 
 export const Route = createFileRoute('/chu-ky')({
@@ -26,8 +27,6 @@ interface SignatureRow {
   is_active: boolean;
   created_at: string;
 }
-
-const MAX_SIGNATURE_BYTES = 2 * 1024 * 1024;
 
 function errMsg(error: unknown, fallback: string): string {
   return (error as ApiErrorEnvelope | undefined)?.error?.message ?? fallback;
@@ -121,7 +120,7 @@ function ChuKyPage() {
         </div>
       )}
 
-      {creating && <CreateDrawer units={units} onClose={() => setCreating(false)} />}
+      {creating && <TachNenModal kind="signature" units={units} onClose={() => setCreating(false)} />}
       {selected && (
         <EditDrawer signature={selected} units={units} onClose={() => setSelected(null)} />
       )}
@@ -196,125 +195,6 @@ const createSchema = z.object({
   default_unit_id: z.string(),
 });
 type CreateValues = z.infer<typeof createSchema>;
-
-function CreateDrawer({ units, onClose }: { units: UnitLite[]; onClose: () => void }) {
-  const queryClient = useQueryClient();
-  const [serverError, setServerError] = useState<string | null>(null);
-  const [fileObj, setFileObj] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!preview) return;
-    return () => URL.revokeObjectURL(preview);
-  }, [preview]);
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<CreateValues>({
-    resolver: zodResolver(createSchema),
-    defaultValues: { full_name: '', title: '', default_unit_id: String(units[0]?.id ?? '') },
-  });
-
-  function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0] ?? null;
-    setServerError(null);
-    if (f) {
-      if (f.size > MAX_SIGNATURE_BYTES) {
-        setServerError('Ảnh chữ ký vượt quá 2MB');
-        return;
-      }
-      if (!['image/png', 'image/jpeg'].includes(f.type)) {
-        setServerError('Ảnh chữ ký phải là PNG hoặc JPG');
-        return;
-      }
-    }
-    setFileObj(f);
-    setPreview(f ? URL.createObjectURL(f) : null);
-  }
-
-  async function onSubmit(values: CreateValues) {
-    setServerError(null);
-    if (!fileObj) {
-      setServerError('Chọn ảnh chữ ký để tải lên');
-      return;
-    }
-    const form = new FormData();
-    form.append('full_name', values.full_name);
-    if (values.title?.trim()) form.append('title', values.title.trim());
-    if (values.default_unit_id) form.append('default_unit_id', values.default_unit_id);
-    form.append('file', fileObj);
-    const res = await fetch('/api/signatures', { method: 'POST', body: form, credentials: 'include' });
-    if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as ApiErrorEnvelope | null;
-      setServerError(body?.error?.message ?? 'Tạo chữ ký thất bại');
-      return;
-    }
-    await queryClient.invalidateQueries({ queryKey: ['signatures'] });
-    onClose();
-  }
-
-  return (
-    <Drawer title="Tải chữ ký mới" onClose={onClose}>
-      {serverError && (
-        <div role="alert" className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {serverError}
-        </div>
-      )}
-      <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
-        <div>
-          <label className={labelClass} htmlFor="g_name">Họ tên người ký</label>
-          <input id="g_name" className={fieldClass} placeholder="VD: Nguyễn Văn A" {...register('full_name')} />
-          {errors.full_name && <p className="mt-1 text-xs text-red-600">{errors.full_name.message}</p>}
-        </div>
-        <div>
-          <label className={labelClass} htmlFor="g_title">Chức danh</label>
-          <input id="g_title" className={fieldClass} placeholder="VD: Giám đốc" {...register('title')} />
-        </div>
-        <div>
-          <label className={labelClass} htmlFor="g_unit">Đơn vị mặc định</label>
-          <select id="g_unit" className={fieldClass} {...register('default_unit_id')}>
-            <option value="">— Không gán —</option>
-            {units.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.short_name ?? u.full_name}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 text-xs text-slate-400">Có thể đổi sau. 1 người ký được cho cả 2 đơn vị.</p>
-        </div>
-        <div>
-          <label className={labelClass} htmlFor="g_file">Ảnh chữ ký (PNG/JPG ≤ 2MB)</label>
-          <input
-            id="g_file"
-            type="file"
-            accept="image/png,image/jpeg"
-            onChange={onPickFile}
-            className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium hover:file:bg-slate-200"
-          />
-          {preview && (
-            <div className="mt-3 flex h-24 items-center justify-center rounded-md border border-slate-200 bg-white p-2">
-              <img src={preview} alt="Xem trước chữ ký" className="max-h-full max-w-full object-contain" />
-            </div>
-          )}
-        </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="rounded-md border border-slate-300 px-4 py-2 text-sm">
-            Huỷ
-          </button>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="rounded-md bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500 disabled:opacity-60"
-          >
-            Tạo chữ ký
-          </button>
-        </div>
-      </form>
-    </Drawer>
-  );
-}
 
 // Form sửa giống hệt form tạo (trừ phần upload file) → tái dùng schema.
 const editSchema = createSchema;
