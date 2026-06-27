@@ -84,6 +84,29 @@ def _validate_profile(db: Session, profile_id: int, unit_id: int) -> SigningProf
     return profile
 
 
+def _validate_in_reply_to(db: Session, incoming_id: int) -> None:
+    """D5 — CV đến được phản hồi phải tồn tại + chưa xoá."""
+    from app.models.incoming_document import IncomingDocument
+
+    inc = db.get(IncomingDocument, incoming_id)
+    if inc is None or inc.deleted_at is not None:
+        raise NotFound("Không tìm thấy công văn đến để liên kết")
+
+
+def list_replies(db: Session, incoming_id: int) -> list[OutgoingDocument]:
+    """D5 — danh sách CV đi phản hồi 1 CV đến (2 chiều)."""
+    return list(
+        db.scalars(
+            select(OutgoingDocument)
+            .where(
+                OutgoingDocument.in_reply_to_incoming_id == incoming_id,
+                OutgoingDocument.deleted_at.is_(None),
+            )
+            .order_by(OutgoingDocument.created_at.desc())
+        ).all()
+    )
+
+
 def _set_recipients(db: Session, doc_id: int, recipient_ids: list[int]) -> None:
     db.query(OutgoingRecipient).filter(OutgoingRecipient.outgoing_id == doc_id).delete()
     for oid in dict.fromkeys(recipient_ids):  # giữ thứ tự, loại trùng
@@ -100,6 +123,8 @@ def create_draft(
         raise NotFound("Không tìm thấy loại văn bản")
     if data.signing_profile_id is not None:
         _validate_profile(db, data.signing_profile_id, data.unit_id)
+    if data.in_reply_to_incoming_id is not None:
+        _validate_in_reply_to(db, data.in_reply_to_incoming_id)
 
     doc = OutgoingDocument(
         unit_id=data.unit_id,
@@ -108,6 +133,7 @@ def create_draft(
         issue_date=data.issue_date,
         status="draft",
         signing_profile_id=data.signing_profile_id,
+        in_reply_to_incoming_id=data.in_reply_to_incoming_id,
         stamp_positions=[p.model_dump() for p in data.stamp_positions]
         if data.stamp_positions
         else None,
@@ -141,6 +167,8 @@ def update_draft(
     changes = data.model_dump(exclude_unset=True)
     if changes.get("signing_profile_id") is not None:
         _validate_profile(db, changes["signing_profile_id"], doc.unit_id)
+    if changes.get("in_reply_to_incoming_id") is not None:
+        _validate_in_reply_to(db, changes["in_reply_to_incoming_id"])
     if "recipient_ids" in changes:
         _set_recipients(db, doc.id, changes.pop("recipient_ids") or [])
     if "stamp_positions" in changes and changes["stamp_positions"] is not None:

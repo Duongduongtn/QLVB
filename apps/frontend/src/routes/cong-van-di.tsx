@@ -38,6 +38,7 @@ interface OutRow {
 interface OutDetail extends OutRow {
   period_key: string | null;
   signing_profile_id: number | null;
+  in_reply_to_incoming_id: number | null;
   original_file_id: number | null;
   signed_file_id: number | null;
   cancel_reason: string | null;
@@ -404,6 +405,7 @@ function CongVanDiPage() {
 
 function DetailDrawer({ id, units, onClose }: { id: number; units: UnitLite[]; onClose: () => void }) {
   const me = useAuth((s) => s.user);
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -631,6 +633,18 @@ function DetailDrawer({ id, units, onClose }: { id: number; units: UnitLite[]; o
               <InfoRow label="Ngày phát hành">{fmtDate(d.issue_date)}</InfoRow>
               <InfoRow label="Giáp lai">{rangeLabel(d.sealing_option?.giap_lai?.kind)}</InfoRow>
               <InfoRow label="Ký nháy">{rangeLabel(d.sealing_option?.ky_nhay?.kind)}</InfoRow>
+              {d.in_reply_to_incoming_id != null && (
+                <InfoRow label="Phản hồi CV đến">
+                  <button
+                    type="button"
+                    className="link-btn"
+                    onClick={() => navigate({ to: '/cong-van-den' })}
+                    style={{ background: 'none', border: 'none', padding: 0, color: 'var(--kinpaku-deep)', cursor: 'pointer', font: 'inherit' }}
+                  >
+                    CV đến #{d.in_reply_to_incoming_id}
+                  </button>
+                </InfoRow>
+              )}
               <InfoRow label="Tạo lúc">{fmtDateTime(d.created_at)}</InfoRow>
             </div>
           </SectionCard>

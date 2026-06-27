@@ -73,6 +73,10 @@ class OutgoingDocument(Base, TimestampMixin, SoftDeleteMixin):
     sealing_option: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     original_file_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("files.id"))
     signed_file_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("files.id"))
+    # D5 — CV đi này là PHẢN HỒI của 1 CV đến (1 CV đi ⟶ ≤1 CV đến; 1 CV đến ⟵ nhiều CV đi).
+    in_reply_to_incoming_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("incoming_documents.id")
+    )
     cancel_reason: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
     updated_at: Mapped[datetime] = mapped_column(

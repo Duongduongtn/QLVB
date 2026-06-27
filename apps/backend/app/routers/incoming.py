@@ -30,8 +30,9 @@ from app.schemas.incoming import (
     ManagerOnlyRequest,
     RegisterRequest,
 )
-from app.schemas.outgoing import CancelRequest
+from app.schemas.outgoing import CancelRequest, OutgoingListItem
 from app.services import incoming as inc_service
+from app.services import outgoing as out_service
 from app.workers.ocr import extract_text
 
 router = APIRouter()
@@ -95,6 +96,15 @@ def ocr_status(
         "sender_hint": auto_fill.get("sender_hint"),
         "duplicates": [DuplicateOut(**d).model_dump() for d in dups],
     }
+
+
+@router.get("/{doc_id}/replies", response_model=list[OutgoingListItem])
+def list_replies(
+    doc_id: int, db: Session = Depends(get_db), actor: User = Depends(current_user)
+) -> list[OutgoingListItem]:
+    """D5 — CV đi phản hồi CV đến này (2 chiều)."""
+    _visible(inc_service.get_incoming(db, doc_id), actor)
+    return [OutgoingListItem.model_validate(d) for d in out_service.list_replies(db, doc_id)]
 
 
 @router.get("/{doc_id}/duplicates", response_model=list[DuplicateOut])

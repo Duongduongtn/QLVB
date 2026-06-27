@@ -42,6 +42,7 @@ class OutgoingCreate(BaseModel):
     issue_date: date
     recipient_ids: list[int] = []
     signing_profile_id: int | None = None
+    in_reply_to_incoming_id: int | None = None
     stamp_positions: list[StampPosition] | None = None
     sealing_option: SealingOption | None = None
 
@@ -51,6 +52,7 @@ class OutgoingUpdate(BaseModel):
     issue_date: date | None = None
     recipient_ids: list[int] | None = None
     signing_profile_id: int | None = None
+    in_reply_to_incoming_id: int | None = None
     stamp_positions: list[StampPosition] | None = None
     sealing_option: SealingOption | None = None
 
@@ -86,6 +88,7 @@ class OutgoingOut(BaseModel):
     issue_date: date
     status: str
     signing_profile_id: int | None
+    in_reply_to_incoming_id: int | None
     stamp_positions: list[dict[str, Any]] | None
     sealing_option: dict[str, Any] | None
     original_file_id: int | None

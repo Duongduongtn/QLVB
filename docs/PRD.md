@@ -423,7 +423,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [OUT.LNK-01] Là người soạn CV đi, tôi muốn đánh dấu CV này là phản hồi của 1 công văn đến (nếu có), để tra cứu liên kết 2 chiều sau này.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ✅ Done (27/06/2026) — cột `outgoing.in_reply_to_incoming_id` (FK + migration 0011) + validate CV đến tồn tại; wizard soạn CV đi bước 2 có select "Phản hồi công văn đến"; **2 chiều**: detail CV đi hiện link sang CV đến gốc, detail CV đến hiện danh sách CV đi phản hồi (`GET /api/incoming/{id}/replies`). 1 CV đến ⟵ nhiều CV đi; 1 CV đi ⟶ ≤1 CV đến.
 - **Steps to Complete**: trong luồng D1 bước 3, có ô tuỳ chọn "Phản hồi công văn đến" → tìm + chọn CV đến → lưu liên kết.
 - **Done khi**: xem CV đi thấy link sang CV đến gốc; xem CV đến thấy danh sách CV đi phản hồi.
 - **Edge cases**: 1 CV đến có thể có nhiều CV đi phản hồi (1 từ GDNN + 1 từ DVDL); 1 CV đi chỉ phản hồi 1 CV đến.
@@ -993,7 +993,7 @@ Review qua 5 điểm và bổ sung/sửa các phần sau:
 | OUT.MAP | D2 | Auto map vị trí mộc/chữ ký (4 cách) | D | Must | ⏳ Todo |
 | OUT.GLA | D3 | Đóng giáp lai (3 lựa chọn) | D | Must | ⚠️ Partial |
 | OUT.INI | D4 | Ký nháy mỗi trang | D | Must | ⚠️ Partial |
-| OUT.LNK | D5 | Liên kết CV đi với CV đến | D | Must | ⏳ Todo |
+| OUT.LNK | D5 | Liên kết CV đi với CV đến | D | Must | ✅ Done |
 | OUT.LST | D6 | Danh sách + Sổ CV đi | D | Must | ⚠️ Partial |
 | CTC.RCV | M1 | Danh bạ Nơi nhận (CV đi) | M | Must | ✅ Done |
 | SEC.AUD | H3 | Audit log + Soft delete + Thùng rác | H | Must | ✅ Done |

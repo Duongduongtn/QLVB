@@ -112,6 +112,7 @@ function SoanCongVanPage() {
   const [docTypeId, setDocTypeId] = useState<number | null>(null);
   const [issueDate, setIssueDate] = useState(todayISO());
   const [recipientIds, setRecipientIds] = useState<number[]>([]);
+  const [replyToId, setReplyToId] = useState<number | null>(null);
   const [profileId, setProfileId] = useState<number | null>(null);
   const [giapLai, setGiapLai] = useState<RangeOpt>({ kind: 'none' });
   const [kyNhay, setKyNhay] = useState<RangeOpt>({ kind: 'none' });
@@ -134,6 +135,17 @@ function SoanCongVanPage() {
     enabled: !!me,
     queryFn: async () => (await api.GET('/api/document-types', {})).data as { items: DocType[] },
   });
+
+  // CV đến đã vào sổ — để liên kết "phản hồi" (D5).
+  const { data: incomingData } = useQuery({
+    queryKey: ['incoming', 'reply-picker'],
+    enabled: !!me,
+    queryFn: async () => {
+      const res = await api.GET('/api/incoming', { params: { query: { status: 'registered', size: 100 } } });
+      return (res.data ?? { items: [] }) as { items: { id: number; number: string | null; subject: string | null }[] };
+    },
+  });
+  const incomingDocs = useMemo(() => incomingData?.items ?? [], [incomingData]);
   const outTypes = useMemo(
     () => (docTypesData?.items ?? []).filter((t) => t.direction === 'out'),
     [docTypesData],
@@ -197,6 +209,7 @@ function SoanCongVanPage() {
       issue_date: issueDate,
       recipient_ids: recipientIds,
       signing_profile_id: profileId,
+      in_reply_to_incoming_id: replyToId,
       sealing_option: sealingOption(),
     };
     if (draftId === null) {
@@ -426,6 +439,9 @@ function SoanCongVanPage() {
               recipients={visibleRecipients}
               recipientIds={recipientIds}
               setRecipientIds={setRecipientIds}
+              replyTo={replyToId}
+              setReplyTo={setReplyToId}
+              incomingDocs={incomingDocs}
             />
           )}
 
@@ -544,6 +560,9 @@ function Step2(props: {
   recipients: OrgRow[];
   recipientIds: number[];
   setRecipientIds: (v: number[]) => void;
+  replyTo: number | null;
+  setReplyTo: (v: number | null) => void;
+  incomingDocs: { id: number; number: string | null; subject: string | null }[];
 }) {
   const { recipients, recipientIds, setRecipientIds } = props;
   function toggle(id: number) {
@@ -640,8 +659,22 @@ function Step2(props: {
           )}
         </div>
         <div style={{ gridColumn: '1 / -1' }}>
-          <label className="field-label">Phản hồi công văn đến (tuỳ chọn)</label>
-          <input className="text-input" placeholder="Tìm công văn đến để liên kết…" disabled />
+          <label className="field-label" htmlFor="cv_reply">
+            Phản hồi công văn đến (tuỳ chọn)
+          </label>
+          <select
+            id="cv_reply"
+            className="text-input"
+            value={props.replyTo ?? ''}
+            onChange={(e) => props.setReplyTo(e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">— Không liên kết —</option>
+            {props.incomingDocs.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.number ?? `#${d.id}`} — {d.subject ?? '(chưa có trích yếu)'}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
     </div>

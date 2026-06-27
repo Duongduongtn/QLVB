@@ -103,6 +103,16 @@ function CongVanDenPage() {
     },
   });
 
+  const repliesQuery = useQuery({
+    queryKey: ['incoming-replies', selected?.id],
+    enabled: !!selected,
+    queryFn: async () => {
+      const res = await api.GET('/api/incoming/{doc_id}/replies', { params: { path: { doc_id: selected!.id } } });
+      return (res.data ?? []) as { id: number; number: string | null; subject: string }[];
+    },
+  });
+  const replies = repliesQuery.data ?? [];
+
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ['incoming'] });
     setSelected(null);
@@ -340,6 +350,19 @@ function CongVanDenPage() {
               </InfoRow>
               <InfoRow label="Vào sổ lúc">{fmtDateTime(selected.created_at)}</InfoRow>
             </div>
+            {replies.length > 0 && (
+              <div className="card" style={{ padding: 16 }}>
+                <div className="eyebrow" style={{ marginBottom: 8 }}>Công văn đi phản hồi ({replies.length})</div>
+                <div className="flex flex-col" style={{ gap: 6 }}>
+                  {replies.map((r) => (
+                    <div key={r.id} className="flex items-center" style={{ gap: 8 }}>
+                      <span className="cell-mono num">{r.number ?? `#${r.id}`}</span>
+                      <span className="cell-meta" style={{ flex: 1, minWidth: 0 }}>{r.subject}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         )}
       </Drawer>
