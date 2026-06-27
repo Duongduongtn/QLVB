@@ -8,8 +8,8 @@ import {
 } from '@tanstack/react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Bell,
   ChevronDown,
+  ClipboardList,
   Contact,
   Inbox,
   KeyRound,
@@ -31,6 +31,7 @@ import { api } from '~/lib/api';
 import { useBranding } from '~/lib/branding';
 import { useAuth, type Role } from '~/stores/auth';
 import { useUnitView, type UnitView } from '~/stores/unitView';
+import { NotificationBell } from '~/components/NotificationBell';
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -62,6 +63,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Công văn đi', to: '/cong-van-di', icon: Send },
       { label: 'Công văn đến', to: '/cong-van-den', icon: Inbox },
+      { label: 'Việc của tôi', to: '/viec-cua-toi', icon: ClipboardList },
     ],
   },
   {
@@ -229,10 +231,7 @@ function AppShell({
           </div>
 
           {/* Notification bell */}
-          <button className="icon-btn" aria-label="Thông báo">
-            <Bell size={20} />
-            <span className="noti-dot" />
-          </button>
+          <NotificationBell />
 
           {/* User menu */}
           <div className="relative">

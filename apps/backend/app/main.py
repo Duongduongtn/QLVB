@@ -25,11 +25,13 @@ from app.routers import (
     document_types,
     health,
     incoming,
+    notifications,
     organizations,
     outgoing,
     seals,
     signatures,
     signing_profiles,
+    tasks,
     trash,
     units,
     users,
@@ -90,5 +92,7 @@ app.include_router(bg_removal.router, prefix="/api/bg-removal", tags=["bg-remova
 app.include_router(organizations.router, prefix="/api/organizations", tags=["organizations"])
 app.include_router(outgoing.router, prefix="/api/outgoing", tags=["outgoing"])
 app.include_router(incoming.router, prefix="/api/incoming", tags=["incoming"])
+app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
+app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
 app.include_router(trash.router, prefix="/api/trash", tags=["trash"])
 app.include_router(audit.router, prefix="/api/audit-logs", tags=["audit"])

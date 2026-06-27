@@ -9,8 +9,10 @@ from app.models.base import Base
 from app.models.document_type import DocumentType, NumberingRegistry
 from app.models.file import File
 from app.models.incoming_document import IncomingDocument
+from app.models.notification import Notification
 from app.models.organization import Organization
 from app.models.outgoing_document import OutgoingDocument, OutgoingRecipient
+from app.models.processing_task import ProcessingTask
 from app.models.seal import Seal
 from app.models.signature import Signature
 from app.models.signing_profile import SigningProfile
@@ -24,10 +26,12 @@ __all__ = [
     "DocumentType",
     "File",
     "IncomingDocument",
+    "Notification",
     "NumberingRegistry",
     "Organization",
     "OutgoingDocument",
     "OutgoingRecipient",
+    "ProcessingTask",
     "Seal",
     "Signature",
     "SigningProfile",

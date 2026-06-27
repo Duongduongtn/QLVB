@@ -31,8 +31,10 @@ from app.schemas.incoming import (
     RegisterRequest,
 )
 from app.schemas.outgoing import CancelRequest, OutgoingListItem
+from app.schemas.tasks import AssignRequest, TaskOut
 from app.services import incoming as inc_service
 from app.services import outgoing as out_service
+from app.services import tasks as task_service
 from app.workers.ocr import extract_text
 
 router = APIRouter()
@@ -96,6 +98,31 @@ def ocr_status(
         "sender_hint": auto_fill.get("sender_hint"),
         "duplicates": [DuplicateOut(**d).model_dump() for d in dups],
     }
+
+
+@router.post("/{doc_id}/assign", response_model=list[TaskOut])
+def assign_incoming(
+    doc_id: int,
+    payload: AssignRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(current_user),
+) -> list[TaskOut]:
+    """E2 — phân công xử lý cho 1 hoặc cả 2 đơn vị (mỗi đơn vị 1 task độc lập)."""
+    _visible(inc_service.get_incoming(db, doc_id), actor)
+    ip, ua = _ctx(request)
+    tasks = task_service.assign(
+        db, doc_id, [a.model_dump() for a in payload.assignments], actor_id=actor.id, ip=ip, ua=ua
+    )
+    return [TaskOut.model_validate(t) for t in tasks]
+
+
+@router.get("/{doc_id}/tasks", response_model=list[TaskOut])
+def incoming_tasks(
+    doc_id: int, db: Session = Depends(get_db), actor: User = Depends(current_user)
+) -> list[TaskOut]:
+    _visible(inc_service.get_incoming(db, doc_id), actor)
+    return [TaskOut.model_validate(t) for t in task_service.list_for_incoming(db, doc_id)]
 
 
 @router.get("/{doc_id}/replies", response_model=list[OutgoingListItem])

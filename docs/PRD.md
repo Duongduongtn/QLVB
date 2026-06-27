@@ -503,7 +503,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [INC.ASG-01] Là Nhân viên, tôi muốn phân công CV đến cho 1 hoặc cả 2 đơn vị + gán người cụ thể, để rõ trách nhiệm xử lý.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ⚠️ Partial (27/06/2026) — model `processing_tasks` (UNIQUE incoming+unit chống đua) + migration 0012. `assign` GDNN/DVDL/**Cả 2 → 2 task ĐỘC LẬP** + noti người được giao (đổi người → noti cả cũ + mới). Người bị khoá → chặn giao. Modal "Phân công" (seg đơn vị + người + hạn + ghi chú) ở chi tiết CV đến; chuông thông báo header poll số chưa đọc + dropdown. **Defer:** badge "Đã giao" ở danh sách CV đến (hiện hiển thị task trong chi tiết).
 - **Steps to Complete**:
   1. Vào trang chi tiết CV đến.
   2. Click "Phân công".
@@ -526,7 +526,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [INC.TRK-01] Là người được giao, tôi muốn cập nhật trạng thái xử lý CV, để báo cáo tiến độ.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ⚠️ Partial (27/06/2026) — trang **"Việc của tôi"** (poll 15s) cập nhật trạng thái (Mới→Đang xử lý→Hoàn thành / Mở lại) + **chuyển người** (chỉ assignee/Quản lý — chống IDOR) + quá hạn **highlight đỏ**. Cron ngày `notify_due_tasks` nhắc việc sắp tới hạn (ngày mai/hôm nay) + **quá hạn** (cờ `reminded_on` chống spam). **Defer:** báo cáo tiến độ trên dashboard (Nhóm G).
 - **Steps to Complete**:
   1. Vào "Việc của tôi".
   2. Mở 1 task → cập nhật trạng thái: Đang xử lý / Đã hoàn thành / Chuyển người khác.
@@ -1005,8 +1005,8 @@ Review qua 5 điểm và bổ sung/sửa các phần sau:
 | INC.REG | E1 | Vào sổ CV đến (luồng chính) | E | Must | ⚠️ Partial |
 | INC.VER | E1.5 | Verify chữ ký số PAdES | E | Must | ⏳ Todo |
 | INC.DUP | E1.6 | Check trùng 3 lớp | E | Must | ✅ Done |
-| INC.ASG | E2 | Phân công xử lý | E | Must | ⏳ Todo |
-| INC.TRK | E3 | Theo dõi xử lý | E | Must | ⏳ Todo |
+| INC.ASG | E2 | Phân công xử lý | E | Must | ⚠️ Partial |
+| INC.TRK | E3 | Theo dõi xử lý | E | Must | ⚠️ Partial |
 | INC.ATT | E4 | Phụ lục đính kèm | E | Must | ⏳ Todo |
 | INC.LST | E5 | Danh sách + Sổ CV đến | E | Must | ⚠️ Partial |
 | CTC.SND | M2 | Danh bạ Cơ quan gửi (CV đến) | M | Must | ⚠️ Partial |

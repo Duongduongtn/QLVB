@@ -1,14 +1,32 @@
 import { useMemo, useState } from 'react';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Ban, ChevronLeft, ChevronRight, Download, EyeOff, Inbox, Plus, Search, ShieldCheck } from 'lucide-react';
+import { Ban, ChevronLeft, ChevronRight, Download, EyeOff, Inbox, Plus, Search, ShieldCheck, UserPlus } from 'lucide-react';
 
 import { api, type ApiErrorEnvelope } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
 import { fmtDate, fmtDateTime } from '~/lib/format';
 import { EmptyState, FilterMenu, InfoRow, PageHeader, Pill } from '~/components/ui';
 import { Drawer } from '~/components/Drawer';
+import { Modal } from '~/components/Modal';
 import { CONFIDENTIALITY_LABEL, URGENCY_LABEL } from '~/lib/incoming';
+
+interface UnitLite2 {
+  id: number;
+  short_name: string | null;
+  code: string;
+}
+interface UserLite {
+  id: number;
+  username: string;
+  full_name: string;
+}
+interface TaskLite {
+  id: number;
+  unit_id: number;
+  assignee_id: number | null;
+  status: string;
+}
 
 export const Route = createFileRoute('/cong-van-den')({
   component: CongVanDenPage,
@@ -112,6 +130,69 @@ function CongVanDenPage() {
     },
   });
   const replies = repliesQuery.data ?? [];
+
+  const tasksQuery = useQuery({
+    queryKey: ['incoming-tasks', selected?.id],
+    enabled: !!selected,
+    queryFn: async () => {
+      const res = await api.GET('/api/incoming/{doc_id}/tasks', { params: { path: { doc_id: selected!.id } } });
+      return (res.data ?? []) as TaskLite[];
+    },
+  });
+  const tasks = tasksQuery.data ?? [];
+
+  const unitsQuery = useQuery({
+    queryKey: ['units'],
+    queryFn: async () => (await api.GET('/api/units', {})).data as { items: UnitLite2[] },
+  });
+  const allUnits = useMemo(() => unitsQuery.data?.items ?? [], [unitsQuery.data]);
+
+  const usersQuery = useQuery({
+    queryKey: ['users', 'assignee'],
+    enabled: !!me,
+    queryFn: async () => {
+      const res = await api.GET('/api/users', { params: { query: { size: 100 } } });
+      return (res.data ?? { items: [] }) as { items: UserLite[] };
+    },
+  });
+  const users = useMemo(() => usersQuery.data?.items ?? [], [usersQuery.data]);
+
+  // ── Phân công (E2) ──
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignUnits, setAssignUnits] = useState<'first' | 'second' | 'both'>('first');
+  const [assignee1, setAssignee1] = useState<number | ''>('');
+  const [assignee2, setAssignee2] = useState<number | ''>('');
+  const [assignDeadline, setAssignDeadline] = useState('');
+  const [assignNote, setAssignNote] = useState('');
+
+  const assignMut = useMutation({
+    mutationFn: async (docId: number) => {
+      const u1 = allUnits[0];
+      const u2 = allUnits[1];
+      const list: { unit_id: number; assignee_id: number; deadline: string | null; note: string | null }[] = [];
+      if ((assignUnits === 'first' || assignUnits === 'both') && u1 && assignee1) {
+        list.push({ unit_id: u1.id, assignee_id: assignee1, deadline: assignDeadline || null, note: assignNote || null });
+      }
+      if ((assignUnits === 'second' || assignUnits === 'both') && u2 && assignee2) {
+        list.push({ unit_id: u2.id, assignee_id: assignee2, deadline: assignDeadline || null, note: assignNote || null });
+      }
+      if (list.length === 0) throw new Error('Chọn đơn vị và người xử lý');
+      const { error } = await api.POST('/api/incoming/{doc_id}/assign', {
+        params: { path: { doc_id: docId } },
+        body: { assignments: list },
+      });
+      if (error) throw new Error(errMsg(error, 'Phân công thất bại'));
+    },
+    onSuccess: async () => {
+      setAssignOpen(false);
+      setAssignee1('');
+      setAssignee2('');
+      setAssignDeadline('');
+      setAssignNote('');
+      await queryClient.invalidateQueries({ queryKey: ['incoming-tasks'] });
+    },
+    onError: (e: Error) => setActErr(e.message),
+  });
 
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ['incoming'] });
@@ -325,6 +406,11 @@ function CongVanDenPage() {
                   <Ban size={13} /> Huỷ vào sổ
                 </button>
               )}
+              {selected.status === 'registered' && (
+                <button className="btn-primary" style={{ height: 32 }} type="button" onClick={() => setAssignOpen(true)}>
+                  <UserPlus size={13} /> Phân công
+                </button>
+              )}
             </>
           )
         }
@@ -350,6 +436,26 @@ function CongVanDenPage() {
               </InfoRow>
               <InfoRow label="Vào sổ lúc">{fmtDateTime(selected.created_at)}</InfoRow>
             </div>
+            {tasks.length > 0 && (
+              <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+                <div className="eyebrow" style={{ marginBottom: 8 }}>Phân công xử lý</div>
+                <div className="flex flex-col" style={{ gap: 6 }}>
+                  {tasks.map((t) => {
+                    const u = allUnits.find((x) => x.id === t.unit_id);
+                    const who = users.find((x) => x.id === t.assignee_id);
+                    const sv = t.status === 'done' ? 'success' : t.status === 'in_progress' ? 'warning' : 'info';
+                    const sl = t.status === 'done' ? 'Hoàn thành' : t.status === 'in_progress' ? 'Đang xử lý' : 'Mới';
+                    return (
+                      <div key={t.id} className="flex items-center" style={{ gap: 8 }}>
+                        <span style={{ fontWeight: 600, color: 'var(--ink)', minWidth: 56 }}>{u?.short_name ?? u?.code ?? '—'}</span>
+                        <span className="cell-meta" style={{ flex: 1, minWidth: 0 }}>{who?.full_name ?? 'Chưa giao'}</span>
+                        <Pill variant={sv} dot>{sl}</Pill>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             {replies.length > 0 && (
               <div className="card" style={{ padding: 16 }}>
                 <div className="eyebrow" style={{ marginBottom: 8 }}>Công văn đi phản hồi ({replies.length})</div>
@@ -366,6 +472,56 @@ function CongVanDenPage() {
           </>
         )}
       </Drawer>
+
+      <Modal
+        open={assignOpen}
+        onClose={() => setAssignOpen(false)}
+        title="Phân công xử lý"
+        actions={
+          <>
+            <button className="btn-secondary" type="button" onClick={() => setAssignOpen(false)}>Huỷ</button>
+            <button className="btn-primary" type="button" disabled={assignMut.isPending || !selected} onClick={() => selected && assignMut.mutate(selected.id)}>
+              {assignMut.isPending ? 'Đang giao…' : 'Giao việc'}
+            </button>
+          </>
+        }
+      >
+        <div>
+          <label className="field-label">Đơn vị xử lý</label>
+          <div className="seg">
+            <button type="button" data-active={assignUnits === 'first' ? 'true' : undefined} onClick={() => setAssignUnits('first')}>{allUnits[0]?.short_name ?? 'Đơn vị 1'}</button>
+            <button type="button" data-active={assignUnits === 'second' ? 'true' : undefined} onClick={() => setAssignUnits('second')}>{allUnits[1]?.short_name ?? 'Đơn vị 2'}</button>
+            <button type="button" data-active={assignUnits === 'both' ? 'true' : undefined} onClick={() => setAssignUnits('both')}>Cả 2 đơn vị</button>
+          </div>
+        </div>
+        {(assignUnits === 'first' || assignUnits === 'both') && (
+          <div>
+            <label className="field-label">Người xử lý — {allUnits[0]?.short_name ?? 'Đơn vị 1'}</label>
+            <select className="text-input" value={assignee1} onChange={(e) => setAssignee1(e.target.value ? Number(e.target.value) : '')}>
+              <option value="">— Chọn người —</option>
+              {users.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+            </select>
+          </div>
+        )}
+        {(assignUnits === 'second' || assignUnits === 'both') && (
+          <div>
+            <label className="field-label">Người xử lý — {allUnits[1]?.short_name ?? 'Đơn vị 2'}</label>
+            <select className="text-input" value={assignee2} onChange={(e) => setAssignee2(e.target.value ? Number(e.target.value) : '')}>
+              <option value="">— Chọn người —</option>
+              {users.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+            </select>
+          </div>
+        )}
+        <div>
+          <label className="field-label">Hạn xử lý</label>
+          <input className="text-input" type="date" value={assignDeadline} onChange={(e) => setAssignDeadline(e.target.value)} />
+        </div>
+        <div>
+          <label className="field-label">Ghi chú phân công</label>
+          <textarea className="text-input" rows={3} value={assignNote} onChange={(e) => setAssignNote(e.target.value)} placeholder="Nội dung cần xử lý…" />
+        </div>
+        <p className="cell-meta">Chọn “Cả 2 đơn vị” sẽ tạo 2 việc xử lý độc lập.</p>
+      </Modal>
     </>
   );
 }

@@ -64,4 +64,8 @@ celery.conf.beat_schedule = {
         "task": "app.workers.rembg_task.purge_bg_tmp",
         "schedule": 60 * 60,  # mỗi giờ — dọn asset tạm tách nền (preview/slider)
     },
+    "notify-due-tasks-daily": {
+        "task": "app.workers.r2_sync.notify_due_tasks",
+        "schedule": 24 * 60 * 60,  # mỗi ngày — nhắc việc sắp/đã quá hạn (E3)
+    },
 }

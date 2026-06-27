@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ViecCuaToiRouteImport } from './routes/viec-cua-toi'
 import { Route as ThungRacRouteImport } from './routes/thung-rac'
 import { Route as NguoiDungRouteImport } from './routes/nguoi-dung'
 import { Route as MocRouteImport } from './routes/moc'
@@ -24,6 +25,11 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as CongVanDiSoanRouteImport } from './routes/cong-van-di.soan'
 import { Route as CongVanDenVaoSoRouteImport } from './routes/cong-van-den.vao-so'
 
+const ViecCuaToiRoute = ViecCuaToiRouteImport.update({
+  id: '/viec-cua-toi',
+  path: '/viec-cua-toi',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ThungRacRoute = ThungRacRouteImport.update({
   id: '/thung-rac',
   path: '/thung-rac',
@@ -108,6 +114,7 @@ export interface FileRoutesByFullPath {
   '/moc': typeof MocRoute
   '/nguoi-dung': typeof NguoiDungRoute
   '/thung-rac': typeof ThungRacRoute
+  '/viec-cua-toi': typeof ViecCuaToiRoute
   '/cong-van-den/vao-so': typeof CongVanDenVaoSoRoute
   '/cong-van-di/soan': typeof CongVanDiSoanRoute
 }
@@ -124,6 +131,7 @@ export interface FileRoutesByTo {
   '/moc': typeof MocRoute
   '/nguoi-dung': typeof NguoiDungRoute
   '/thung-rac': typeof ThungRacRoute
+  '/viec-cua-toi': typeof ViecCuaToiRoute
   '/cong-van-den/vao-so': typeof CongVanDenVaoSoRoute
   '/cong-van-di/soan': typeof CongVanDiSoanRoute
 }
@@ -141,6 +149,7 @@ export interface FileRoutesById {
   '/moc': typeof MocRoute
   '/nguoi-dung': typeof NguoiDungRoute
   '/thung-rac': typeof ThungRacRoute
+  '/viec-cua-toi': typeof ViecCuaToiRoute
   '/cong-van-den/vao-so': typeof CongVanDenVaoSoRoute
   '/cong-van-di/soan': typeof CongVanDiSoanRoute
 }
@@ -159,6 +168,7 @@ export interface FileRouteTypes {
     | '/moc'
     | '/nguoi-dung'
     | '/thung-rac'
+    | '/viec-cua-toi'
     | '/cong-van-den/vao-so'
     | '/cong-van-di/soan'
   fileRoutesByTo: FileRoutesByTo
@@ -175,6 +185,7 @@ export interface FileRouteTypes {
     | '/moc'
     | '/nguoi-dung'
     | '/thung-rac'
+    | '/viec-cua-toi'
     | '/cong-van-den/vao-so'
     | '/cong-van-di/soan'
   id:
@@ -191,6 +202,7 @@ export interface FileRouteTypes {
     | '/moc'
     | '/nguoi-dung'
     | '/thung-rac'
+    | '/viec-cua-toi'
     | '/cong-van-den/vao-so'
     | '/cong-van-di/soan'
   fileRoutesById: FileRoutesById
@@ -208,10 +220,18 @@ export interface RootRouteChildren {
   MocRoute: typeof MocRoute
   NguoiDungRoute: typeof NguoiDungRoute
   ThungRacRoute: typeof ThungRacRoute
+  ViecCuaToiRoute: typeof ViecCuaToiRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/viec-cua-toi': {
+      id: '/viec-cua-toi'
+      path: '/viec-cua-toi'
+      fullPath: '/viec-cua-toi'
+      preLoaderRoute: typeof ViecCuaToiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/thung-rac': {
       id: '/thung-rac'
       path: '/thung-rac'
@@ -350,6 +370,7 @@ const rootRouteChildren: RootRouteChildren = {
   MocRoute: MocRoute,
   NguoiDungRoute: NguoiDungRoute,
   ThungRacRoute: ThungRacRoute,
+  ViecCuaToiRoute: ViecCuaToiRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

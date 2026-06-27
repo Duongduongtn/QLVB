@@ -31,6 +31,20 @@ def purge_trash_older_than_30d() -> dict:
     return {"removed": removed}
 
 
+@celery.task(name="app.workers.r2_sync.notify_due_tasks")
+def notify_due_tasks() -> dict:
+    """Cron ngày (E3) — nhắc việc xử lý sắp tới hạn / quá hạn cho người được giao."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.core.database import SessionLocal
+    from app.services.tasks import notify_deadlines
+
+    vn_today = datetime.now(timezone(timedelta(hours=7))).date()
+    with SessionLocal() as db:
+        sent = notify_deadlines(db, today=vn_today)
+    return {"sent": sent}
+
+
 @celery.task(name="app.workers.r2_sync.reap_stuck_jobs")
 def reap_stuck_jobs() -> dict:
     """Cron mỗi phút — TDD §3.2: job 'running' mất heartbeat >5' → failed + retry."""
