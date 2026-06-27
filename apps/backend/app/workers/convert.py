@@ -1,7 +1,8 @@
-"""Convert Word → PDF bằng LibreOffice headless.
+"""Convert Word → PDF bằng LibreOffice headless (TDD §2.4 — chạy ở image WORKER).
 
-LibreOffice cần cài sẵn trong image worker (Dockerfile.worker).
-TDD §4: tách worker riêng để LibreOffice crash không sập web.
+Task mỏng bọc `services.convert`: đọc Word (asset tạm) → convert → ghi PDF (asset tạm) →
+trả storage_key. Hiện luồng D1 gọi service đồng bộ (convert nhanh, ≤10s); task này để
+chuyển sang async khi cần (file lớn / tải cao).
 """
 
 from __future__ import annotations
@@ -9,15 +10,12 @@ from __future__ import annotations
 from app.core.celery_app import celery
 
 
-@celery.task(name="app.workers.convert.docx_to_pdf", bind=True, max_retries=3)
-def docx_to_pdf(self, job_id: str, file_id: int) -> dict:
-    """TODO §4 GĐ1 — convert .docx/.doc → PDF.
+@celery.task(name="app.workers.convert.docx_to_pdf", bind=True, max_retries=2)
+def docx_to_pdf(self, input_key: str, ext: str = "docx") -> dict:
+    from app.core.storage import read_asset, save_asset
+    from app.services.convert import convert_word_to_pdf
 
-    Args:
-        job_id: UUID job trong bảng `jobs` để cập nhật progress.
-        file_id: file gốc (đã mã hoá phong bì) cần convert.
-
-    Returns:
-        {"output_file_id": <id PDF mới>}
-    """
-    raise NotImplementedError("Implement ở giai đoạn 1 nhóm D")
+    data = read_asset(input_key)
+    pdf = convert_word_to_pdf(data, ext=ext)
+    asset = save_asset(pdf, ext="pdf", subdir="cv_tmp")
+    return {"result_key": asset.storage_key}

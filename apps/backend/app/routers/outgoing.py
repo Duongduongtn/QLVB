@@ -8,14 +8,17 @@ from __future__ import annotations
 
 from urllib.parse import quote
 
+from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, File, Query, Request, Response, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
+from app.core.celery_app import celery
 from app.core.database import get_db
 from app.core.deps import current_user
-from app.core.errors import ValidationFailed
+from app.core.errors import Conflict, ValidationFailed
 from app.core.http import client_ip
+from app.core.storage import read_asset, save_asset
 from app.models.user import User
 from app.schemas.outgoing import (
     CancelRequest,
@@ -28,6 +31,7 @@ from app.schemas.outgoing import (
     RecipientOut,
 )
 from app.services import outgoing as out_service
+from app.workers.convert import docx_to_pdf
 
 router = APIRouter()
 
@@ -96,25 +100,66 @@ def update_outgoing(
     return _to_out(db, doc)
 
 
-@router.post("/{doc_id}/file", response_model=OutgoingOut)
+_WORD_EXTS = frozenset({"docx", "doc"})
+
+
+def _ext_of(name: str | None) -> str:
+    return name.rsplit(".", 1)[-1].lower() if name and "." in name else ""
+
+
+@router.post("/{doc_id}/file")
 async def upload_outgoing_file(
     doc_id: int,
     request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     actor: User = Depends(current_user),
-) -> OutgoingOut:
+) -> dict[str, object]:
+    """PDF → lưu ngay (set_file). Word → CONVERT Ở WORKER (LibreOffice cô lập, TDD §2.4):
+    lưu Word tạm → enqueue → FE poll /finalize-convert."""
     data = await file.read(_MAX_PDF_BYTES + 1)
     if not data:
         raise ValidationFailed("File rỗng")
     if len(data) > _MAX_PDF_BYTES:
         raise ValidationFailed("File vượt quá 50MB")
     ip, ua = _ctx(request)
-    # set_file = DB + AES-GCM + ghi đĩa (đồng bộ) → đẩy threadpool để không chặn event loop.
-    doc = await run_in_threadpool(
-        out_service.set_file, db, doc_id, data, actor_id=actor.id, ip=ip, ua=ua
-    )
-    return _to_out(db, doc)
+
+    if data.startswith(b"%PDF"):
+        await run_in_threadpool(
+            out_service.set_file, db, doc_id, data, file.filename, actor_id=actor.id, ip=ip, ua=ua
+        )
+        return {"status": "ready"}
+
+    ext = _ext_of(file.filename)
+    if ext not in _WORD_EXTS and data[:2] != b"PK":
+        raise ValidationFailed("File phải là PDF hoặc Word (.docx/.doc)")
+    doc = out_service.get_outgoing(db, doc_id)  # đảm bảo còn nháp trước khi tốn công convert
+    if doc.status != "draft":
+        raise Conflict("Chỉ thay file khi công văn còn nháp")
+    tmp_key = save_asset(data, ext=ext or "docx", subdir="cv_tmp").storage_key
+    task = docx_to_pdf.delay(tmp_key, ext or "docx")
+    return {"status": "converting", "task_id": task.id}
+
+
+@router.post("/{doc_id}/finalize-convert")
+def finalize_convert(
+    doc_id: int,
+    request: Request,
+    task_id: str = Query(...),
+    db: Session = Depends(get_db),
+    actor: User = Depends(current_user),
+) -> dict[str, object]:
+    """FE poll sau khi upload Word: task convert xong → đọc PDF kết quả → lưu làm file gốc."""
+    res: AsyncResult = AsyncResult(task_id, app=celery)
+    if res.failed():
+        return {"status": "error", "message": "Chuyển Word sang PDF thất bại — thử tải PDF"}
+    if not res.successful():
+        return {"status": "pending"}
+    result_key = str(res.result["result_key"])
+    pdf = read_asset(result_key)
+    ip, ua = _ctx(request)
+    out_service.set_file(db, doc_id, pdf, "cong-van.pdf", actor_id=actor.id, ip=ip, ua=ua)
+    return {"status": "done"}
 
 
 @router.post("/{doc_id}/preview")

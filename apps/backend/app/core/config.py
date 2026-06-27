@@ -43,6 +43,9 @@ class Settings(BaseSettings):
 
     # ── Storage ───────────────────────────────────────
     storage_local_path: Path = Path("/var/qlcv/storage")
+    # LibreOffice để convert Word→PDF (worker image có sẵn 'soffice' trên PATH; local
+    # Windows trỏ full path qua biến môi trường LIBREOFFICE_BIN nếu cần).
+    libreoffice_bin: str = "soffice"
     master_key_hex: SecretStr = Field(default=SecretStr(""))  # 32-byte hex
     r2_endpoint: str | None = None
     r2_bucket: str | None = None

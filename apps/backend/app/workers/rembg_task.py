@@ -42,5 +42,10 @@ def purge_bg_tmp(max_age_hours: int = 2) -> dict:
 
     from app.core.storage import purge_old_files
 
-    removed = purge_old_files("bg_tmp", max_age_seconds=max_age_hours * 3600, now=time.time())
+    now = time.time()
+    age = max_age_hours * 3600
+    # bg_tmp (tách nền) + cv_tmp (Word/PDF convert) đều là asset tạm phù du.
+    removed = purge_old_files("bg_tmp", max_age_seconds=age, now=now) + purge_old_files(
+        "cv_tmp", max_age_seconds=age, now=now
+    )
     return {"removed": removed}

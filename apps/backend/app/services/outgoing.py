@@ -167,13 +167,22 @@ def update_draft(
 
 
 def set_file(
-    db: Session, doc_id: int, pdf_bytes: bytes, *, actor_id: int, ip: str | None, ua: str | None
+    db: Session,
+    doc_id: int,
+    data: bytes,
+    filename: str | None,
+    *,
+    actor_id: int,
+    ip: str | None,
+    ua: str | None,
 ) -> OutgoingDocument:
     doc = get_outgoing(db, doc_id)
     if doc.status != "draft":
         raise Conflict("Chỉ thay file khi công văn còn nháp")
-    if not pdf_bytes.startswith(b"%PDF"):
+    if not data.startswith(b"%PDF"):
+        # Word convert THÀNH PDF ở worker (router), tới đây luôn là PDF.
         raise ValidationFailed("File công văn phải là PDF")
+    pdf_bytes = data
 
     old = db.get(File, doc.original_file_id) if doc.original_file_id is not None else None
     old_key = old.storage_key if old is not None else None
@@ -186,7 +195,7 @@ def set_file(
             sha256=enc.sha256,
             size_bytes=enc.size_bytes,
             mime_type="application/pdf",
-            original_name="goc.pdf",
+            original_name=filename or "goc.pdf",
         )
         db.add(new_file)
         db.flush()

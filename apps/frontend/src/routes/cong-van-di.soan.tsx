@@ -152,6 +152,22 @@ function SoanCongVanPage() {
     return { giap_lai: giapLai, ky_nhay: kyNhay };
   }
 
+  async function pollConvert(id: number, taskId: string): Promise<void> {
+    for (let i = 0; i < 30; i++) {
+      // ~30s (convert Word ≤10s; nới biên cho worker cold-start)
+      await new Promise((r) => setTimeout(r, 1000));
+      const res = await fetch(`/api/outgoing/${id}/finalize-convert?task_id=${encodeURIComponent(taskId)}`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!res.ok) continue;
+      const body = (await res.json()) as { status: string; message?: string };
+      if (body.status === 'done') return;
+      if (body.status === 'error') throw new Error(body.message ?? 'Chuyển Word sang PDF thất bại');
+    }
+    throw new Error('Chuyển Word sang PDF quá lâu (worker chưa chạy?) — thử tải file PDF');
+  }
+
   async function ensureDraft(): Promise<number> {
     const body = {
       unit_id: unitId,
@@ -173,6 +189,10 @@ function SoanCongVanPage() {
       if (!res.ok) {
         const b = (await res.json().catch(() => null)) as ApiErrorEnvelope | null;
         throw new Error(b?.error?.message ?? 'Tải file lên thất bại');
+      }
+      const up = (await res.json()) as { status: string; task_id?: string };
+      if (up.status === 'converting' && up.task_id) {
+        await pollConvert(id, up.task_id); // Word → chờ worker convert sang PDF
       }
       setDraftId(id);
       return id;
@@ -264,8 +284,9 @@ function SoanCongVanPage() {
       setErr('File vượt quá 50MB');
       return;
     }
-    if (f && f.type !== 'application/pdf') {
-      setErr('Hiện chỉ hỗ trợ file PDF');
+    // Chấp nhận PDF hoặc Word (.docx/.doc — backend tự convert sang PDF bằng LibreOffice).
+    if (f && !/\.(pdf|docx|doc)$/i.test(f.name)) {
+      setErr('Hỗ trợ file PDF hoặc Word (.docx/.doc)');
       return;
     }
     setFile(f);
@@ -441,12 +462,12 @@ function StepUpload({ file, onPick }: { file: File | null; onPick: (f: File | nu
         className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center hover:border-amber-300"
       >
         <UploadCloud size={40} className="text-amber-500" strokeWidth={1.25} />
-        <span className="font-medium text-slate-700">Bấm để chọn file PDF</span>
-        <span className="text-xs text-slate-400">PDF — tối đa 50MB</span>
+        <span className="font-medium text-slate-700">Bấm để chọn file PDF hoặc Word</span>
+        <span className="text-xs text-slate-400">PDF / .docx / .doc — tối đa 50MB</span>
         <input
           id="cv_file"
           type="file"
-          accept="application/pdf"
+          accept=".pdf,.docx,.doc,application/pdf"
           className="hidden"
           onChange={(e) => onPick(e.target.files?.[0] ?? null)}
         />
@@ -457,7 +478,7 @@ function StepUpload({ file, onPick }: { file: File | null; onPick: (f: File | nu
         </p>
       )}
       <p className="mt-3 text-xs text-slate-400">
-        Hiện hỗ trợ PDF. Chuyển đổi Word→PDF (LibreOffice) sẽ bổ sung sau.
+        File Word được tự động chuyển sang PDF (LibreOffice) trước khi chèn mộc.
       </p>
     </div>
   );
