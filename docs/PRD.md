@@ -447,7 +447,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [INC.REG-01] Là Nhân viên/Quản lý, tôi muốn vào sổ công văn đến bằng cách upload file PDF, web tự đọc metadata + check trùng, để CV được lưu tập trung và không nhập trùng.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ⚠️ Partial (27/06/2026) — **BE+FE wizard 4 bước XONG**: upload PDF (mã hoá phong bì) → OCR worker (PyMuPDF text-layer / PaddleOCR `vie` scan, bản tạm `in_tmp` xoá ngay sau OCR + beat purge) → auto-fill số ký hiệu/ngày VB/gợi ý cơ quan → dedup 3 lớp (E1.6) → cấp **số đến sổ chung** (nextval atomic, theo năm tiếp nhận) → manager_only ẩn NV (404 server-side). Cancel giữ số. Audit gồm download. **Defer:** verify chữ ký số (E1.5 — đang `unchecked`), upload batch nhiều file, phụ lục (E4).
 - **Steps to Complete**:
   1. Vào "Công văn đến → Vào sổ mới".
   2. Upload file PDF (drag drop, hỗ trợ upload nhiều file batch).
@@ -491,7 +491,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [INC.DUP-01] Là Nhân viên, tôi muốn web tự cảnh báo khi CV đến có dấu hiệu trùng (đã có trong sổ), để không vào sổ 2 lần.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ✅ Done (27/06/2026) — `check_duplicates` 3 lớp: SHA-256 (đỏ, chặn register nếu thiếu lý do) / metadata số-ký-hiệu+cơ-quan+ngày (vàng) / OCR similarity ≥90% (nhẹ, SequenceMatcher cắt 4000 ký tự + quick_ratio prefilter). Chữ ký số hợp lệ → bỏ qua dedup. FE cảnh báo + "Vẫn lưu" kèm `duplicate_note` (audit). FE tái kiểm lớp 2/3 sau khi chọn cơ quan gửi.
 - **Steps to Complete**:
   - **Lớp 1 — SHA-256 hash**: trùng tuyệt đối → cảnh báo MẠNH 🔴 + link CV cũ + nút "Xem / Vẫn lưu / Huỷ".
   - **Lớp 2 — Trùng metadata** (số ký hiệu + cơ quan gửi + ngày VB): trùng có thể → cảnh báo TRUNG BÌNH 🟡 + gợi ý "Có thể cùng CV gửi cho cả 2 đơn vị → vào sổ 1 lần, gán xử lý Cả 2".
@@ -1002,9 +1002,9 @@ Review qua 5 điểm và bổ sung/sửa các phần sau:
 
 | ID | Mã | Tên story | Nhóm | Ưu tiên | Trạng thái |
 |---|---|---|---|---|---|
-| INC.REG | E1 | Vào sổ CV đến (luồng chính) | E | Must | ⏳ Todo |
+| INC.REG | E1 | Vào sổ CV đến (luồng chính) | E | Must | ⚠️ Partial |
 | INC.VER | E1.5 | Verify chữ ký số PAdES | E | Must | ⏳ Todo |
-| INC.DUP | E1.6 | Check trùng 3 lớp | E | Must | ⏳ Todo |
+| INC.DUP | E1.6 | Check trùng 3 lớp | E | Must | ✅ Done |
 | INC.ASG | E2 | Phân công xử lý | E | Must | ⏳ Todo |
 | INC.TRK | E3 | Theo dõi xử lý | E | Must | ⏳ Todo |
 | INC.ATT | E4 | Phụ lục đính kèm | E | Must | ⏳ Todo |

@@ -11,6 +11,7 @@ import {
   Bell,
   ChevronDown,
   Contact,
+  Inbox,
   KeyRound,
   LogOut,
   Menu,
@@ -58,7 +59,10 @@ interface NavGroup {
 const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Công việc',
-    items: [{ label: 'Công văn đi', to: '/cong-van-di', icon: Send }],
+    items: [
+      { label: 'Công văn đi', to: '/cong-van-di', icon: Send },
+      { label: 'Công văn đến', to: '/cong-van-den', icon: Inbox },
+    ],
   },
   {
     title: 'Danh mục',

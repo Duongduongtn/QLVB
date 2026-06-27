@@ -24,6 +24,7 @@ from app.routers import (
     bg_removal,
     document_types,
     health,
+    incoming,
     organizations,
     outgoing,
     seals,
@@ -88,5 +89,6 @@ app.include_router(
 app.include_router(bg_removal.router, prefix="/api/bg-removal", tags=["bg-removal"])
 app.include_router(organizations.router, prefix="/api/organizations", tags=["organizations"])
 app.include_router(outgoing.router, prefix="/api/outgoing", tags=["outgoing"])
+app.include_router(incoming.router, prefix="/api/incoming", tags=["incoming"])
 app.include_router(trash.router, prefix="/api/trash", tags=["trash"])
 app.include_router(audit.router, prefix="/api/audit-logs", tags=["audit"])
