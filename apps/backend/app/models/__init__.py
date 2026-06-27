@@ -9,6 +9,7 @@ from app.models.base import Base
 from app.models.document_type import DocumentType, NumberingRegistry
 from app.models.file import File
 from app.models.organization import Organization
+from app.models.outgoing_document import OutgoingDocument, OutgoingRecipient
 from app.models.seal import Seal
 from app.models.signature import Signature
 from app.models.signing_profile import SigningProfile
@@ -23,6 +24,8 @@ __all__ = [
     "File",
     "NumberingRegistry",
     "Organization",
+    "OutgoingDocument",
+    "OutgoingRecipient",
     "Seal",
     "Signature",
     "SigningProfile",

@@ -38,6 +38,14 @@ class AssetResult:
     size_bytes: int
 
 
+@dataclass(slots=True)
+class EncryptedFileResult:
+    storage_key: str
+    sha256: str  # hash NỘI DUNG GỐC (trước mã hoá) — E1.6 check trùng
+    size_bytes: int  # kích thước nội dung gốc
+    wrapped_key: bytes
+
+
 def _master_key() -> bytes:
     from app.core.config import settings
 
@@ -109,6 +117,29 @@ def read_asset(storage_key: str) -> bytes:
 def delete_asset(storage_key: str) -> None:
     """Xoá file asset khỏi đĩa (bỏ qua nếu đã không còn) — dọn logo cũ khi đổi."""
     _safe_path(storage_key).unlink(missing_ok=True)
+
+
+# ── File CV mã hoá phong bì (PDF công văn — khác asset mộc/logo không mã hoá) ──────
+def save_encrypted_file(data: bytes, *, ext: str = "pdf", subdir: str = "cv") -> EncryptedFileResult:
+    """Mã hoá phong bì AES-256-GCM rồi ghi ciphertext ra đĩa. Trả metadata + wrapped_key
+    (để lưu cột files.wrapped_key). sha256 = hash NỘI DUNG GỐC (cho E1.6 check trùng)."""
+    sha256 = hashlib.sha256(data).hexdigest()
+    env = envelope_encrypt(data)
+    name = secrets.token_hex(16)
+    safe_ext = ext.lower().lstrip(".")
+    rel = f"{subdir}/{name[:2]}/{name}.{safe_ext}.enc" if safe_ext else f"{subdir}/{name[:2]}/{name}.enc"
+    dest = _storage_root() / rel
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(env.ciphertext)
+    return EncryptedFileResult(
+        storage_key=rel, sha256=sha256, size_bytes=len(data), wrapped_key=env.wrapped_key
+    )
+
+
+def read_encrypted_file(storage_key: str, wrapped_key: bytes) -> bytes:
+    """Đọc ciphertext + giải mã phong bì → trả nội dung gốc."""
+    ciphertext = _safe_path(storage_key).read_bytes()
+    return envelope_decrypt(ciphertext, wrapped_key)
 
 
 def purge_old_files(subdir: str, *, max_age_seconds: int, now: float) -> int:

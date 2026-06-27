@@ -1,0 +1,164 @@
+"""Router CV đi — Nhóm D (D1 phát hành, D6 sổ). Quản lý + Nhân viên đều dùng.
+
+Tạo/sửa draft + cấp số qua JSON; upload PDF + preview + tải về qua endpoint riêng (binary).
+Router mỏng: validate + gọi service + map schema.
+"""
+
+from __future__ import annotations
+
+from urllib.parse import quote
+
+from fastapi import APIRouter, Depends, File, Query, Request, Response, UploadFile
+from fastapi.concurrency import run_in_threadpool
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.core.deps import current_user
+from app.core.errors import ValidationFailed
+from app.core.http import client_ip
+from app.models.user import User
+from app.schemas.outgoing import (
+    NumberRequest,
+    OutgoingCreate,
+    OutgoingListItem,
+    OutgoingListResponse,
+    OutgoingOut,
+    OutgoingUpdate,
+    RecipientOut,
+)
+from app.services import outgoing as out_service
+
+router = APIRouter()
+
+_MAX_PDF_BYTES = 50 * 1024 * 1024  # PRD NFR: upload ≤ 50MB
+
+
+def _ctx(request: Request) -> tuple[str | None, str | None]:
+    return client_ip(request), request.headers.get("user-agent")
+
+
+def _to_out(db: Session, doc: object) -> OutgoingOut:
+    out = OutgoingOut.model_validate(doc)
+    out.recipients = [
+        RecipientOut.model_validate(o) for o in out_service.get_recipients(db, out.id)
+    ]
+    return out
+
+
+@router.get("", response_model=OutgoingListResponse)
+def list_outgoing(
+    unit_id: int | None = Query(default=None),
+    status: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _: User = Depends(current_user),
+) -> OutgoingListResponse:
+    items, total = out_service.list_outgoing(
+        db, unit_id=unit_id, status=status, q=q, page=page, size=size
+    )
+    return OutgoingListResponse(
+        items=[OutgoingListItem.model_validate(d) for d in items], total=total
+    )
+
+
+@router.post("", response_model=OutgoingOut, status_code=201)
+def create_outgoing(
+    payload: OutgoingCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(current_user),
+) -> OutgoingOut:
+    ip, ua = _ctx(request)
+    doc = out_service.create_draft(db, payload, actor_id=actor.id, ip=ip, ua=ua)
+    return _to_out(db, doc)
+
+
+@router.get("/{doc_id}", response_model=OutgoingOut)
+def get_outgoing(
+    doc_id: int, db: Session = Depends(get_db), _: User = Depends(current_user)
+) -> OutgoingOut:
+    return _to_out(db, out_service.get_outgoing(db, doc_id))
+
+
+@router.patch("/{doc_id}", response_model=OutgoingOut)
+def update_outgoing(
+    doc_id: int,
+    payload: OutgoingUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(current_user),
+) -> OutgoingOut:
+    ip, ua = _ctx(request)
+    doc = out_service.update_draft(db, doc_id, payload, actor_id=actor.id, ip=ip, ua=ua)
+    return _to_out(db, doc)
+
+
+@router.post("/{doc_id}/file", response_model=OutgoingOut)
+async def upload_outgoing_file(
+    doc_id: int,
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    actor: User = Depends(current_user),
+) -> OutgoingOut:
+    data = await file.read(_MAX_PDF_BYTES + 1)
+    if not data:
+        raise ValidationFailed("File rỗng")
+    if len(data) > _MAX_PDF_BYTES:
+        raise ValidationFailed("File vượt quá 50MB")
+    ip, ua = _ctx(request)
+    # set_file = DB + AES-GCM + ghi đĩa (đồng bộ) → đẩy threadpool để không chặn event loop.
+    doc = await run_in_threadpool(
+        out_service.set_file, db, doc_id, data, actor_id=actor.id, ip=ip, ua=ua
+    )
+    return _to_out(db, doc)
+
+
+@router.post("/{doc_id}/preview")
+def preview_outgoing(
+    doc_id: int, db: Session = Depends(get_db), _: User = Depends(current_user)
+) -> Response:
+    doc = out_service.get_outgoing(db, doc_id)
+    pdf = out_service.render_stamped(db, doc)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Cache-Control": "no-store", "Content-Disposition": "inline; filename=preview.pdf"},
+    )
+
+
+@router.post("/{doc_id}/number", response_model=OutgoingOut)
+def number_outgoing(
+    doc_id: int,
+    payload: NumberRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(current_user),
+) -> OutgoingOut:
+    ip, ua = _ctx(request)
+    doc = out_service.issue(
+        db, doc_id, manual_number=payload.manual_number, actor_id=actor.id, ip=ip, ua=ua
+    )
+    return _to_out(db, doc)
+
+
+@router.get("/{doc_id}/download")
+def download_outgoing(
+    doc_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(current_user),
+) -> Response:
+    doc = out_service.get_outgoing(db, doc_id)
+    ip, ua = _ctx(request)
+    data, filename = out_service.read_original_for_download(db, doc, actor_id=actor.id, ip=ip, ua=ua)
+    # Sanitize chống header injection: ascii fallback + filename* RFC5987 đã encode.
+    ascii_name = "".join(c for c in filename if c.isascii() and c not in '"\\\r\n') or "cong-van.pdf"
+    disposition = f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename)}"
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={"Cache-Control": "no-store", "Content-Disposition": disposition},
+    )

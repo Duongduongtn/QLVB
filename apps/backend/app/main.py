@@ -24,6 +24,7 @@ from app.routers import (
     document_types,
     health,
     organizations,
+    outgoing,
     seals,
     signatures,
     signing_profiles,
@@ -84,3 +85,4 @@ app.include_router(
 )
 app.include_router(bg_removal.router, prefix="/api/bg-removal", tags=["bg-removal"])
 app.include_router(organizations.router, prefix="/api/organizations", tags=["organizations"])
+app.include_router(outgoing.router, prefix="/api/outgoing", tags=["outgoing"])

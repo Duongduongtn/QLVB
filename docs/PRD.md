@@ -334,7 +334,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [OUT.PUB-01] Là Quản lý/Nhân viên, tôi muốn upload file công văn → chọn đơn vị + hồ sơ ký → chèn mộc/chữ ký → cấp số → tải về PDF sẵn sàng ký số, để rút quy trình từ 30 phút (in/đóng/scan) xuống 5 phút.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ⚠️ Partial (27/06/2026) — **backend xong**: tạo draft→upload PDF (mã hoá)→chèn mộc/chữ ký (PyMuPDF toạ độ %)→**cấp số atomic** (nextval) / dùng số có sẵn (unique index + sync sequence)→tải `_CHUA_KY_SO`. **Chống nhầm mộc enforce server** (profile.unit_id==doc.unit_id + active + bắt buộc hồ sơ khi cấp số). Khoá row chống double-issue, audit cả tải file. **Còn FE soạn CV** (slice sau). **Defer:** convert Word (LibreOffice-worker), verify chữ ký số đầu vào, watermark khi tải (D1.11), upload file đã ký (D1.12).
 - **Steps to Complete**:
   1. Vào "Công văn đi → Soạn mới".
   2. Upload file gốc (Word `.docx`/`.doc` hoặc PDF). Nếu Word → web convert sang PDF bằng LibreOffice headless.
@@ -390,7 +390,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [OUT.GLA-01] Là người phát hành CV nhiều trang, tôi muốn đóng giáp lai để chống đánh tráo trang, theo quy định cơ quan nhà nước.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ⚠️ Partial (27/06/2026) — **backend xong** (`pdf_stamp.giap_lai`: 3 lựa chọn none/all/range, cắt mộc N cột đặt mép phải, validate X≤Y≤page_count). Cần FE + **in thử kiểm ghép mép liền mạch**.
 - **Steps to Complete**:
   1. Trong luồng D1 bước 7, chọn 1 trong 3 option:
      - **Không giáp lai** (mặc định cho CV 1 trang).
@@ -411,7 +411,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [OUT.INI-01] Là người phát hành CV nhiều trang, tôi muốn chèn chữ ký nháy nhỏ ở góc dưới mỗi trang, để xác nhận từng trang đã đọc.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ⚠️ Partial (27/06/2026) — **backend xong** (`pdf_stamp.ky_nhay`: góc dưới phải, range, TRỪ trang cuối; range chỉ trang cuối→không chèn). Cần FE.
 - **Steps to Complete**:
   1. Trong luồng D1 bước 7, tick "Ký nháy mỗi trang".
   2. Chọn range tương tự D3: Không / Toàn bộ / Range.
@@ -432,7 +432,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [OUT.LST-01] Là người dùng, tôi muốn xem danh sách CV đi, lọc theo đơn vị/thời gian/loại/trạng thái/người ký, để tra cứu nhanh.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ⚠️ Partial (27/06/2026) — **backend xong** (list filter đơn vị/trạng thái/search + paginate + detail). Cần FE sổ + bộ lọc thời gian/loại/người ký.
 - **Done khi**:
   - Danh sách paginate, default sort theo ngày phát hành mới nhất.
   - Filter đa tiêu chí: đơn vị, khoảng thời gian, loại văn bản, trạng thái (Draft/Đã phát hành), người ký, nơi nhận.
@@ -989,12 +989,12 @@ Review qua 5 điểm và bổ sung/sửa các phần sau:
 | SIG.SGN | C2 | Quản lý chữ ký | C | Must | ✅ Done |
 | SIG.BG | C3 | Tách nền tự động khi upload | C | Must | ✅ Done |
 | SIG.PRO | C4 | Hồ sơ ký (chống nhầm mộc) | C | Must | ✅ Done |
-| OUT.PUB | D1 | Luồng phát hành CV đi (cốt lõi) | D | Must | ⏳ Todo |
+| OUT.PUB | D1 | Luồng phát hành CV đi (cốt lõi) | D | Must | ⚠️ Partial |
 | OUT.MAP | D2 | Auto map vị trí mộc/chữ ký (4 cách) | D | Must | ⏳ Todo |
-| OUT.GLA | D3 | Đóng giáp lai (3 lựa chọn) | D | Must | ⏳ Todo |
-| OUT.INI | D4 | Ký nháy mỗi trang | D | Must | ⏳ Todo |
+| OUT.GLA | D3 | Đóng giáp lai (3 lựa chọn) | D | Must | ⚠️ Partial |
+| OUT.INI | D4 | Ký nháy mỗi trang | D | Must | ⚠️ Partial |
 | OUT.LNK | D5 | Liên kết CV đi với CV đến | D | Must | ⏳ Todo |
-| OUT.LST | D6 | Danh sách + Sổ CV đi | D | Must | ⏳ Todo |
+| OUT.LST | D6 | Danh sách + Sổ CV đi | D | Must | ⚠️ Partial |
 | CTC.RCV | M1 | Danh bạ Nơi nhận (CV đi) | M | Must | ✅ Done |
 | SEC.AUD | H3 | Audit log + Soft delete + Thùng rác | H | Must | ⏳ Todo |
 
