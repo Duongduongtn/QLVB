@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Ban, ChevronLeft, ChevronRight, Download, EyeOff, Inbox, Plus, Search, ShieldCheck, UserPlus } from 'lucide-react';
+import { Ban, ChevronLeft, ChevronRight, Download, EyeOff, FileArchive, Inbox, Paperclip, Plus, Search, ShieldCheck, Trash2, UploadCloud, UserPlus } from 'lucide-react';
 
 import { api, type ApiErrorEnvelope } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
-import { fmtDate, fmtDateTime } from '~/lib/format';
+import { fmtDate, fmtDateTime, fmtInt, fmtNum } from '~/lib/format';
 import { EmptyState, FilterMenu, InfoRow, PageHeader, Pill } from '~/components/ui';
 import { Drawer } from '~/components/Drawer';
 import { Modal } from '~/components/Modal';
@@ -71,6 +71,112 @@ const YEARS = (() => {
   const y = new Date().getFullYear();
   return [y, y - 1, y - 2];
 })();
+
+interface AttachmentRow {
+  id: number;
+  original_name: string | null;
+  mime_type: string | null;
+  size_bytes: number;
+  created_at: string;
+}
+
+function fmtSize(bytes: number): string {
+  return bytes < 1024 * 1024 ? `${fmtInt(Math.max(1, Math.round(bytes / 1024)))} KB` : `${fmtNum(bytes / 1048576)} MB`;
+}
+
+function fetchErr(res: Response, fallback: string): Promise<string> {
+  return res.json().then((b: ApiErrorEnvelope | null) => b?.error?.message ?? fallback).catch(() => fallback);
+}
+
+/** E4 — phụ lục đính kèm CV đến: liệt kê + tải lẻ + tải ZIP gộp + thêm/xoá. */
+function AttachmentsCard({ docId }: { docId: number }) {
+  const queryClient = useQueryClient();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const attQuery = useQuery({
+    queryKey: ['incoming-attachments', docId],
+    queryFn: async () => {
+      const res = await api.GET('/api/incoming/{doc_id}/attachments', { params: { path: { doc_id: docId } } });
+      return (res.data ?? []) as AttachmentRow[];
+    },
+  });
+  const atts = attQuery.data ?? [];
+
+  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f) return;
+    setErr(null);
+    setBusy(true);
+    try {
+      const form = new FormData();
+      form.append('file', f);
+      const res = await fetch(`/api/incoming/${docId}/attachments`, { method: 'POST', body: form, credentials: 'include' });
+      if (!res.ok) throw new Error(await fetchErr(res, 'Tải phụ lục thất bại'));
+      await queryClient.invalidateQueries({ queryKey: ['incoming-attachments', docId] });
+    } catch (e2) {
+      setErr((e2 as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function del(id: number) {
+    if (!window.confirm('Xoá phụ lục này khỏi công văn?')) return;
+    setErr(null);
+    const res = await fetch(`/api/incoming/${docId}/attachments/${id}`, { method: 'DELETE', credentials: 'include' });
+    if (!res.ok) {
+      setErr(await fetchErr(res, 'Xoá phụ lục thất bại'));
+      return;
+    }
+    await queryClient.invalidateQueries({ queryKey: ['incoming-attachments', docId] });
+  }
+
+  return (
+    <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+      <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
+        <div className="eyebrow flex items-center" style={{ gap: 6 }}>
+          <Paperclip size={13} /> Phụ lục đính kèm ({atts.length})
+        </div>
+        <div className="flex items-center" style={{ gap: 6 }}>
+          {atts.length > 0 && (
+            <button className="btn-ghost" style={{ height: 28 }} type="button" onClick={() => window.open(`/api/incoming/${docId}/attachments/zip`, '_blank')}>
+              <FileArchive size={13} /> Tải ZIP gộp
+            </button>
+          )}
+          <input ref={fileRef} type="file" className="hidden" onChange={onPick} />
+          <button className="btn-secondary" style={{ height: 28 }} type="button" disabled={busy} onClick={() => fileRef.current?.click()}>
+            <UploadCloud size={13} /> {busy ? 'Đang tải…' : 'Thêm'}
+          </button>
+        </div>
+      </div>
+
+      {err && <div className="cell-meta" role="alert" style={{ color: 'var(--danger)', marginBottom: 8 }}>{err}</div>}
+
+      {atts.length === 0 ? (
+        <p className="cell-meta">Chưa có phụ lục. Hỗ trợ PDF, Word, Excel, ảnh — tối đa 50MB/file, tổng 500MB.</p>
+      ) : (
+        <div className="flex flex-col" style={{ gap: 6 }}>
+          {atts.map((a) => (
+            <div key={a.id} className="flex items-center" style={{ gap: 8, padding: '6px 8px', border: '1px solid var(--rule)', borderRadius: 6 }}>
+              <Paperclip size={13} style={{ color: 'var(--ink-muted)', flexShrink: 0 }} />
+              <span className="subject" style={{ flex: 1, minWidth: 0, fontSize: '0.85rem' }}>{a.original_name ?? `Phụ lục #${a.id}`}</span>
+              <span className="cell-meta" style={{ flexShrink: 0 }}>{fmtSize(a.size_bytes)}</span>
+              <button className="action-btn" type="button" aria-label="Tải phụ lục" onClick={() => window.open(`/api/incoming/${docId}/attachments/${a.id}/file`, '_blank')}>
+                <Download size={14} />
+              </button>
+              <button className="action-btn" type="button" aria-label="Xoá phụ lục" style={{ color: 'var(--danger)' }} onClick={() => del(a.id)}>
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function CongVanDenPage() {
   const me = useAuth((s) => s.user);
@@ -436,6 +542,7 @@ function CongVanDenPage() {
               </InfoRow>
               <InfoRow label="Vào sổ lúc">{fmtDateTime(selected.created_at)}</InfoRow>
             </div>
+            <AttachmentsCard docId={selected.id} />
             {tasks.length > 0 && (
               <div className="card" style={{ padding: 16, marginBottom: 16 }}>
                 <div className="eyebrow" style={{ marginBottom: 8 }}>Phân công xử lý</div>

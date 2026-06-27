@@ -545,7 +545,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [INC.ATT-01] Là người vào sổ, tôi muốn đính kèm phụ lục (PDF, Excel, ảnh) cho CV chính, để lưu trữ đầy đủ tài liệu liên quan.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ⚠️ Partial (27/06/2026) — model `incoming_attachments` (FK CV cha CASCADE, file_id mã hoá envelope) + migration 0014. `services/incoming_attachments`: add (allowlist ext PDF/Word/Excel/ảnh, ≤50MB/file + tổng ≤500MB/CV, mã hoá như CV chính, orphan cleanup khi lỗi), list, tải lẻ, **ZIP gộp** (CV chính + tất cả phụ lục, `_safe_zip_name` chống traversal + dedup tên, semaphore chặn OOM đồng thời), xoá (**chỉ người tải lên hoặc Quản lý** + audit). Phụ lục **PDF → OCR** ghi `ocr_text` qua worker `ocr_attachment` (SessionLocal fire-and-forget; att_tmp KHÔNG mã hoá xoá ngay + beat purge); Excel/ảnh KHÔNG OCR. Router 5 endpoint đều `_visible(doc cha)` (CV "Chỉ Quản lý xem" → NV 404). FE: `AttachmentsCard` trong drawer CV đến (list + thêm + tải lẻ + Tải ZIP gộp + xoá, fmtSize VN). 15 unit test. 2 subagent review PASS không blocker. **Partial vì**: `ocr_text` phụ lục đã lưu nhưng CHƯA wire vào tìm kiếm full-text (story F1 SRC.FTS chưa làm) + F1 phải tôn trọng cờ `manager_only` khi index phụ lục. Nâng ✅ Done khi F1 tiêu thụ.
 - **Done khi**:
   - Phụ lục liệt kê dưới CV chính.
   - Tải xuống được riêng lẻ hoặc gộp ZIP (CV chính + tất cả phụ lục).

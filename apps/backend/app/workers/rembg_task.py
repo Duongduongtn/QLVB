@@ -52,5 +52,6 @@ def purge_bg_tmp(max_age_hours: int = 2) -> dict:
         + purge_old_files("cv_tmp", max_age_seconds=age, now=now)
         + purge_old_files("in_tmp", max_age_seconds=age, now=now)
         + purge_old_files("sig_tmp", max_age_seconds=age, now=now)
+        + purge_old_files("att_tmp", max_age_seconds=age, now=now)
     )
     return {"removed": removed}

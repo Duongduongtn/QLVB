@@ -6,6 +6,7 @@ Upload PDF → OCR ở worker (poll) → sửa metadata → cấp số đến. C
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, date, datetime
 from urllib.parse import quote
 
@@ -22,6 +23,7 @@ from app.core.http import client_ip
 from app.models.incoming_document import IncomingDocument
 from app.models.user import User
 from app.schemas.incoming import (
+    AttachmentOut,
     DuplicateOut,
     IncomingListItem,
     IncomingListResponse,
@@ -33,14 +35,18 @@ from app.schemas.incoming import (
 from app.schemas.outgoing import CancelRequest, OutgoingListItem
 from app.schemas.tasks import AssignRequest, TaskOut
 from app.services import incoming as inc_service
+from app.services import incoming_attachments as att_service
 from app.services import outgoing as out_service
 from app.services import tasks as task_service
-from app.workers.ocr import extract_text
+from app.workers.ocr import extract_text, ocr_attachment
 from app.workers.sign_verify import verify_pades
 
 router = APIRouter()
 
 _MAX_BYTES = 50 * 1024 * 1024
+# ZIP gộp giải mã toàn bộ phụ lục (tổng tới 500MB) vào RAM → serialize để vài request
+# đồng thời không nhân RAM gây OOM trên VPS dùng chung (review E4).
+_zip_limiter = asyncio.Semaphore(1)
 
 
 def _ctx(request: Request) -> tuple[str | None, str | None]:
@@ -293,3 +299,91 @@ def download_incoming(
         media_type="application/pdf",
         headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(name)}"},
     )
+
+
+# ── E4 — Phụ lục đính kèm ─────────────────────────────────────────────────────
+@router.post("/{doc_id}/attachments", response_model=AttachmentOut, status_code=201)
+async def upload_attachment(
+    doc_id: int,
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    actor: User = Depends(current_user),
+) -> AttachmentOut:
+    """Đính kèm 1 phụ lục (≤50MB/file, tổng ≤500MB/CV). PDF → enqueue OCR full-text."""
+    _visible(inc_service.get_incoming(db, doc_id), actor)
+    data = await file.read(att_service.MAX_FILE_BYTES + 1)
+    if len(data) > att_service.MAX_FILE_BYTES:
+        raise ValidationFailed("Phụ lục vượt quá 50MB")
+    ip, ua = _ctx(request)
+    att, tmp_key = await run_in_threadpool(
+        att_service.add_attachment, db, doc_id, data, file.filename, actor_id=actor.id, ip=ip, ua=ua
+    )
+    if tmp_key:  # phụ lục PDF → OCR ghi thẳng DB (fire-and-forget)
+        ocr_attachment.delay(att.id, tmp_key)
+    return AttachmentOut.model_validate(att)
+
+
+@router.get("/{doc_id}/attachments", response_model=list[AttachmentOut])
+def list_attachments(
+    doc_id: int, db: Session = Depends(get_db), actor: User = Depends(current_user)
+) -> list[AttachmentOut]:
+    _visible(inc_service.get_incoming(db, doc_id), actor)
+    return [AttachmentOut.model_validate(a) for a in att_service.list_attachments(db, doc_id)]
+
+
+@router.get("/{doc_id}/attachments/zip")
+async def download_attachments_zip(
+    doc_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(current_user),
+) -> Response:
+    """Tải gộp ZIP: CV chính + tất cả phụ lục."""
+    doc = _visible(inc_service.get_incoming(db, doc_id), actor)
+    async with _zip_limiter:
+        data = await run_in_threadpool(att_service.build_zip, db, doc)
+    ip, ua = _ctx(request)
+    inc_service.log_download(db, doc, actor_id=actor.id, ip=ip, ua=ua)
+    fname = f"CV-den-{doc.number or doc.id}.zip"
+    return Response(
+        content=data,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(fname)}"},
+    )
+
+
+@router.get("/{doc_id}/attachments/{att_id}/file")
+async def download_attachment(
+    doc_id: int,
+    att_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(current_user),
+) -> Response:
+    doc = _visible(inc_service.get_incoming(db, doc_id), actor)
+    att = att_service.get_attachment(db, doc_id, att_id)
+    data, name, mime = await run_in_threadpool(att_service.read_attachment, db, att)
+    ip, ua = _ctx(request)
+    inc_service.log_download(db, doc, actor_id=actor.id, ip=ip, ua=ua)
+    return Response(
+        content=data,
+        media_type=mime,
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"},
+    )
+
+
+@router.delete("/{doc_id}/attachments/{att_id}", status_code=204)
+def delete_attachment(
+    doc_id: int,
+    att_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(current_user),
+) -> Response:
+    _visible(inc_service.get_incoming(db, doc_id), actor)
+    ip, ua = _ctx(request)
+    att_service.delete_attachment(
+        db, doc_id, att_id, actor_id=actor.id, actor_role=actor.role, ip=ip, ua=ua
+    )
+    return Response(status_code=204)

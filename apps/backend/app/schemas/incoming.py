@@ -85,3 +85,14 @@ class IncomingListItem(BaseModel):
 class IncomingListResponse(BaseModel):
     items: list[IncomingListItem]
     total: int
+
+
+class AttachmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    incoming_id: int
+    original_name: str | None
+    mime_type: str | None
+    size_bytes: int
+    created_at: datetime

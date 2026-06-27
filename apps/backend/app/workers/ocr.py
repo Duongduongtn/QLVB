@@ -53,3 +53,36 @@ def extract_text(self, tmp_key: str) -> dict:
     # Chỉ xoá khi thành công → lần retry vẫn còn file. Beat purge_bg_tmp dọn nốt trường hợp lạc.
     delete_asset(tmp_key)
     return result
+
+
+def _extract_text(data: bytes) -> str:
+    """Text-layer PDF (nhanh) → fallback PaddleOCR scan. Lỗi OCR toàn phần → text rỗng."""
+    from app.services.incoming_ocr import extract_text_layer
+
+    text = extract_text_layer(data)
+    if len(text) < _MIN_TEXT_LEN:
+        try:
+            text = _ocr_scanned(data)
+        except Exception as exc:  # OCR fail → vẫn lưu text rỗng
+            logger.warning("ocr.attachment_scan_failed: %s", exc)
+            text = text or ""
+    return text
+
+
+@celery.task(name="app.workers.ocr.ocr_attachment", bind=True, max_retries=3)
+def ocr_attachment(self, attachment_id: int, tmp_key: str) -> dict:
+    """E4 — OCR phụ lục PDF rồi GHI THẲNG `ocr_text` vào DB (fire-and-forget, không FE poll).
+
+    Khác `extract_text` (CV chính, poll-back): phụ lục không cần tương tác → worker tự ghi DB
+    qua SessionLocal (worker reach Postgres ở cả qlcv_net + qlcv_worker_net).
+    """
+    from app.core.database import SessionLocal
+    from app.core.storage import delete_asset, read_asset
+    from app.services.incoming_attachments import set_ocr_text
+
+    data = read_asset(tmp_key)
+    text = _extract_text(data)
+    with SessionLocal() as db:
+        set_ocr_text(db, attachment_id, text)
+    delete_asset(tmp_key)
+    return {"attachment_id": attachment_id, "chars": len(text)}
