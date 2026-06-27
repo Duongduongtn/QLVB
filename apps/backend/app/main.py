@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.errors import AppError, app_error_handler
 from app.core.logging import configure_logging, logger
-from app.routers import auth, health, users
+from app.routers import auth, health, units, users
 
 
 @asynccontextmanager
@@ -60,3 +60,4 @@ app.add_exception_handler(AppError, app_error_handler)
 app.include_router(health.router, prefix="/api")
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
+app.include_router(units.router, prefix="/api/units", tags=["units"])

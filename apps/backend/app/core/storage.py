@@ -16,8 +16,11 @@ TODO (giai đoạn 1):
 
 from __future__ import annotations
 
+import hashlib
 import os
+import secrets
 from dataclasses import dataclass
+from pathlib import Path
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -26,6 +29,13 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 class EnvelopeResult:
     ciphertext: bytes
     wrapped_key: bytes  # nonce(12) + AES-GCM ciphertext của DEK
+
+
+@dataclass(slots=True)
+class AssetResult:
+    storage_key: str  # đường dẫn tương đối dưới storage_local_path
+    sha256: str
+    size_bytes: int
 
 
 def _master_key() -> bytes:
@@ -56,3 +66,46 @@ def envelope_decrypt(ciphertext: bytes, wrapped_key: bytes) -> bytes:
     dek = AESGCM(_master_key()).decrypt(wrap_nonce, wrapped, associated_data=None)
     nonce, ct = ciphertext[:12], ciphertext[12:]
     return AESGCM(dek).decrypt(nonce, ct, associated_data=None)
+
+
+# ── Asset KHÔNG mã hoá (logo/mộc/chữ ký — file.py: wrapped_key NULL) ──────────
+# Mộc/logo là ảnh thương hiệu công khai trong nội bộ, không nhạy cảm như nội dung
+# CV → lưu thẳng ra đĩa, không qua envelope. Tách hẳn khỏi luồng CV mã hoá.
+def _storage_root() -> Path:
+    from app.core.config import settings
+
+    return Path(settings.storage_local_path)
+
+
+def save_asset(data: bytes, *, ext: str, subdir: str = "assets") -> AssetResult:
+    """Ghi 1 file asset ra đĩa dưới storage_local_path/<subdir>/, trả metadata.
+
+    Tên file ngẫu nhiên (token_hex) → không lộ thông tin, không trùng. Sharding theo
+    2 ký tự đầu để tránh 1 thư mục phình quá nhiều file.
+    """
+    sha256 = hashlib.sha256(data).hexdigest()
+    name = secrets.token_hex(16)
+    safe_ext = ext.lower().lstrip(".")
+    rel = f"{subdir}/{name[:2]}/{name}.{safe_ext}" if safe_ext else f"{subdir}/{name[:2]}/{name}"
+    dest = _storage_root() / rel
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(data)
+    return AssetResult(storage_key=rel, sha256=sha256, size_bytes=len(data))
+
+
+def _safe_path(storage_key: str) -> Path:
+    """Chống path traversal: từ chối key tuyệt đối / chứa '..'. Defense-in-depth —
+    hiện key luôn sinh server-side, nhưng hàm generic dễ bị tái dùng sai sau này.
+    """
+    if storage_key.startswith(("/", "\\")) or ".." in Path(storage_key).parts:
+        raise ValueError("storage_key không hợp lệ")
+    return _storage_root() / storage_key
+
+
+def read_asset(storage_key: str) -> bytes:
+    return _safe_path(storage_key).read_bytes()
+
+
+def delete_asset(storage_key: str) -> None:
+    """Xoá file asset khỏi đĩa (bỏ qua nếu đã không còn) — dọn logo cũ khi đổi."""
+    _safe_path(storage_key).unlink(missing_ok=True)

@@ -208,7 +208,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [CFG.UNT-01] Là Quản lý, tôi muốn xem và chỉnh sửa thông tin của 2 đơn vị (tên, địa chỉ, MST, logo, mã màu), để hệ thống hiển thị đúng và áp dụng cho công văn đi của từng đơn vị.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ✅ Done _(GET/PUT /api/units + upload/serve logo asset không mã hoá ≤2MB magic-bytes PNG/JPG; sửa 6 field text, color chặn cứng; audit; trang Cấu hình FE. Follow-up: nới color khi có bảng `documents`; integration test cho 3 nhánh validate upload_logo)_
 - **Done khi**:
   - Hệ thống có sẵn 2 record cố định: Trung tâm GDNN Thành Đạt (mã màu xanh lá) + Công ty CP DVDL Thành Đạt (mã màu tím).
   - Mỗi đơn vị cho phép sửa: tên đầy đủ, tên viết tắt, địa chỉ, MST, SĐT, email, logo.
@@ -981,7 +981,7 @@ Review qua 5 điểm và bổ sung/sửa các phần sau:
 | USR.LGN | A1 | Đăng nhập | A | Must | ✅ Done |
 | USR.LGO | A2 | Đăng xuất | A | Must | ✅ Done |
 | USR.MNG | A4 | Quản lý người dùng | A | Must | ✅ Done |
-| CFG.UNT | B1 | Quản lý 2 đơn vị | B | Must | ⏳ Todo |
+| CFG.UNT | B1 | Quản lý 2 đơn vị | B | Must | ✅ Done |
 | CFG.BOK | B2 | Cấu hình sổ công văn | B | Must | ⏳ Todo |
 | CFG.VEW | B3a | Switch view đơn vị | B | Must | ⏳ Todo |
 | CFG.BRD | B3b | Branding header | B | Must | ⏳ Todo |

@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as NguoiDungRouteImport } from './routes/nguoi-dung'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as CauHinhRouteImport } from './routes/cau-hinh'
 import { Route as IndexRouteImport } from './routes/index'
 
 const NguoiDungRoute = NguoiDungRouteImport.update({
@@ -23,6 +24,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CauHinhRoute = CauHinhRouteImport.update({
+  id: '/cau-hinh',
+  path: '/cau-hinh',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -31,30 +37,34 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/cau-hinh': typeof CauHinhRoute
   '/login': typeof LoginRoute
   '/nguoi-dung': typeof NguoiDungRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/cau-hinh': typeof CauHinhRoute
   '/login': typeof LoginRoute
   '/nguoi-dung': typeof NguoiDungRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/cau-hinh': typeof CauHinhRoute
   '/login': typeof LoginRoute
   '/nguoi-dung': typeof NguoiDungRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/nguoi-dung'
+  fullPaths: '/' | '/cau-hinh' | '/login' | '/nguoi-dung'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/nguoi-dung'
-  id: '__root__' | '/' | '/login' | '/nguoi-dung'
+  to: '/' | '/cau-hinh' | '/login' | '/nguoi-dung'
+  id: '__root__' | '/' | '/cau-hinh' | '/login' | '/nguoi-dung'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CauHinhRoute: typeof CauHinhRoute
   LoginRoute: typeof LoginRoute
   NguoiDungRoute: typeof NguoiDungRoute
 }
@@ -75,6 +85,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cau-hinh': {
+      id: '/cau-hinh'
+      path: '/cau-hinh'
+      fullPath: '/cau-hinh'
+      preLoaderRoute: typeof CauHinhRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -87,6 +104,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CauHinhRoute: CauHinhRoute,
   LoginRoute: LoginRoute,
   NguoiDungRoute: NguoiDungRoute,
 }
