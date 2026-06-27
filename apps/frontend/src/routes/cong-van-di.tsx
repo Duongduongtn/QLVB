@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useQuery } from '@tanstack/react-query';
-import { Download, FileText, Plus, Search, X } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Ban, Download, FileCheck2, FileText, Plus, Search, Upload, X } from 'lucide-react';
 
 import { api, type ApiErrorEnvelope } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
@@ -29,6 +29,8 @@ interface OutDetail extends OutRow {
   period_key: string | null;
   signing_profile_id: number | null;
   original_file_id: number | null;
+  signed_file_id: number | null;
+  cancel_reason: string | null;
   sealing_option: { giap_lai?: { kind: string }; ky_nhay?: { kind: string } } | null;
   created_by: number | null;
   updated_at: string;
@@ -250,6 +252,12 @@ function CongVanDiPage() {
 }
 
 function DetailDrawer({ id, units, onClose }: { id: number; units: UnitLite[]; onClose: () => void }) {
+  const me = useAuth((s) => s.user);
+  const queryClient = useQueryClient();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [actionErr, setActionErr] = useState<string | null>(null);
+
   const detailQuery = useQuery({
     queryKey: ['outgoing', id],
     queryFn: async () => {
@@ -263,9 +271,55 @@ function DetailDrawer({ id, units, onClose }: { id: number; units: UnitLite[]; o
   const d = detailQuery.data;
   const unit = d ? units.find((u) => u.id === d.unit_id) : undefined;
 
-  function download() {
-    // Tải file qua link trực tiếp (cookie tự gửi) — endpoint trả attachment.
-    window.open(`/api/outgoing/${id}/download`, '_blank');
+  function download(signed: boolean) {
+    // Tải qua link trực tiếp (cookie tự gửi) — endpoint trả attachment.
+    window.open(`/api/outgoing/${id}/download${signed ? '?signed=true' : ''}`, '_blank');
+  }
+
+  async function refresh() {
+    await queryClient.invalidateQueries({ queryKey: ['outgoing'] });
+  }
+
+  async function uploadSigned(file: File) {
+    setActionErr(null);
+    setBusy(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch(`/api/outgoing/${id}/signed-file`, { method: 'POST', body: form, credentials: 'include' });
+      if (!res.ok) {
+        const b = (await res.json().catch(() => null)) as ApiErrorEnvelope | null;
+        throw new Error(b?.error?.message ?? 'Tải bản ký số thất bại');
+      }
+      await refresh();
+    } catch (e) {
+      setActionErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cancelDoc() {
+    const reason = window.prompt('Lý do huỷ công văn này? (bắt buộc — số đã cấp sẽ không tái dùng)');
+    if (reason === null) return;
+    if (!reason.trim()) {
+      setActionErr('Phải nhập lý do huỷ');
+      return;
+    }
+    setActionErr(null);
+    setBusy(true);
+    try {
+      const { error } = await api.POST('/api/outgoing/{doc_id}/cancel', {
+        params: { path: { doc_id: id } },
+        body: { reason: reason.trim() },
+      });
+      if (error) throw new Error(errMsg(error, 'Huỷ thất bại'));
+      await refresh();
+    } catch (e) {
+      setActionErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -316,19 +370,85 @@ function DetailDrawer({ id, units, onClose }: { id: number; units: UnitLite[]; o
                 )}
               </Section>
 
-              {d.original_file_id !== null && (
-                <div className="rounded-md border border-slate-200 p-4">
-                  <div className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
-                    <FileText size={15} /> File PDF {d.status === 'draft' ? '(bản gốc)' : '(_CHUA_KY_SO)'}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={download}
-                    className="flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"
-                  >
-                    <Download size={15} /> Tải PDF
-                  </button>
+              {d.status === 'cancelled' && d.cancel_reason && (
+                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  <span className="font-medium">Đã huỷ.</span> Lý do: {d.cancel_reason}
                 </div>
+              )}
+
+              {d.status === 'numbered' && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                  <FileCheck2 size={14} className="mt-0.5 shrink-0" />
+                  Đã cấp số, chưa ký số. Mở vSign + USB Token Viettel-CA để ký, rồi tải bản đã ký lên đây.
+                </div>
+              )}
+
+              {actionErr && (
+                <div role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {actionErr}
+                </div>
+              )}
+
+              {d.original_file_id !== null && (
+                <div className="space-y-2 rounded-md border border-slate-200 p-4">
+                  <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                    <FileText size={15} /> File PDF
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => download(false)}
+                      className="flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"
+                    >
+                      <Download size={15} /> Tải bản {d.status === 'draft' ? 'gốc' : 'chưa ký (_CHUA_KY_SO)'}
+                    </button>
+                    {d.signed_file_id !== null && (
+                      <button
+                        type="button"
+                        onClick={() => download(true)}
+                        className="flex items-center gap-2 rounded-md border border-green-300 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
+                      >
+                        <FileCheck2 size={15} /> Tải bản đã ký số
+                      </button>
+                    )}
+                  </div>
+
+                  {d.status === 'numbered' && (
+                    <>
+                      <input
+                        ref={fileRef}
+                        type="file"
+                        accept="application/pdf"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) void uploadSigned(f);
+                          e.target.value = '';
+                        }}
+                      />
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => fileRef.current?.click()}
+                        className="flex items-center gap-2 rounded-md bg-amber-400 px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500 disabled:opacity-60"
+                      >
+                        <Upload size={15} /> {busy ? 'Đang tải…' : 'Tải lên bản đã ký số'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Thu hồi CV đã phát hành: chỉ Quản lý (PRD máy trạng thái). */}
+              {d.status !== 'cancelled' && !(d.status === 'published' && me?.role !== 'manager') && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={cancelDoc}
+                  className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+                >
+                  <Ban size={15} /> {d.status === 'published' ? 'Thu hồi công văn' : 'Huỷ công văn'}
+                </button>
               )}
             </div>
           )}

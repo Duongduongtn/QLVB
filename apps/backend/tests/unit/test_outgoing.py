@@ -15,7 +15,8 @@ fitz = pytest.importorskip("fitz")
 PILImage = pytest.importorskip("PIL.Image")
 from PIL import ImageDraw  # noqa: E402
 
-from app.core.errors import NotFound, ValidationFailed  # noqa: E402
+from app.core import storage  # noqa: E402
+from app.core.errors import Conflict, NotFound, ValidationFailed  # noqa: E402
 from app.models.file import File  # noqa: E402
 from app.models.outgoing_document import OutgoingDocument  # noqa: E402
 from app.models.seal import Seal  # noqa: E402
@@ -171,3 +172,119 @@ def test_render_stamped_giaplai_without_profile_errors(monkeypatch: pytest.Monke
     monkeypatch.setattr(out_svc, "read_encrypted_file", lambda key, wk: _pdf(2))
     with pytest.raises(ValidationFailed):
         out_svc.render_stamped(db, doc)  # type: ignore[arg-type]
+
+
+# ── D1.12 set_signed_file + cancel (vòng đời) ───────────────────────
+class _Result:
+    def __init__(self, obj: Any) -> None:
+        self._obj = obj
+
+    def scalar_one_or_none(self) -> Any:
+        return self._obj
+
+
+class _DocDB:
+    def __init__(self, doc: Any) -> None:
+        self.doc = doc
+        self.added: list[Any] = []
+        self.committed = False
+        self.rolled_back = False
+
+    def get(self, model: Any, _id: Any) -> Any:
+        return self.doc if model is OutgoingDocument else None
+
+    def execute(self, _stmt: Any) -> _Result:
+        return _Result(self.doc)  # _lock_doc(with_for_update)
+
+    def add(self, obj: Any) -> None:
+        self.added.append(obj)
+
+    def flush(self) -> None:
+        for o in self.added:
+            if getattr(o, "id", None) is None:
+                o.id = 999
+
+    def commit(self) -> None:
+        self.committed = True
+
+    def rollback(self) -> None:
+        self.rolled_back = True
+
+    def refresh(self, _o: Any) -> None:
+        pass
+
+    def delete(self, _o: Any) -> None:
+        pass
+
+
+def _numbered_doc() -> OutgoingDocument:
+    return OutgoingDocument(
+        id=99, unit_id=1, doc_type_id=2, subject="x",
+        issue_date=__import__("datetime").date(2026, 6, 27),
+        status="numbered", number="247/CV-GDNN", number_int=247,
+    )
+
+
+def test_set_signed_file_rejects_non_numbered() -> None:
+    doc = _numbered_doc()
+    doc.status = "draft"
+    with pytest.raises(Conflict):
+        out_svc.set_signed_file(_DocDB(doc), 99, b"%PDF-1.7", "247.pdf", actor_id=1, ip=None, ua=None)  # type: ignore[arg-type]
+
+
+def test_set_signed_file_rejects_wrong_filename() -> None:
+    doc = _numbered_doc()  # số 247
+    with pytest.raises(ValidationFailed):  # tên file không chứa 247 → chống nhầm
+        out_svc.set_signed_file(_DocDB(doc), 99, b"%PDF-1.7", "cong-van-khac.pdf", actor_id=1, ip=None, ua=None)  # type: ignore[arg-type]
+
+
+def test_set_signed_file_publishes(monkeypatch: pytest.MonkeyPatch) -> None:
+    doc = _numbered_doc()
+    db = _DocDB(doc)
+    monkeypatch.setattr(
+        out_svc,
+        "save_encrypted_file",
+        lambda *_a, **_k: storage.EncryptedFileResult(storage_key="cv/x.enc", sha256="h", size_bytes=10, wrapped_key=b"k"),
+    )
+    out_svc.set_signed_file(db, 99, b"%PDF-1.7 signed", "247_da_ky.pdf", actor_id=5, ip=None, ua=None)  # type: ignore[arg-type]
+    assert doc.status == "published"
+    assert doc.signed_file_id == 999
+    assert db.committed is True
+    assert "outgoing_publish" in [getattr(a, "action", None) for a in db.added]
+
+
+def test_set_signed_file_rejects_substring_filename() -> None:
+    doc = _numbered_doc()  # số 247
+    with pytest.raises(ValidationFailed):  # '1247' chứa '247' nhưng KHÁC số → vẫn chặn
+        out_svc.set_signed_file(_DocDB(doc), 99, b"%PDF-1.7", "cv-1247.pdf", actor_id=1, ip=None, ua=None)  # type: ignore[arg-type]
+
+
+def test_cancel_requires_reason() -> None:
+    with pytest.raises(ValidationFailed):
+        out_svc.cancel(_DocDB(_numbered_doc()), 99, "  ", actor_id=1, actor_role="staff", ip=None, ua=None)  # type: ignore[arg-type]
+
+
+def test_cancel_sets_status_and_keeps_number() -> None:
+    doc = _numbered_doc()
+    db = _DocDB(doc)
+    out_svc.cancel(db, 99, "Sai nội dung", actor_id=1, actor_role="staff", ip=None, ua=None)  # type: ignore[arg-type]
+    assert doc.status == "cancelled"
+    assert doc.cancel_reason == "Sai nội dung"
+    assert doc.number == "247/CV-GDNN"  # số KHÔNG bị xoá (không tái dùng)
+    assert "outgoing_cancel" in [getattr(a, "action", None) for a in db.added]
+
+
+def test_cancel_published_requires_manager() -> None:
+    doc = _numbered_doc()
+    doc.status = "published"
+    from app.core.errors import PermissionDenied
+
+    with pytest.raises(PermissionDenied):  # Nhân viên KHÔNG được thu hồi CV đã phát hành
+        out_svc.cancel(_DocDB(doc), 99, "Thu hồi", actor_id=1, actor_role="staff", ip=None, ua=None)  # type: ignore[arg-type]
+
+
+def test_cancel_published_allowed_for_manager() -> None:
+    doc = _numbered_doc()
+    doc.status = "published"
+    out_svc.cancel(_DocDB(doc), 99, "Thu hồi", actor_id=1, actor_role="manager", ip=None, ua=None)  # type: ignore[arg-type]
+    assert doc.status == "cancelled"

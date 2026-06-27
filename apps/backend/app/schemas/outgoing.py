@@ -61,6 +61,10 @@ class NumberRequest(BaseModel):
     manual_number: Annotated[int | None, Field(ge=1)] = None
 
 
+class CancelRequest(BaseModel):
+    reason: Annotated[str, Field(min_length=1, max_length=500)]
+
+
 class RecipientOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -86,6 +90,7 @@ class OutgoingOut(BaseModel):
     sealing_option: dict[str, Any] | None
     original_file_id: int | None
     signed_file_id: int | None
+    cancel_reason: str | None
     created_by: int | None
     created_at: datetime
     updated_at: datetime

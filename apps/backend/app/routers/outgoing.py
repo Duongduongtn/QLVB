@@ -18,6 +18,7 @@ from app.core.errors import ValidationFailed
 from app.core.http import client_ip
 from app.models.user import User
 from app.schemas.outgoing import (
+    CancelRequest,
     NumberRequest,
     OutgoingCreate,
     OutgoingListItem,
@@ -144,16 +145,54 @@ def number_outgoing(
     return _to_out(db, doc)
 
 
+@router.post("/{doc_id}/signed-file", response_model=OutgoingOut)
+async def upload_signed_file(
+    doc_id: int,
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    actor: User = Depends(current_user),
+) -> OutgoingOut:
+    data = await file.read(_MAX_PDF_BYTES + 1)
+    if not data:
+        raise ValidationFailed("File rỗng")
+    if len(data) > _MAX_PDF_BYTES:
+        raise ValidationFailed("File vượt quá 50MB")
+    ip, ua = _ctx(request)
+    doc = await run_in_threadpool(
+        out_service.set_signed_file, db, doc_id, data, file.filename, actor_id=actor.id, ip=ip, ua=ua
+    )
+    return _to_out(db, doc)
+
+
+@router.post("/{doc_id}/cancel", response_model=OutgoingOut)
+def cancel_outgoing(
+    doc_id: int,
+    payload: CancelRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(current_user),
+) -> OutgoingOut:
+    ip, ua = _ctx(request)
+    doc = out_service.cancel(
+        db, doc_id, payload.reason, actor_id=actor.id, actor_role=actor.role, ip=ip, ua=ua
+    )
+    return _to_out(db, doc)
+
+
 @router.get("/{doc_id}/download")
 def download_outgoing(
     doc_id: int,
     request: Request,
+    signed: bool = Query(default=False),
     db: Session = Depends(get_db),
     actor: User = Depends(current_user),
 ) -> Response:
     doc = out_service.get_outgoing(db, doc_id)
     ip, ua = _ctx(request)
-    data, filename = out_service.read_original_for_download(db, doc, actor_id=actor.id, ip=ip, ua=ua)
+    data, filename = out_service.read_file_for_download(
+        db, doc, signed=signed, actor_id=actor.id, ip=ip, ua=ua
+    )
     # Sanitize chống header injection: ascii fallback + filename* RFC5987 đã encode.
     ascii_name = "".join(c for c in filename if c.isascii() and c not in '"\\\r\n') or "cong-van.pdf"
     disposition = f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename)}"

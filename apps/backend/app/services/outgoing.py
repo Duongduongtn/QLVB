@@ -22,7 +22,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
-from app.core.errors import Conflict, NotFound, ValidationFailed
+from app.core.errors import Conflict, NotFound, PermissionDenied, ValidationFailed
 from app.core.storage import (
     delete_asset,
     read_asset,
@@ -44,6 +44,17 @@ from app.services.audit import log_action
 
 def get_outgoing(db: Session, doc_id: int) -> OutgoingDocument:
     doc = db.get(OutgoingDocument, doc_id)
+    if doc is None or doc.deleted_at is not None:
+        raise NotFound("Không tìm thấy công văn")
+    return doc
+
+
+def _lock_doc(db: Session, doc_id: int) -> OutgoingDocument:
+    """Lấy + KHOÁ row (SELECT ... FOR UPDATE) → 2 request ghi song song không xen kẽ
+    (cấp số / upload ký số / huỷ). Dùng cho mọi thao tác đổi trạng thái."""
+    doc = db.execute(
+        select(OutgoingDocument).where(OutgoingDocument.id == doc_id).with_for_update()
+    ).scalar_one_or_none()
     if doc is None or doc.deleted_at is not None:
         raise NotFound("Không tìm thấy công văn")
     return doc
@@ -313,12 +324,7 @@ def issue(
     ua: str | None,
 ) -> OutgoingDocument:
     """Chèn mộc + CẤP SỐ + lưu PDF _CHUA_KY_SO. draft → numbered."""
-    # Khoá row → 2 request song song không cùng đốt số (idempotent, chống double-click).
-    doc = db.execute(
-        select(OutgoingDocument).where(OutgoingDocument.id == doc_id).with_for_update()
-    ).scalar_one_or_none()
-    if doc is None or doc.deleted_at is not None:
-        raise NotFound("Không tìm thấy công văn")
+    doc = _lock_doc(db, doc_id)  # khoá row chống double-issue
     if doc.status != "draft":
         raise Conflict("Công văn đã được cấp số")
     if doc.signing_profile_id is None:
@@ -410,11 +416,23 @@ def read_original(db: Session, doc: OutgoingDocument) -> tuple[bytes, str]:
     return data, f.original_name or "cong-van.pdf"
 
 
-def read_original_for_download(
-    db: Session, doc: OutgoingDocument, *, actor_id: int, ip: str | None, ua: str | None
+def read_file_for_download(
+    db: Session,
+    doc: OutgoingDocument,
+    *,
+    signed: bool,
+    actor_id: int,
+    ip: str | None,
+    ua: str | None,
 ) -> tuple[bytes, str]:
-    """Như read_original nhưng GHI AUDIT (tải file CV nhạy cảm phải truy vết được)."""
-    data, filename = read_original(db, doc)
+    """Tải file CV (bản chưa ký = original, hoặc bản đã ký số = signed) + GHI AUDIT."""
+    file_id = doc.signed_file_id if signed else doc.original_file_id
+    if file_id is None:
+        raise NotFound("Công văn chưa có file" if not signed else "Chưa có bản đã ký số")
+    f = db.get(File, file_id)
+    if f is None or f.wrapped_key is None:
+        raise NotFound("Không tìm thấy file công văn")
+    data = read_encrypted_file(f.storage_key, f.wrapped_key)
     log_action(
         db,
         action="outgoing_download",
@@ -423,10 +441,117 @@ def read_original_for_download(
         object_id=doc.id,
         ip=ip,
         user_agent=ua,
-        detail={"file_id": doc.original_file_id},
+        detail={"file_id": file_id, "signed": signed},
     )
     db.commit()
-    return data, filename
+    return data, f.original_name or "cong-van.pdf"
+
+
+def _filename_has_number(filename: str | None, number_int: int) -> bool:
+    """Số CV xuất hiện như TOKEN trong tên file (không phải chuỗi con của số khác)."""
+    import re
+
+    return re.search(rf"(?<!\d){number_int}(?!\d)", filename or "") is not None
+
+
+def set_signed_file(
+    db: Session,
+    doc_id: int,
+    pdf_bytes: bytes,
+    filename: str | None,
+    *,
+    actor_id: int,
+    ip: str | None,
+    ua: str | None,
+) -> OutgoingDocument:
+    """D1.12: tải bản ĐÃ KÝ SỐ → numbered → published. Check số CV trong tên file (chống
+    nhầm file của CV khác). Lưu signed_file_id mã hoá."""
+    doc = _lock_doc(db, doc_id)
+    if doc.status != "numbered":
+        raise Conflict("Chỉ tải bản ký số cho công văn đã cấp số (chưa phát hành)")
+    if not pdf_bytes.startswith(b"%PDF"):
+        raise ValidationFailed("File phải là PDF")
+    # Edge D1: ký nhầm file CV khác → tên file phải chứa số CV (so khớp token, tránh
+    # '247' lọt vào '1247').
+    if doc.number_int is not None and not _filename_has_number(filename, doc.number_int):
+        raise ValidationFailed(
+            f"Tên file không chứa số CV {doc.number} — kiểm tra tránh tải nhầm file của công văn khác"
+        )
+
+    old = db.get(File, doc.signed_file_id) if doc.signed_file_id is not None else None
+    old_key = old.storage_key if old is not None else None
+    enc = save_encrypted_file(pdf_bytes, ext="pdf", subdir="cv")
+    try:
+        new_file = File(
+            storage_key=enc.storage_key,
+            location="local",
+            wrapped_key=enc.wrapped_key,
+            sha256=enc.sha256,
+            size_bytes=enc.size_bytes,
+            mime_type="application/pdf",
+            original_name=filename or "da-ky-so.pdf",
+        )
+        db.add(new_file)
+        db.flush()
+        doc.signed_file_id = new_file.id
+        if old is not None:
+            db.delete(old)
+        doc.status = "published"
+        log_action(
+            db,
+            action="outgoing_publish",
+            user_id=actor_id,
+            object_type="outgoing_document",
+            object_id=doc.id,
+            ip=ip,
+            user_agent=ua,
+            detail={"number": doc.number},
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        delete_asset(enc.storage_key)
+        raise
+    db.refresh(doc)
+    if old_key:
+        delete_asset(old_key)
+    return doc
+
+
+def cancel(
+    db: Session,
+    doc_id: int,
+    reason: str,
+    *,
+    actor_id: int,
+    actor_role: str,
+    ip: str | None,
+    ua: str | None,
+) -> OutgoingDocument:
+    """Huỷ CV (draft/numbered/published → cancelled). Bắt buộc lý do. Số đã cấp KHÔNG tái
+    dùng (sequence không lùi). **Thu hồi CV ĐÃ PHÁT HÀNH chỉ Quản lý** (PRD máy trạng thái)."""
+    doc = _lock_doc(db, doc_id)
+    if doc.status == "cancelled":
+        raise Conflict("Công văn đã huỷ")
+    if doc.status == "published" and actor_role != "manager":
+        raise PermissionDenied("Chỉ Quản lý được thu hồi công văn đã phát hành")
+    if not reason or not reason.strip():
+        raise ValidationFailed("Phải nhập lý do huỷ")
+    doc.status = "cancelled"
+    doc.cancel_reason = reason.strip()
+    log_action(
+        db,
+        action="outgoing_cancel",
+        user_id=actor_id,
+        object_type="outgoing_document",
+        object_id=doc.id,
+        ip=ip,
+        user_agent=ua,
+        detail={"reason": reason.strip(), "number": doc.number},
+    )
+    db.commit()
+    db.refresh(doc)
+    return doc
 
 
 def list_outgoing(

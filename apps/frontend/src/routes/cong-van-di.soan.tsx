@@ -12,6 +12,7 @@ import {
   PenTool,
   ShieldAlert,
   Stamp,
+  Upload,
   UploadCloud,
 } from 'lucide-react';
 
@@ -755,6 +756,31 @@ function Step6({
 }
 
 function Step7({ number, docId, onDone }: { number: string | null; docId: number | null; onDone: () => void }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [published, setPublished] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function uploadSigned(f: File) {
+    if (docId === null) return;
+    setErr(null);
+    setBusy(true);
+    try {
+      const form = new FormData();
+      form.append('file', f);
+      const res = await fetch(`/api/outgoing/${docId}/signed-file`, { method: 'POST', body: form, credentials: 'include' });
+      if (!res.ok) {
+        const b = (await res.json().catch(() => null)) as ApiErrorEnvelope | null;
+        throw new Error(b?.error?.message ?? 'Tải bản ký số thất bại');
+      }
+      setPublished(true);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div>
       <div className="mb-5 flex items-center gap-3">
@@ -762,33 +788,71 @@ function Step7({ number, docId, onDone }: { number: string | null; docId: number
           <Check size={24} className="text-green-600" />
         </span>
         <div>
-          <h3 className="text-lg font-semibold text-slate-800">Đã cấp số — chờ ký số</h3>
+          <h3 className="text-lg font-semibold text-slate-800">
+            {published ? 'Đã phát hành' : 'Đã cấp số — chờ ký số'}
+          </h3>
           <div className="font-mono text-amber-700">{number}</div>
         </div>
       </div>
 
-      <div className="rounded-md border border-slate-200 p-4">
-        <div className="font-medium text-slate-800">Tải PDF chưa ký số &amp; ký bằng USB Token</div>
-        <p className="mb-3 mt-1 text-sm text-slate-500">
-          Mở file bằng vSign + USB Token Viettel-CA để ký số (ngoài hệ thống).
-        </p>
-        <button
-          type="button"
-          disabled={docId === null}
-          onClick={() => docId !== null && window.open(`/api/outgoing/${docId}/download`, '_blank')}
-          className="flex items-center gap-2 rounded-md bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500 disabled:opacity-60"
-        >
-          <Download size={15} /> Tải PDF (_CHUA_KY_SO)
-        </button>
-      </div>
+      {err && (
+        <div role="alert" className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {err}
+        </div>
+      )}
 
-      <p className="mt-3 text-xs text-slate-400">
-        Bước tải lên bản đã ký số để chuyển “Đã phát hành” sẽ bổ sung ở phần sau.
-      </p>
+      <div className="space-y-3">
+        <div className="rounded-md border border-slate-200 p-4">
+          <div className="font-medium text-slate-800">1. Tải PDF chưa ký số &amp; ký bằng USB Token</div>
+          <p className="mb-3 mt-1 text-sm text-slate-500">
+            Mở file bằng vSign + USB Token Viettel-CA để ký số (ngoài hệ thống), rồi quay lại tải lên.
+          </p>
+          <button
+            type="button"
+            disabled={docId === null}
+            onClick={() => docId !== null && window.open(`/api/outgoing/${docId}/download`, '_blank')}
+            className="flex items-center gap-2 rounded-md border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50 disabled:opacity-60"
+          >
+            <Download size={15} /> Tải PDF (_CHUA_KY_SO)
+          </button>
+        </div>
+
+        <div className="rounded-md border border-slate-200 p-4">
+          <div className="font-medium text-slate-800">2. Tải lên bản đã ký số → hoàn tất phát hành</div>
+          <p className="mb-3 mt-1 text-sm text-slate-500">
+            Hệ thống kiểm tra số CV trong tên file (chống nhầm) rồi chuyển “Đã phát hành”.
+          </p>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="application/pdf"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void uploadSigned(f);
+              e.target.value = '';
+            }}
+          />
+          {published ? (
+            <span className="flex items-center gap-1.5 text-sm font-medium text-green-700">
+              <Check size={15} /> Đã phát hành công văn.
+            </span>
+          ) : (
+            <button
+              type="button"
+              disabled={busy || docId === null}
+              onClick={() => fileRef.current?.click()}
+              className="flex items-center gap-2 rounded-md bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500 disabled:opacity-60"
+            >
+              <Upload size={15} /> {busy ? 'Đang tải…' : 'Tải lên bản đã ký số'}
+            </button>
+          )}
+        </div>
+      </div>
 
       <div className="mt-5 flex justify-end">
         <button type="button" onClick={onDone} className="rounded-md border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50">
-          Về danh sách công văn
+          {published ? 'Xong, về danh sách' : 'Để sau, về danh sách'}
         </button>
       </div>
     </div>
