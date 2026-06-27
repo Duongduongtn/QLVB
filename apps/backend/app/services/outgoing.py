@@ -297,6 +297,70 @@ def _resolve_range(opt: dict[str, Any], page_count: int) -> tuple[int, int]:
     return pf, pt
 
 
+def auto_detect_positions(
+    db: Session, doc_id: int, *, actor_id: int, ip: str | None, ua: str | None
+) -> tuple[OutgoingDocument, str]:
+    """D2 — tự dò vị trí mộc/chữ ký (A placeholder → C template → B regex → default)."""
+    from app.services import stamp_autodetect
+
+    doc = _lock_doc(db, doc_id)
+    if doc.status != "draft":
+        raise Conflict("Chỉ dò vị trí khi công văn còn nháp")
+    if doc.original_file_id is None:
+        raise ValidationFailed("Chưa upload file công văn")
+    if doc.signing_profile_id is None:
+        raise ValidationFailed("Chọn hồ sơ ký trước khi dò vị trí")
+    f = db.get(File, doc.original_file_id)
+    if f is None or f.wrapped_key is None:
+        raise ValidationFailed("Không đọc được file công văn gốc")
+    data = read_encrypted_file(f.storage_key, f.wrapped_key)
+    dt = db.get(DocumentType, doc.doc_type_id)
+    template = dt.stamp_template if dt is not None else None
+    positions, method = stamp_autodetect.detect_positions(
+        data, want_seal=True, want_sig=True, template=template
+    )
+    if not positions:  # PDF scan / không khớp → góc dưới phải trang cuối (cách D fallback)
+        positions = _default_positions(pdf_stamp.pdf_page_count(data), have_seal=True, have_sig=True)
+        method = "default"
+    doc.stamp_positions = positions
+    log_action(
+        db,
+        action="outgoing_autodetect",
+        user_id=actor_id,
+        object_type="outgoing_document",
+        object_id=doc.id,
+        ip=ip,
+        user_agent=ua,
+        detail={"method": method},
+    )
+    db.commit()
+    db.refresh(doc)
+    return doc, method
+
+
+def save_stamp_template(
+    db: Session, doc_id: int, *, actor_id: int, ip: str | None, ua: str | None
+) -> None:
+    """D2 — lưu vị trí hiện tại làm template cho loại VB (lần sau tự áp — cách C)."""
+    doc = get_outgoing(db, doc_id)
+    if not doc.stamp_positions:
+        raise ValidationFailed("Chưa có vị trí mộc/chữ ký để lưu làm template")
+    dt = db.get(DocumentType, doc.doc_type_id)
+    if dt is None:
+        raise NotFound("Không tìm thấy loại văn bản")
+    dt.stamp_template = list(doc.stamp_positions)
+    log_action(
+        db,
+        action="doctype_save_template",
+        user_id=actor_id,
+        object_type="document_type",
+        object_id=dt.id,
+        ip=ip,
+        user_agent=ua,
+    )
+    db.commit()
+
+
 def render_stamped(db: Session, doc: OutgoingDocument) -> bytes:
     """Chèn mộc/chữ ký theo stamp_positions + giáp lai (D3) + ký nháy (D4). Trả PDF bytes."""
     if doc.original_file_id is None:

@@ -122,6 +122,8 @@ function SoanCongVanPage() {
   const [draftId, setDraftId] = useState<number | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [issuedNumber, setIssuedNumber] = useState<string | null>(null);
+  const [detectMethod, setDetectMethod] = useState<string | null>(null);
+  const [templateSaved, setTemplateSaved] = useState(false);
 
   const { data: unitsData } = useQuery({
     queryKey: ['units'],
@@ -261,6 +263,45 @@ function SoanCongVanPage() {
     } finally {
       setBusy(false);
       busyRef.current = false;
+    }
+  }
+
+  // D2 — tự dò vị trí mộc/chữ ký rồi xem lại preview.
+  async function doAutoDetect() {
+    if (busyRef.current) return;
+    setErr(null);
+    setTemplateSaved(false);
+    setBusy(true);
+    try {
+      const id = await ensureDraft();
+      const res = await fetch(`/api/outgoing/${id}/auto-detect`, { method: 'POST', credentials: 'include' });
+      if (!res.ok) {
+        const b = (await res.json().catch(() => null)) as ApiErrorEnvelope | null;
+        throw new Error(b?.error?.message ?? 'Không dò được vị trí');
+      }
+      const body = (await res.json()) as { method: string };
+      setDetectMethod(body.method);
+    } catch (e) {
+      setErr((e as Error).message);
+      setBusy(false);
+      return;
+    }
+    setBusy(false);
+    await doPreview();
+  }
+
+  async function doSaveTemplate() {
+    if (draftId === null) {
+      setErr('Hãy dò/đặt vị trí trước khi lưu template');
+      return;
+    }
+    setErr(null);
+    const res = await fetch(`/api/outgoing/${draftId}/save-template`, { method: 'POST', credentials: 'include' });
+    if (!res.ok) {
+      const b = (await res.json().catch(() => null)) as ApiErrorEnvelope | null;
+      setErr(b?.error?.message ?? 'Lưu template thất bại');
+    } else {
+      setTemplateSaved(true);
     }
   }
 
@@ -449,7 +490,17 @@ function SoanCongVanPage() {
             <Step3 unit={unit} profiles={unitProfiles} profileId={profileId} setProfileId={setProfileId} />
           )}
 
-          {step === 4 && <StepPreview previewUrl={previewUrl} busy={busy} onReload={doPreview} />}
+          {step === 4 && (
+            <StepPreview
+              previewUrl={previewUrl}
+              busy={busy}
+              onReload={doPreview}
+              onAutoDetect={doAutoDetect}
+              onSaveTemplate={doSaveTemplate}
+              method={detectMethod}
+              templateSaved={templateSaved}
+            />
+          )}
 
           {step === 5 && (
             <Step5 giapLai={giapLai} setGiapLai={setGiapLai} kyNhay={kyNhay} setKyNhay={setKyNhay} onPreview={doPreview} previewUrl={previewUrl} busy={busy} />
@@ -759,15 +810,52 @@ function Step3({
   );
 }
 
-function StepPreview({ previewUrl, busy, onReload }: { previewUrl: string | null; busy: boolean; onReload: () => void }) {
+const DETECT_LABEL: Record<string, string> = {
+  placeholder: 'theo placeholder trong văn bản ({{KY_TEN}}/{{DONG_DAU}}/{{NGAY}})',
+  template: 'theo template đã lưu của loại văn bản',
+  regex: 'theo cụm chức danh nhận diện được',
+  default: 'mặc định góc dưới phải trang cuối',
+};
+
+function StepPreview({
+  previewUrl,
+  busy,
+  onReload,
+  onAutoDetect,
+  onSaveTemplate,
+  method,
+  templateSaved,
+}: {
+  previewUrl: string | null;
+  busy: boolean;
+  onReload: () => void;
+  onAutoDetect: () => void;
+  onSaveTemplate: () => void;
+  method: string | null;
+  templateSaved: boolean;
+}) {
   return (
     <div>
       <h2 className="section-title" style={{ marginBottom: 8 }}>
         Vị trí mộc &amp; chữ ký
       </h2>
-      <p style={{ fontSize: '0.85rem', color: 'var(--ink-muted)', marginBottom: 16 }}>
-        Hệ thống tự đặt mộc + chữ ký ở góc dưới phải trang cuối. Xem trước bên dưới (kéo-thả tinh chỉnh sẽ bổ sung sau).
+      <p style={{ fontSize: '0.85rem', color: 'var(--ink-muted)', marginBottom: 12 }}>
+        Bấm “Tự dò vị trí” để hệ thống đặt mộc + chữ ký đúng chỗ (placeholder → template → cụm chức danh → mặc định góc dưới phải).
       </p>
+      <div className="flex items-center flex-wrap" style={{ gap: 8, marginBottom: 12 }}>
+        <button type="button" className="btn-primary" onClick={onAutoDetect} disabled={busy}>
+          {busy ? 'Đang dò…' : 'Tự dò vị trí'}
+        </button>
+        <button type="button" className="btn-secondary" onClick={onSaveTemplate} disabled={busy}>
+          Lưu vị trí làm template
+        </button>
+        {templateSaved && <span className="cell-meta" style={{ color: 'var(--success)' }}>Đã lưu template ✓</span>}
+      </div>
+      {method && (
+        <div className="card flex items-center" style={{ padding: '8px 14px', gap: 8, marginBottom: 12, background: 'var(--kinpaku-pale)' }}>
+          <span style={{ fontSize: '0.82rem', color: 'var(--ink)' }}>Đã đặt vị trí {DETECT_LABEL[method] ?? method}.</span>
+        </div>
+      )}
       <PreviewFrame previewUrl={previewUrl} busy={busy} onReload={onReload} />
     </div>
   );

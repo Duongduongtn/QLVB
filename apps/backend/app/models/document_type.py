@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -18,6 +20,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin
@@ -51,6 +54,8 @@ class DocumentType(Base, TimestampMixin):
     reset_policy: Mapped[str] = mapped_column(String(10), nullable=False, default="year")
     zero_pad: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=3)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # D2 — template vị trí mộc/chữ ký đã lưu cho loại VB này (list StampPosition %).
+    stamp_template: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
 
 
 class NumberingRegistry(Base):

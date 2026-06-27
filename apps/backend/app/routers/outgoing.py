@@ -162,6 +162,32 @@ def finalize_convert(
     return {"status": "done"}
 
 
+@router.post("/{doc_id}/auto-detect")
+def auto_detect_positions(
+    doc_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(current_user),
+) -> dict[str, object]:
+    """D2 — tự dò vị trí mộc/chữ ký, lưu vào nháp. Trả method đã áp dụng."""
+    ip, ua = _ctx(request)
+    _, method = out_service.auto_detect_positions(db, doc_id, actor_id=actor.id, ip=ip, ua=ua)
+    return {"method": method}
+
+
+@router.post("/{doc_id}/save-template", status_code=204)
+def save_stamp_template(
+    doc_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(current_user),
+) -> Response:
+    """D2 — lưu vị trí hiện tại làm template cho loại VB."""
+    ip, ua = _ctx(request)
+    out_service.save_stamp_template(db, doc_id, actor_id=actor.id, ip=ip, ua=ua)
+    return Response(status_code=204)
+
+
 @router.post("/{doc_id}/preview")
 def preview_outgoing(
     doc_id: int, db: Session = Depends(get_db), _: User = Depends(current_user)
