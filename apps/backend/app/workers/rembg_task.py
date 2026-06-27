@@ -44,11 +44,13 @@ def purge_bg_tmp(max_age_hours: int = 2) -> dict:
 
     now = time.time()
     age = max_age_hours * 3600
-    # bg_tmp (tách nền) + cv_tmp (convert Word) + in_tmp (PDF CV đến cho OCR — KHÔNG mã hoá)
-    # đều là asset tạm phù du; backstop dọn nếu worker chưa xoá kịp.
+    # bg_tmp (tách nền) + cv_tmp (convert Word) + in_tmp (PDF CV đến cho OCR) + sig_tmp
+    # (PDF CV đến cho verify PAdES) đều là asset tạm KHÔNG mã hoá; backstop dọn nếu worker
+    # chưa xoá kịp.
     removed = (
         purge_old_files("bg_tmp", max_age_seconds=age, now=now)
         + purge_old_files("cv_tmp", max_age_seconds=age, now=now)
         + purge_old_files("in_tmp", max_age_seconds=age, now=now)
+        + purge_old_files("sig_tmp", max_age_seconds=age, now=now)
     )
     return {"removed": removed}

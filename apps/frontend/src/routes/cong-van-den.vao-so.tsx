@@ -10,12 +10,15 @@ import {
   FileText,
   Hash,
   ScanText,
+  ShieldAlert,
+  ShieldCheck,
   ShieldQuestion,
   UploadCloud,
 } from 'lucide-react';
 
 import { api, type ApiErrorEnvelope } from '~/lib/api';
 import { PageHeader, Pill } from '~/components/ui';
+import { fmtDate, fmtDateTime } from '~/lib/format';
 import { CONFIDENTIALITY_LABEL, URGENCY_LABEL } from '~/lib/incoming';
 
 export const Route = createFileRoute('/cong-van-den/vao-so')({
@@ -47,6 +50,22 @@ interface Dup {
   number: string | null;
   reference_number: string | null;
 }
+interface SigDetail {
+  signer: string | null;
+  ca: string | null;
+  signed_at: string | null;
+  valid_until: string | null;
+  intact: boolean;
+  valid: boolean;
+  trusted: boolean;
+  expired: boolean;
+}
+interface SigInfo {
+  status: string;
+  checked_at: string;
+  signatures: SigDetail[];
+  warning: string | null;
+}
 interface Doc {
   id: number;
   reference_number: string | null;
@@ -64,6 +83,78 @@ function errBody(res: Response, fallback: string): Promise<string> {
   return res.json().then((b: ApiErrorEnvelope | null) => b?.error?.message ?? fallback).catch(() => fallback);
 }
 
+function SignatureBadge({ status, info }: { status: string | null; info: SigInfo | null }) {
+  const wrap = (bg: string, border: string): React.CSSProperties => ({
+    display: 'flex', alignItems: 'flex-start', gap: 12, padding: 16, borderRadius: 6,
+    background: bg, border: `1px solid ${border}`, marginBottom: 16,
+  });
+
+  if (status === null) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 16, borderRadius: 6, background: 'var(--paper-deep)', marginBottom: 16, fontSize: '0.85rem', color: 'var(--ink-muted)' }}>
+        <ShieldQuestion size={18} /> Đang kiểm chữ ký số (PAdES)…
+      </div>
+    );
+  }
+  if (status === 'error') {
+    return (
+      <div style={wrap('var(--paper-deep)', 'var(--rule)')}>
+        <ShieldQuestion size={20} style={{ color: 'var(--ink-muted)', flexShrink: 0 }} />
+        <div style={{ fontSize: '0.85rem', color: 'var(--ink)' }}>
+          <strong>Không kiểm được chữ ký số</strong>
+          <div className="cell-meta" style={{ marginTop: 4 }}>Hãy kiểm tra thủ công nếu đây là văn bản đã ký số.</div>
+        </div>
+      </div>
+    );
+  }
+  if (status === 'none') {
+    return (
+      <div style={wrap('var(--paper-deep)', 'var(--rule)')}>
+        <ShieldQuestion size={20} style={{ color: 'var(--ink-muted)', flexShrink: 0 }} />
+        <div style={{ fontSize: '0.85rem', color: 'var(--ink)' }}>
+          <strong>Chưa ký số</strong>
+          <div className="cell-meta" style={{ marginTop: 4 }}>Văn bản không có chữ ký số → chạy kiểm tra trùng 3 lớp bên dưới.</div>
+        </div>
+      </div>
+    );
+  }
+
+  const valid = status === 'valid';
+  const sigs = info?.signatures ?? [];
+  // Cert lạ (intact + hợp lệ mật mã nhưng CHƯA tin cậy) ≠ chữ ký hỏng/sửa nội dung →
+  // headline trung tính, tránh ám chỉ giả mạo.
+  const untrustedOnly = !valid && sigs.length > 0 && sigs.every((s) => s.intact && s.valid && !s.trusted);
+  const Icon = valid ? ShieldCheck : untrustedOnly ? ShieldQuestion : ShieldAlert;
+  const headline = valid
+    ? 'Chữ ký số hợp lệ'
+    : untrustedOnly
+      ? 'Chữ ký số chưa được tin cậy — kiểm tra thủ công'
+      : 'Chữ ký số không hợp lệ';
+  return (
+    <div style={wrap(valid ? 'var(--success-soft)' : 'var(--warning-soft)', valid ? 'var(--success)' : 'var(--warning)')}>
+      <Icon size={20} style={{ color: valid ? 'var(--success)' : 'var(--warning)', flexShrink: 0 }} />
+      <div style={{ fontSize: '0.85rem', color: 'var(--ink)', flex: 1, minWidth: 0 }}>
+        <strong>{headline}</strong>
+        {!valid && info?.warning && <div className="cell-meta" style={{ marginTop: 4 }}>{info.warning}</div>}
+        {sigs.map((s, i) => (
+          <div key={i} className="cell-meta" style={{ marginTop: 8, paddingTop: 8, borderTop: i > 0 ? '1px solid var(--rule)' : undefined }}>
+            <div>Ký bởi: <strong style={{ color: 'var(--ink)' }}>{s.signer ?? '—'}</strong></div>
+            <div>Chứng thư: {s.ca ?? '—'}</div>
+            {s.signed_at && <div>Ký lúc: {fmtDateTime(s.signed_at)}</div>}
+            {s.valid_until && <div>Hiệu lực đến: {fmtDate(s.valid_until)}{s.expired ? ' (đã hết hạn)' : ''}</div>}
+            {!s.trusted && s.intact && s.valid && (
+              <div className="flex items-center" style={{ gap: 4, color: 'var(--warning)' }}>
+                <AlertTriangle size={12} /> Chứng thư chưa có trong trust list VN
+              </div>
+            )}
+          </div>
+        ))}
+        {sigs.length > 1 && <div className="cell-meta" style={{ marginTop: 6 }}>Tổng {sigs.length} chữ ký.</div>}
+      </div>
+    </div>
+  );
+}
+
 function VaoSoPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
@@ -72,6 +163,9 @@ function VaoSoPage() {
 
   const [docId, setDocId] = useState<number | null>(null);
   const [taskId, setTaskId] = useState<string | null>(null);
+  const [sigTaskId, setSigTaskId] = useState<string | null>(null);
+  const [sigStatus, setSigStatus] = useState<string | null>(null); // null=đang kiểm; none/valid/invalid/error
+  const [sigInfo, setSigInfo] = useState<SigInfo | null>(null);
   const [fileName, setFileName] = useState<string>('');
   const [doc, setDoc] = useState<Doc | null>(null);
   const [dups, setDups] = useState<Dup[]>([]);
@@ -115,10 +209,13 @@ function VaoSoPage() {
       form.append('file', f);
       const res = await fetch('/api/incoming/upload', { method: 'POST', body: form, credentials: 'include' });
       if (!res.ok) throw new Error(await errBody(res, 'Tải file lên thất bại'));
-      const body = (await res.json()) as { doc: Doc; ocr_task_id: string };
+      const body = (await res.json()) as { doc: Doc; ocr_task_id: string; sig_task_id: string };
       setDocId(body.doc.id);
       setDoc(body.doc);
       setTaskId(body.ocr_task_id);
+      setSigTaskId(body.sig_task_id);
+      setSigStatus(null);
+      setSigInfo(null);
       setFileName(f.name);
       setOcrDone(false);
       setStep(2);
@@ -159,6 +256,35 @@ function VaoSoPage() {
       clearInterval(iv);
     };
   }, [step, docId, taskId, ocrDone]);
+
+  // Bước 2: poll verify chữ ký số (PAdES) song song OCR — E1.5.
+  useEffect(() => {
+    if (step !== 2 || !docId || !sigTaskId || sigStatus !== null) return;
+    let alive = true;
+    const tick = async () => {
+      const res = await fetch(`/api/incoming/${docId}/sig-status?task_id=${encodeURIComponent(sigTaskId)}`, { method: 'POST', credentials: 'include' });
+      if (!alive || !res.ok) return false;
+      const body = (await res.json()) as { status: string; signature_status?: string; signature_info?: SigInfo | null };
+      if (body.status === 'done') {
+        setSigStatus(body.signature_status ?? 'none');
+        setSigInfo(body.signature_info ?? null);
+        return true;
+      }
+      if (body.status === 'error') {
+        setSigStatus('error');
+        return true;
+      }
+      return false;
+    };
+    const iv = setInterval(async () => {
+      if (await tick()) clearInterval(iv);
+    }, 1200);
+    void tick();
+    return () => {
+      alive = false;
+      clearInterval(iv);
+    };
+  }, [step, docId, sigTaskId, sigStatus]);
 
   function setField<K extends keyof Doc>(k: K, v: Doc[K]) {
     setDoc((d) => (d ? { ...d, [k]: v } : d));
@@ -311,13 +437,7 @@ function VaoSoPage() {
                 <Pill variant="success" dot>Đã tải</Pill>
               </div>
 
-              <div className="flex items-start" style={{ gap: 12, padding: 16, borderRadius: 6, background: 'var(--paper-deep)', marginBottom: 16 }}>
-                <ShieldQuestion size={20} style={{ color: 'var(--ink-muted)', flexShrink: 0 }} />
-                <div style={{ fontSize: '0.85rem', color: 'var(--ink)' }}>
-                  <strong>Chữ ký số: chưa kiểm</strong>
-                  <div className="cell-meta" style={{ marginTop: 4 }}>Verify PAdES sẽ bổ sung ở bản sau (E1.5).</div>
-                </div>
-              </div>
+              <SignatureBadge status={sigStatus} info={sigInfo} />
 
               <div className="eyebrow" style={{ marginBottom: 10 }}>Kiểm tra trùng 3 lớp</div>
               {!ocrDone ? (

@@ -36,6 +36,7 @@ from app.services import incoming as inc_service
 from app.services import outgoing as out_service
 from app.services import tasks as task_service
 from app.workers.ocr import extract_text
+from app.workers.sign_verify import verify_pades
 
 router = APIRouter()
 
@@ -60,18 +61,48 @@ async def upload_incoming(
     db: Session = Depends(get_db),
     actor: User = Depends(current_user),
 ) -> dict[str, object]:
-    """Tạo nháp CV đến + enqueue OCR. Trả {doc, ocr_task_id}."""
+    """Tạo nháp CV đến + enqueue OCR (E1) + verify PAdES (E1.5). Trả {doc, ocr_task_id, sig_task_id}."""
     data = await file.read(_MAX_BYTES + 1)
     if not data:
         raise ValidationFailed("File rỗng")
     if len(data) > _MAX_BYTES:
         raise ValidationFailed("File vượt quá 50MB")
     ip, ua = _ctx(request)
-    doc, tmp_key = await run_in_threadpool(
+    doc, ocr_key, sig_key = await run_in_threadpool(
         inc_service.create_from_upload, db, data, file.filename, actor_id=actor.id, ip=ip, ua=ua
     )
-    task = extract_text.delay(tmp_key)
-    return {"doc": IncomingOut.model_validate(doc).model_dump(mode="json"), "ocr_task_id": task.id}
+    ocr_task = extract_text.delay(ocr_key)
+    sig_task = verify_pades.delay(sig_key)
+    return {
+        "doc": IncomingOut.model_validate(doc).model_dump(mode="json"),
+        "ocr_task_id": ocr_task.id,
+        "sig_task_id": sig_task.id,
+    }
+
+
+@router.post("/{doc_id}/sig-status")
+def sig_status(
+    doc_id: int,
+    task_id: str = Query(...),
+    db: Session = Depends(get_db),
+    actor: User = Depends(current_user),
+) -> dict[str, object]:
+    """E1.5 — poll kết quả verify PAdES. Khi xong → lưu signature_status + info → trả badge."""
+    doc = _visible(inc_service.get_incoming(db, doc_id), actor)
+    res: AsyncResult = AsyncResult(task_id, app=celery)
+    if res.failed():
+        return {"status": "error", "message": "Không kiểm được chữ ký số"}
+    if not res.successful():
+        return {"status": "pending"}
+    payload = res.result if isinstance(res.result, dict) else {}
+    sig_status_val = payload.get("signature_status", "unchecked")
+    info = payload.get("signature_info") if isinstance(payload.get("signature_info"), dict) else None
+    doc = inc_service.set_signature_result(db, doc_id, status=sig_status_val, info=info)
+    return {
+        "status": "done",
+        "signature_status": doc.signature_status,
+        "signature_info": doc.signature_info,
+    }
 
 
 @router.post("/{doc_id}/ocr-status")

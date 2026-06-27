@@ -1,0 +1,6 @@
+{
+  "_note": "Danh sách CA gốc đã đăng ký với NEAC (neac.gov.vn) dùng verify chữ ký số PAdES (E1.5). Worker cron 'refresh_trust_list' tải bản mới hằng tuần từ NEAC_TRUST_LIST_URL về cache local (storage/trust/vn-trust-list.json) và ghi đè file cache; file seed này chỉ là fallback rỗng. Khi CHƯA cấu hình NEAC_TRUST_LIST_URL hoặc trust list rỗng, mọi chữ ký số sẽ bị coi là 'chứng thư lạ' (badge vàng) thay vì xanh — đây là mặc định AN TOÀN. Điền 'cas' bằng các chứng thư gốc dạng PEM khi vận hành.",
+  "source": "NEAC — Trung tâm Chứng thực Điện tử Quốc gia",
+  "updated_at": null,
+  "cas": []
+}

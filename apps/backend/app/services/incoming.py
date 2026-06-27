@@ -52,13 +52,18 @@ def _lock(db: Session, doc_id: int) -> IncomingDocument:
 
 def create_from_upload(
     db: Session, data: bytes, filename: str | None, *, actor_id: int, ip: str | None, ua: str | None
-) -> tuple[IncomingDocument, str]:
-    """Tạo bản nháp CV đến từ file PDF. Trả (doc, tmp_key) — tmp_key để enqueue OCR."""
+) -> tuple[IncomingDocument, str, str]:
+    """Tạo bản nháp CV đến từ file PDF.
+
+    Trả (doc, ocr_tmp_key, sig_tmp_key): 2 bản tạm KHÔNG mã hoá cho worker OCR (E1) và
+    verify PAdES (E1.5). Mỗi worker tự xoá bản của mình sau khi xử lý (beat purge backstop).
+    """
     if not data.startswith(b"%PDF"):
         raise ValidationFailed("File công văn đến phải là PDF")
     sha = hashlib.sha256(data).hexdigest()
     enc = save_encrypted_file(data, ext="pdf", subdir="incoming")
     tmp = save_asset(data, ext="pdf", subdir="in_tmp")  # bản KHÔNG mã hoá cho worker OCR
+    sig_tmp = save_asset(data, ext="pdf", subdir="sig_tmp")  # bản cho worker verify PAdES
     try:
         f = File(
             storage_key=enc.storage_key,
@@ -89,9 +94,10 @@ def create_from_upload(
         db.rollback()
         delete_asset(enc.storage_key)
         delete_asset(tmp.storage_key)
+        delete_asset(sig_tmp.storage_key)
         raise
     db.refresh(doc)
-    return doc, tmp.storage_key
+    return doc, tmp.storage_key, sig_tmp.storage_key
 
 
 def set_ocr_result(
@@ -107,6 +113,25 @@ def set_ocr_result(
             doc.document_date = date.fromisoformat(str(auto_fill["document_date"]))
     db.commit()
     db.refresh(doc)
+    return doc
+
+
+_SIG_STATUSES = ("none", "valid", "invalid")
+
+
+def set_signature_result(
+    db: Session, doc_id: int, *, status: str, info: dict[str, Any] | None
+) -> IncomingDocument:
+    """E1.5 — lưu kết quả verify PAdES (worker trả qua poll). status hợp lệ → ghi DB.
+
+    'valid' → register() sẽ BỎ QUA dedup 3 lớp (chữ ký số tin cậy đảm bảo duy nhất).
+    """
+    doc = _lock(db, doc_id)
+    if status in _SIG_STATUSES:
+        doc.signature_status = status
+        doc.signature_info = info
+        db.commit()
+        db.refresh(doc)
     return doc
 
 
@@ -240,7 +265,11 @@ def register(
         object_id=doc.id,
         ip=ip,
         user_agent=ua,
-        detail={"number": formatted, "duplicate_override": bool(doc.duplicate_note)},
+        detail={
+            "number": formatted,
+            "duplicate_override": bool(doc.duplicate_note),
+            "signature_status": doc.signature_status,  # truy vết: 'valid' = bỏ dedup hợp lệ
+        },
     )
     try:
         db.commit()

@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     # LibreOffice để convert Word→PDF (worker image có sẵn 'soffice' trên PATH; local
     # Windows trỏ full path qua biến môi trường LIBREOFFICE_BIN nếu cần).
     libreoffice_bin: str = "soffice"
+    # Trust list NEAC verify chữ ký số PAdES (E1.5) — cron tuần tải về cache local.
+    # Để trống → bỏ qua cập nhật (mọi chữ ký coi là 'chứng thư lạ', badge vàng — an toàn).
+    neac_trust_list_url: str | None = None
     master_key_hex: SecretStr = Field(default=SecretStr(""))  # 32-byte hex
     r2_endpoint: str | None = None
     r2_bucket: str | None = None

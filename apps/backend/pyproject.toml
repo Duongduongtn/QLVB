@@ -128,7 +128,8 @@ exclude = ["alembic/versions/", "tests/"]
 [[tool.mypy.overrides]]
 module = [
     "fitz.*", "paddleocr.*", "rembg.*", "cv2.*",
-    "pyhanko.*", "pywebpush.*", "boto3.*", "celery.*",
+    "pyhanko.*", "pyhanko_certvalidator.*", "asn1crypto.*",
+    "httpx.*", "pywebpush.*", "boto3.*", "celery.*",
 ]
 ignore_missing_imports = true
 
