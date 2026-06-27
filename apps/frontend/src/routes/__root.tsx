@@ -15,10 +15,12 @@ import {
   LogOut,
   Menu,
   MonitorSmartphone,
+  ScrollText,
   Search,
   Send,
   Settings,
   Stamp,
+  Trash2,
   Users,
   X,
   type LucideIcon,
@@ -80,6 +82,8 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Cấu hình', to: '/cau-hinh', icon: Settings, managerOnly: true },
       { label: 'Người dùng', to: '/nguoi-dung', icon: Users, managerOnly: true },
+      { label: 'Audit log', to: '/audit-log', icon: ScrollText, managerOnly: true },
+      { label: 'Thùng rác', to: '/thung-rac', icon: Trash2, managerOnly: true },
     ],
   },
 ];

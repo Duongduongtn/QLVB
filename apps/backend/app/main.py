@@ -19,6 +19,7 @@ from app.core.config import settings
 from app.core.errors import AppError, app_error_handler
 from app.core.logging import configure_logging, logger
 from app.routers import (
+    audit,
     auth,
     bg_removal,
     document_types,
@@ -28,6 +29,7 @@ from app.routers import (
     seals,
     signatures,
     signing_profiles,
+    trash,
     units,
     users,
 )
@@ -86,3 +88,5 @@ app.include_router(
 app.include_router(bg_removal.router, prefix="/api/bg-removal", tags=["bg-removal"])
 app.include_router(organizations.router, prefix="/api/organizations", tags=["organizations"])
 app.include_router(outgoing.router, prefix="/api/outgoing", tags=["outgoing"])
+app.include_router(trash.router, prefix="/api/trash", tags=["trash"])
+app.include_router(audit.router, prefix="/api/audit-logs", tags=["audit"])

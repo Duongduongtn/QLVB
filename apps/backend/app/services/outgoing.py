@@ -15,6 +15,7 @@ on-the-fly khi tải (D1.11), upload file đã ký (D1.12), D5 in_reply_to.
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func, select
@@ -561,6 +562,130 @@ def cancel(
     db.commit()
     db.refresh(doc)
     return doc
+
+
+TRASH_KEEP_DAYS = 30  # CV trong thùng rác giữ tối đa ngần này ngày rồi tự xoá vĩnh viễn
+
+
+def _lock_trashed(db: Session, doc_id: int) -> OutgoingDocument:
+    doc = db.execute(
+        select(OutgoingDocument).where(OutgoingDocument.id == doc_id).with_for_update()
+    ).scalar_one_or_none()
+    if doc is None:
+        raise NotFound("Không tìm thấy công văn")
+    if doc.deleted_at is None:
+        raise Conflict("Công văn không nằm trong thùng rác")
+    return doc
+
+
+def soft_delete(
+    db: Session, doc_id: int, *, actor_id: int, actor_role: str, ip: str | None, ua: str | None
+) -> OutgoingDocument:
+    """Xoá mềm CV → thùng rác (giữ 30 ngày). CV ĐÃ CẤP SỐ chỉ Quản lý xoá được (PRD edge)."""
+    doc = _lock_doc(db, doc_id)
+    if doc.number_int is not None and actor_role != "manager":
+        raise PermissionDenied("Công văn đã cấp số — chỉ Quản lý được xoá")
+    doc.deleted_at = func.now()
+    log_action(
+        db,
+        action="outgoing_delete",
+        user_id=actor_id,
+        object_type="outgoing_document",
+        object_id=doc.id,
+        ip=ip,
+        user_agent=ua,
+        detail={"number": doc.number},
+    )
+    db.commit()
+    db.refresh(doc)
+    return doc
+
+
+def restore(
+    db: Session, doc_id: int, *, actor_id: int, ip: str | None, ua: str | None
+) -> OutgoingDocument:
+    """Khôi phục CV từ thùng rác."""
+    doc = _lock_trashed(db, doc_id)
+    doc.deleted_at = None
+    log_action(
+        db,
+        action="outgoing_restore",
+        user_id=actor_id,
+        object_type="outgoing_document",
+        object_id=doc.id,
+        ip=ip,
+        user_agent=ua,
+        detail={"number": doc.number},
+    )
+    db.commit()
+    db.refresh(doc)
+    return doc
+
+
+def _delete_doc_files(db: Session, doc: OutgoingDocument) -> list[str]:
+    """Xoá row File (gốc + đã ký) của CV; trả storage_key để unlink đĩa SAU commit."""
+    file_ids = [fid for fid in (doc.original_file_id, doc.signed_file_id) if fid is not None]
+    db.delete(doc)
+    db.flush()  # bỏ ràng buộc FK files trước khi xoá File
+    keys: list[str] = []
+    for fid in file_ids:
+        f = db.get(File, fid)
+        if f is not None:
+            keys.append(f.storage_key)
+            db.delete(f)
+    return keys
+
+
+def purge(db: Session, doc_id: int, *, actor_id: int, ip: str | None, ua: str | None) -> None:
+    """Xoá VĨNH VIỄN 1 CV trong thùng rác (audit log giữ lại để truy vết)."""
+    doc = _lock_trashed(db, doc_id)
+    number = doc.number
+    log_action(
+        db,
+        action="outgoing_purge",
+        user_id=actor_id,
+        object_type="outgoing_document",
+        object_id=doc.id,
+        ip=ip,
+        user_agent=ua,
+        detail={"number": number},
+    )
+    keys = _delete_doc_files(db, doc)
+    db.commit()
+    for key in keys:
+        delete_asset(key)
+
+
+def purge_expired_trash(db: Session, *, now: datetime, days: int = TRASH_KEEP_DAYS) -> int:
+    """Cron: xoá vĩnh viễn CV trong thùng rác quá `days` ngày. Trả số CV đã xoá."""
+    cutoff = now - timedelta(days=days)
+    docs = list(
+        db.scalars(
+            select(OutgoingDocument).where(
+                OutgoingDocument.deleted_at.is_not(None), OutgoingDocument.deleted_at < cutoff
+            )
+        ).all()
+    )
+    keys: list[str] = []
+    for doc in docs:
+        keys.extend(_delete_doc_files(db, doc))
+    db.commit()
+    for key in keys:
+        delete_asset(key)
+    return len(docs)
+
+
+def list_trash(db: Session, *, page: int = 1, size: int = 20) -> tuple[list[OutgoingDocument], int]:
+    conds = [OutgoingDocument.deleted_at.is_not(None)]
+    total = db.scalar(select(func.count()).select_from(OutgoingDocument).where(*conds)) or 0
+    stmt = (
+        select(OutgoingDocument)
+        .where(*conds)
+        .order_by(OutgoingDocument.deleted_at.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+    )
+    return list(db.scalars(stmt).all()), total
 
 
 def list_outgoing(

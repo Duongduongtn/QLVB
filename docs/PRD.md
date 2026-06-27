@@ -663,7 +663,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [SEC.AUD-01] Là Quản lý, tôi muốn xem nhật ký mọi thao tác + khôi phục được CV đã xoá, để truy vết và an toàn dữ liệu.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ✅ Done (27/06/2026) — Trang **Audit log** (`/audit-log`, Quản lý): lọc người dùng + hành động + thời gian (biên giờ VN) + tìm action/đối tượng/username, phân trang, drawer chi tiết. **Xoá mềm** CV → Thùng rác (CV đã cấp số: chỉ Quản lý — enforce server); **Thùng rác** (`/thung-rac`, Quản lý): khôi phục + xoá vĩnh viễn (ghi audit `outgoing_purge` trước khi xoá + unlink file); beat `purge_trash_older_than_30d` tự xoá >30 ngày. Index `audit_logs.created_at`. **Defer:** Xuất log ra Excel (nút UI để sau).
 - **Done khi**:
   - Mọi thao tác (tạo/sửa/xoá/upload/tải/đăng nhập) ghi log: user, IP, thời gian, action, object_id.
   - Xoá CV = soft delete → vào Thùng rác → giữ 30 ngày → tự xoá vĩnh viễn.
@@ -996,7 +996,7 @@ Review qua 5 điểm và bổ sung/sửa các phần sau:
 | OUT.LNK | D5 | Liên kết CV đi với CV đến | D | Must | ⏳ Todo |
 | OUT.LST | D6 | Danh sách + Sổ CV đi | D | Must | ⚠️ Partial |
 | CTC.RCV | M1 | Danh bạ Nơi nhận (CV đi) | M | Must | ✅ Done |
-| SEC.AUD | H3 | Audit log + Soft delete + Thùng rác | H | Must | ⏳ Todo |
+| SEC.AUD | H3 | Audit log + Soft delete + Thùng rác | H | Must | ✅ Done |
 
 ### Giai đoạn 2 — Đầy đủ nghiệp vụ (11 story, ~16 ngày)
 

@@ -7,6 +7,8 @@ Cron task (xem celery_app.beat_schedule):
 
 from __future__ import annotations
 
+from datetime import UTC
+
 from app.core.celery_app import celery
 
 
@@ -18,8 +20,15 @@ def upload_to_r2(self, job_id: str, file_id: int) -> dict:
 
 @celery.task(name="app.workers.r2_sync.purge_trash_older_than_30d")
 def purge_trash_older_than_30d() -> dict:
-    """Cron ngày — soft-deleted >30 ngày → xoá vĩnh viễn (giữ audit log)."""
-    raise NotImplementedError("Implement ở giai đoạn 1")
+    """Cron ngày — CV trong thùng rác >30 ngày → xoá vĩnh viễn (giữ audit log)."""
+    from datetime import datetime
+
+    from app.core.database import SessionLocal
+    from app.services.outgoing import purge_expired_trash
+
+    with SessionLocal() as db:
+        removed = purge_expired_trash(db, now=datetime.now(UTC), days=30)
+    return {"removed": removed}
 
 
 @celery.task(name="app.workers.r2_sync.reap_stuck_jobs")

@@ -21,6 +21,7 @@ class AuditLog(Base, TimestampMixin):
     __table_args__ = (
         Index("idx_audit_object", "object_type", "object_id"),
         Index("idx_audit_user_time", "user_id", "created_at"),
+        Index("idx_audit_created", "created_at"),  # liệt kê/lọc theo thời gian (bảng append-heavy)
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)

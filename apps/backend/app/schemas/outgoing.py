@@ -113,3 +113,20 @@ class OutgoingListItem(BaseModel):
 class OutgoingListResponse(BaseModel):
     items: list[OutgoingListItem]
     total: int
+
+
+class TrashItemOut(BaseModel):
+    """CV trong thùng rác — H3. `days_remaining` = số ngày còn lại trước khi tự xoá."""
+
+    id: int
+    unit_id: int
+    number: str | None
+    subject: str
+    status: str
+    deleted_at: datetime | None
+    days_remaining: int
+
+
+class TrashListResponse(BaseModel):
+    items: list[TrashItemOut]
+    total: int

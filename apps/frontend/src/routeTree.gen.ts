@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ThungRacRouteImport } from './routes/thung-rac'
 import { Route as NguoiDungRouteImport } from './routes/nguoi-dung'
 import { Route as MocRouteImport } from './routes/moc'
 import { Route as LoginRouteImport } from './routes/login'
@@ -17,9 +18,15 @@ import { Route as DanhBaRouteImport } from './routes/danh-ba'
 import { Route as CongVanDiRouteImport } from './routes/cong-van-di'
 import { Route as ChuKyRouteImport } from './routes/chu-ky'
 import { Route as CauHinhRouteImport } from './routes/cau-hinh'
+import { Route as AuditLogRouteImport } from './routes/audit-log'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as CongVanDiSoanRouteImport } from './routes/cong-van-di.soan'
 
+const ThungRacRoute = ThungRacRouteImport.update({
+  id: '/thung-rac',
+  path: '/thung-rac',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const NguoiDungRoute = NguoiDungRouteImport.update({
   id: '/nguoi-dung',
   path: '/nguoi-dung',
@@ -60,6 +67,11 @@ const CauHinhRoute = CauHinhRouteImport.update({
   path: '/cau-hinh',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuditLogRoute = AuditLogRouteImport.update({
+  id: '/audit-log',
+  path: '/audit-log',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -73,6 +85,7 @@ const CongVanDiSoanRoute = CongVanDiSoanRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/audit-log': typeof AuditLogRoute
   '/cau-hinh': typeof CauHinhRoute
   '/chu-ky': typeof ChuKyRoute
   '/cong-van-di': typeof CongVanDiRouteWithChildren
@@ -81,10 +94,12 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/moc': typeof MocRoute
   '/nguoi-dung': typeof NguoiDungRoute
+  '/thung-rac': typeof ThungRacRoute
   '/cong-van-di/soan': typeof CongVanDiSoanRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/audit-log': typeof AuditLogRoute
   '/cau-hinh': typeof CauHinhRoute
   '/chu-ky': typeof ChuKyRoute
   '/cong-van-di': typeof CongVanDiRouteWithChildren
@@ -93,11 +108,13 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/moc': typeof MocRoute
   '/nguoi-dung': typeof NguoiDungRoute
+  '/thung-rac': typeof ThungRacRoute
   '/cong-van-di/soan': typeof CongVanDiSoanRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/audit-log': typeof AuditLogRoute
   '/cau-hinh': typeof CauHinhRoute
   '/chu-ky': typeof ChuKyRoute
   '/cong-van-di': typeof CongVanDiRouteWithChildren
@@ -106,12 +123,14 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/moc': typeof MocRoute
   '/nguoi-dung': typeof NguoiDungRoute
+  '/thung-rac': typeof ThungRacRoute
   '/cong-van-di/soan': typeof CongVanDiSoanRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/audit-log'
     | '/cau-hinh'
     | '/chu-ky'
     | '/cong-van-di'
@@ -120,10 +139,12 @@ export interface FileRouteTypes {
     | '/login'
     | '/moc'
     | '/nguoi-dung'
+    | '/thung-rac'
     | '/cong-van-di/soan'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/audit-log'
     | '/cau-hinh'
     | '/chu-ky'
     | '/cong-van-di'
@@ -132,10 +153,12 @@ export interface FileRouteTypes {
     | '/login'
     | '/moc'
     | '/nguoi-dung'
+    | '/thung-rac'
     | '/cong-van-di/soan'
   id:
     | '__root__'
     | '/'
+    | '/audit-log'
     | '/cau-hinh'
     | '/chu-ky'
     | '/cong-van-di'
@@ -144,11 +167,13 @@ export interface FileRouteTypes {
     | '/login'
     | '/moc'
     | '/nguoi-dung'
+    | '/thung-rac'
     | '/cong-van-di/soan'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuditLogRoute: typeof AuditLogRoute
   CauHinhRoute: typeof CauHinhRoute
   ChuKyRoute: typeof ChuKyRoute
   CongVanDiRoute: typeof CongVanDiRouteWithChildren
@@ -157,10 +182,18 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   MocRoute: typeof MocRoute
   NguoiDungRoute: typeof NguoiDungRoute
+  ThungRacRoute: typeof ThungRacRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/thung-rac': {
+      id: '/thung-rac'
+      path: '/thung-rac'
+      fullPath: '/thung-rac'
+      preLoaderRoute: typeof ThungRacRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/nguoi-dung': {
       id: '/nguoi-dung'
       path: '/nguoi-dung'
@@ -217,6 +250,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CauHinhRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/audit-log': {
+      id: '/audit-log'
+      path: '/audit-log'
+      fullPath: '/audit-log'
+      preLoaderRoute: typeof AuditLogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -248,6 +288,7 @@ const CongVanDiRouteWithChildren = CongVanDiRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuditLogRoute: AuditLogRoute,
   CauHinhRoute: CauHinhRoute,
   ChuKyRoute: ChuKyRoute,
   CongVanDiRoute: CongVanDiRouteWithChildren,
@@ -256,6 +297,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   MocRoute: MocRoute,
   NguoiDungRoute: NguoiDungRoute,
+  ThungRacRoute: ThungRacRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

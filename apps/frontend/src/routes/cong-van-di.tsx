@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Ban, ChevronLeft, ChevronRight, Download, FileCheck2, FileSearch, Search, Tag as TagIcon, Upload } from 'lucide-react';
+import { Ban, ChevronLeft, ChevronRight, Download, FileCheck2, FileSearch, Search, Tag as TagIcon, Trash2, Upload } from 'lucide-react';
 
 import { api, type ApiErrorEnvelope } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
@@ -473,8 +473,26 @@ function DetailDrawer({ id, units, onClose }: { id: number; units: UnitLite[]; o
     }
   }
 
+  async function deleteDoc() {
+    if (!window.confirm('Xoá công văn này vào Thùng rác? (giữ 30 ngày, Quản lý có thể khôi phục)')) return;
+    setActionErr(null);
+    setBusy(true);
+    try {
+      const { error } = await api.DELETE('/api/outgoing/{doc_id}', { params: { path: { doc_id: id } } });
+      if (error) throw new Error(errMsg(error, 'Xoá thất bại'));
+      await refresh();
+      onClose();
+    } catch (e) {
+      setActionErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   // Thu hồi CV đã phát hành: chỉ Quản lý (PRD máy trạng thái).
   const showCancel = !!d && d.status !== 'cancelled' && !(d.status === 'published' && me?.role !== 'manager');
+  // Xoá (thùng rác): CV đã cấp số chỉ Quản lý xoá (PRD edge).
+  const showDelete = !!d && (me?.role === 'manager' || d.number === null);
 
   const actions = d ? (
     <>
@@ -521,6 +539,17 @@ function DetailDrawer({ id, units, onClose }: { id: number; units: UnitLite[]; o
           onClick={cancelDoc}
         >
           <Ban size={13} /> {d.status === 'published' ? 'Thu hồi' : 'Huỷ'}
+        </button>
+      )}
+      {showDelete && (
+        <button
+          className="btn-ghost"
+          style={{ height: 32, color: 'var(--danger)' }}
+          type="button"
+          disabled={busy}
+          onClick={deleteDoc}
+        >
+          <Trash2 size={13} /> Xoá
         </button>
       )}
     </>

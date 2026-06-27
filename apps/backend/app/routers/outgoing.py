@@ -225,6 +225,19 @@ def cancel_outgoing(
     return _to_out(db, doc)
 
 
+@router.delete("/{doc_id}", status_code=204)
+def delete_outgoing(
+    doc_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(current_user),
+) -> Response:
+    """Xoá mềm → thùng rác (CV đã cấp số: chỉ Quản lý)."""
+    ip, ua = _ctx(request)
+    out_service.soft_delete(db, doc_id, actor_id=actor.id, actor_role=actor.role, ip=ip, ua=ua)
+    return Response(status_code=204)
+
+
 @router.get("/{doc_id}/download")
 def download_outgoing(
     doc_id: int,
