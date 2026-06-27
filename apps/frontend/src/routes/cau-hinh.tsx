@@ -8,6 +8,7 @@ import { Building2, FileText, ImageUp, Loader2, Plus, X } from 'lucide-react';
 
 import { api, type ApiErrorEnvelope } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
+import { useBranding } from '~/lib/branding';
 import { fmtInt } from '~/lib/format';
 
 export const Route = createFileRoute('/cau-hinh')({
@@ -50,7 +51,7 @@ const fieldClass =
   'w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100';
 const labelClass = 'mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500';
 
-type Tab = 'don-vi' | 'so-cong-van';
+type Tab = 'don-vi' | 'so-cong-van' | 'branding';
 
 function CauHinhPage() {
   const me = useAuth((s) => s.user);
@@ -98,10 +99,14 @@ function CauHinhPage() {
         <TabButton active={tab === 'so-cong-van'} onClick={() => setTab('so-cong-van')}>
           Sổ công văn
         </TabButton>
+        <TabButton active={tab === 'branding'} onClick={() => setTab('branding')}>
+          Branding
+        </TabButton>
       </div>
 
       {tab === 'don-vi' && <UnitsTab units={units} loading={unitsQuery.isLoading} />}
       {tab === 'so-cong-van' && <SoCongVanTab units={units} />}
+      {tab === 'branding' && <BrandingTab />}
     </div>
   );
 }
@@ -344,6 +349,151 @@ function UnitCard({ unit }: { unit: Unit }) {
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+/* ─────────────────────────── Tab Branding (B3b) ─────────────────────────── */
+const brandingSchema = z.object({ app_name: z.string().min(1, 'Nhập tên ứng dụng').max(150) });
+type BrandingValues = z.infer<typeof brandingSchema>;
+
+function BrandingTab() {
+  const queryClient = useQueryClient();
+  const { data: branding } = useBranding();
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [okMsg, setOkMsg] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting, isDirty },
+  } = useForm<BrandingValues>({
+    resolver: zodResolver(brandingSchema),
+    values: { app_name: branding?.app_name ?? '' }, // sync khi branding tải xong
+  });
+
+  async function onSubmit(values: BrandingValues) {
+    setServerError(null);
+    setOkMsg(null);
+    const { error } = await api.PUT('/api/settings', { body: { app_name: values.app_name } });
+    if (error) {
+      setServerError(errMsg(error, 'Lưu thất bại'));
+      return;
+    }
+    setOkMsg('Đã lưu thương hiệu');
+    reset(values);
+    await queryClient.invalidateQueries({ queryKey: ['settings'] });
+  }
+
+  const uploadLogo = useMutation({
+    mutationFn: async (file: File) => {
+      if (file.size > MAX_LOGO_BYTES) throw new Error('Logo vượt quá 2MB');
+      if (!['image/png', 'image/jpeg'].includes(file.type))
+        throw new Error('Logo phải là ảnh PNG hoặc JPG');
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/settings/logo', {
+        method: 'POST',
+        body: form,
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as ApiErrorEnvelope | null;
+        throw new Error(errMsg(body, 'Tải logo thất bại'));
+      }
+    },
+    onSuccess: async () => {
+      setServerError(null);
+      setOkMsg('Đã cập nhật logo');
+      await queryClient.invalidateQueries({ queryKey: ['settings'] });
+    },
+    onError: (e: Error) => {
+      setOkMsg(null);
+      setServerError(e.message);
+    },
+  });
+
+  function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploading(true);
+    uploadLogo.mutate(file, { onSettled: () => setUploading(false) });
+  }
+
+  const hasLogo = !!branding?.logo_file_id;
+
+  return (
+    <div className="mt-6 max-w-xl">
+      <div className="rounded-lg border border-slate-200 bg-white p-5">
+        <p className="text-sm text-slate-500">
+          Tên ứng dụng và logo hiển thị trên header mọi trang (cả màn hình đăng nhập).
+        </p>
+
+        <div className="my-4 flex items-center gap-4 rounded-md bg-slate-50 px-4 py-3">
+          <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded border border-slate-200 bg-white">
+            {hasLogo ? (
+              <img
+                src={`/api/settings/logo?v=${branding?.logo_file_id}`}
+                alt="Logo ứng dụng"
+                className="h-full w-full object-contain"
+              />
+            ) : (
+              <span className="text-[10px] text-slate-400">Chưa có</span>
+            )}
+          </div>
+          <div className="flex-1">
+            <p className="text-xs text-slate-500">Logo header (PNG/JPG, ≤ 2MB)</p>
+            <button
+              type="button"
+              onClick={() => fileInput.current?.click()}
+              disabled={uploading}
+              className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium hover:bg-white disabled:opacity-60"
+            >
+              {uploading ? <Loader2 size={15} className="animate-spin" /> : <ImageUp size={15} />}
+              {hasLogo ? 'Đổi logo' : 'Tải logo'}
+            </button>
+            <input
+              ref={fileInput}
+              type="file"
+              accept="image/png,image/jpeg"
+              className="hidden"
+              onChange={onPickFile}
+            />
+          </div>
+        </div>
+
+        {serverError && (
+          <div role="alert" className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {serverError}
+          </div>
+        )}
+        {okMsg && (
+          <div role="status" className="mb-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+            {okMsg}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-3">
+          <div>
+            <label className={labelClass} htmlFor="b_name">Tên ứng dụng</label>
+            <input id="b_name" className={fieldClass} {...register('app_name')} />
+            {errors.app_name && <p className="mt-1 text-xs text-red-600">{errors.app_name.message}</p>}
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={isSubmitting || !isDirty}
+              className="rounded-md bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500 disabled:opacity-50"
+            >
+              Lưu
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

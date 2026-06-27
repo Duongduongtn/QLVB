@@ -11,8 +11,9 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import current_user, require_manager
-from app.core.errors import NotFound, ValidationFailed
+from app.core.errors import NotFound
 from app.core.http import client_ip
+from app.core.images import read_image_upload
 from app.core.storage import read_asset
 from app.models.file import File as FileModel
 from app.models.user import User
@@ -22,11 +23,6 @@ from app.services import unit as unit_service
 router = APIRouter()
 
 _MAX_LOGO_BYTES = 2 * 1024 * 1024  # 2MB (PRD B1 edge)
-# magic bytes → (content-type chuẩn, đuôi file)
-_IMAGE_SIGNATURES: list[tuple[bytes, str, str]] = [
-    (b"\x89PNG\r\n\x1a\n", "image/png", "png"),
-    (b"\xff\xd8\xff", "image/jpeg", "jpg"),
-]
 
 
 @router.get("", response_model=UnitListResponse)
@@ -67,16 +63,7 @@ async def upload_logo(
     actor: User = Depends(require_manager),
 ) -> UnitOut:
     # Đọc CÓ CHẶN (MAX+1 byte) → không nạp cả body khổng lồ vào RAM trước khi kiểm.
-    data = await file.read(_MAX_LOGO_BYTES + 1)
-    if not data:
-        raise ValidationFailed("File logo rỗng")
-    if len(data) > _MAX_LOGO_BYTES:
-        raise ValidationFailed("Logo vượt quá 2MB")
-
-    match = next((sig for sig in _IMAGE_SIGNATURES if data.startswith(sig[0])), None)
-    if match is None:
-        raise ValidationFailed("Logo phải là ảnh PNG hoặc JPG")
-    _, mime, ext = match
+    data, ext, mime = await read_image_upload(file, max_bytes=_MAX_LOGO_BYTES)
 
     unit = unit_service.set_logo(
         db,
@@ -105,5 +92,5 @@ def get_logo(
     return Response(
         content=read_asset(logo.storage_key),
         media_type=logo.mime_type or "application/octet-stream",
-        headers={"Cache-Control": "private, max-age=60"},
+        headers={"Cache-Control": "private, max-age=60", "X-Content-Type-Options": "nosniff"},
     )

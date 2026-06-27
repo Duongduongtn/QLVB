@@ -7,6 +7,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Lock, Loader2, ShieldCheck, User } from 'lucide-react';
 
 import { api, type ApiErrorEnvelope } from '~/lib/api';
+import { useBranding } from '~/lib/branding';
 import { useAuth, type Role } from '~/stores/auth';
 
 export const Route = createFileRoute('/login')({
@@ -25,6 +26,7 @@ function LoginPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const setUser = useAuth((s) => s.setUser);
+  const { data: branding } = useBranding();
   const [serverError, setServerError] = useState<string | null>(null);
 
   const {
@@ -59,14 +61,21 @@ function LoginPage() {
   return (
     <div className="flex min-h-[80vh] items-center justify-center px-4 py-10">
       <div className="w-full max-w-[408px]">
-        {/* Thương hiệu */}
+        {/* Thương hiệu (B3b — theo cấu hình app_settings) */}
         <div className="mb-7 flex flex-col items-center gap-3">
           <div className="flex items-center gap-3">
-            <span className="inline-block h-9 w-9 rounded-md bg-amber-400" aria-hidden="true" />
-            <div className="flex flex-col leading-tight">
-              <span className="text-xl font-bold tracking-widest text-slate-800">QLCV</span>
-              <span className="text-xs uppercase tracking-[0.2em] text-amber-600">Thành Đạt</span>
-            </div>
+            {branding?.logo_file_id ? (
+              <img
+                src={`/api/settings/logo?v=${branding.logo_file_id}`}
+                alt="Logo"
+                className="h-10 w-10 rounded-md object-contain"
+              />
+            ) : (
+              <span className="inline-block h-9 w-9 rounded-md bg-amber-400" aria-hidden="true" />
+            )}
+            <span className="text-xl font-bold tracking-wide text-slate-800">
+              {branding?.app_name ?? 'QLCV Thành Đạt'}
+            </span>
           </div>
           <p className="text-sm text-slate-500">Hệ thống Quản lý Công văn và Ký số</p>
         </div>

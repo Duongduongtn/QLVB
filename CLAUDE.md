@@ -131,4 +131,4 @@ docker compose -p qlcv exec qlcv_backend alembic upgrade head
 7. Hỏi trước khi làm nếu PRD/TDD có gì chưa rõ.
 
 # Trạng thái hiện tại
-🚧 **Phase 0 + nhóm B (đang chạy)** — Scaffold + USR.LGN/LGO/MNG, CFG.UNT-01 (2 đơn vị + logo), CFG.BOK-01 (cấu hình sổ + cấp số SEQUENCE) ✅ Done. CI xanh. Tiếp theo: CFG.VEW-01 (switch view đơn vị) / CFG.BRD-01 (branding) — xem PRD nhóm B.
+🚧 **Nhóm B gần xong** — Scaffold + USR.LGN/LGO/MNG, CFG.UNT (2 đơn vị+logo), CFG.BOK (cấu hình sổ+SEQUENCE), CFG.BRD (branding) ✅ Done; CFG.VEW ⚠️ Partial (hạ tầng switch-view xong, chờ list để wire + enforce role server-side). CI xanh. **Nhóm B hoàn tất → tiếp theo nhóm C (Mộc + Chữ ký + Hồ sơ ký)** — tái dùng asset storage + tách nền worker. Xem PRD.

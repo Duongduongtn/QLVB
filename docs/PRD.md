@@ -247,14 +247,14 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [CFG.VEW-01] Là người dùng, tôi muốn chuyển nhanh giữa view *Tất cả / GDNN / DVDL* qua dropdown góc trên, để chỉ thấy CV của đơn vị quan tâm.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ⚠️ Partial _(hạ tầng xong: store Zustand persist `unitView` + dropdown header, "Tất cả" chỉ Quản lý, nhân viên ép về 1 đơn vị. CÒN: wire `useUnitView` vào các list (CV đi/đến/danh bạ/sổ — chưa tồn tại) + **BẮT BUỘC enforce role server-side** khi build list (client-state KHÔNG là ranh giới bảo mật — staff sửa localStorage 'all' → IDOR nếu BE không chặn))_
 - **Done khi**: click chuyển → mọi list (CV đi, danh bạ, sổ) tự lọc theo đơn vị đã chọn trong < 0.5 giây. View "Tất cả" chỉ Quản lý thấy được.
 
 #### [CFG.BRD] B3b. Branding header (tên app + logo)
 
 - **User Story**: [CFG.BRD-01] Là Quản lý, tôi muốn cấu hình tên app + logo trên header, để hiển thị đúng thương hiệu.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ✅ Done _(app_settings single-row + GET công khai / PUT+logo require_manager; header + trang login hiển thị app_name/logo động; tab Branding trong Cấu hình; nosniff header; audit. 4 unit test)_
 - **Done khi**: đổi → mọi trang hiển thị tên/logo mới ngay sau reload.
 
 ---
@@ -983,8 +983,8 @@ Review qua 5 điểm và bổ sung/sửa các phần sau:
 | USR.MNG | A4 | Quản lý người dùng | A | Must | ✅ Done |
 | CFG.UNT | B1 | Quản lý 2 đơn vị | B | Must | ✅ Done |
 | CFG.BOK | B2 | Cấu hình sổ công văn | B | Must | ✅ Done |
-| CFG.VEW | B3a | Switch view đơn vị | B | Must | ⏳ Todo |
-| CFG.BRD | B3b | Branding header | B | Must | ⏳ Todo |
+| CFG.VEW | B3a | Switch view đơn vị | B | Must | ⚠️ Partial |
+| CFG.BRD | B3b | Branding header | B | Must | ✅ Done |
 | SIG.SEL | C1 | Quản lý mộc | C | Must | ⏳ Todo |
 | SIG.SGN | C2 | Quản lý chữ ký | C | Must | ⏳ Todo |
 | SIG.BG | C3 | Tách nền tự động khi upload | C | Must | ⏳ Todo |
