@@ -10,6 +10,7 @@
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
+    "check:design": "node scripts/check-design-tokens.mjs",
     "test:e2e": "playwright test",
     "gen:api": "openapi-typescript http://localhost:8003/api/openapi.json -o src/api/schema.ts"
   },

@@ -1,13 +1,15 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Search, Trash2, X } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Plus, Search, Trash2 } from 'lucide-react';
 
 import { api, type ApiErrorEnvelope } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
+import { FilterMenu, InfoRow, PageHeader, Pill, RowActions } from '~/components/ui';
+import { Drawer } from '~/components/Drawer';
 
 export const Route = createFileRoute('/danh-ba')({
   component: DanhBaPage,
@@ -43,17 +45,13 @@ function errMsg(error: unknown, fallback: string): string {
 }
 
 function CategoryPill({ category }: { category: Category }) {
-  const cls =
-    category === 'gdnn'
-      ? 'bg-green-50 text-green-700'
-      : category === 'dvdl'
-        ? 'bg-violet-50 text-violet-700'
-        : 'bg-slate-100 text-slate-600';
-  return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>{CATEGORY_LABEL[category]}</span>;
+  const variant = category === 'gdnn' ? 'gdnn' : category === 'dvdl' ? 'dvdl' : 'draft';
+  return <Pill variant={variant}>{CATEGORY_LABEL[category]}</Pill>;
 }
 
 function DanhBaPage() {
   const me = useAuth((s) => s.user);
+  const queryClient = useQueryClient();
   const [role, setRole] = useState<Role>('recipient');
   const [q, setQ] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
@@ -92,10 +90,20 @@ function DanhBaPage() {
     },
   });
 
+  const deleteOrg = useMutation({
+    mutationFn: async (org: OrgRow) => {
+      const { error } = await api.DELETE('/api/organizations/{org_id}', {
+        params: { path: { org_id: org.id } },
+      });
+      if (error) throw new Error(errMsg(error, 'Xoá thất bại'));
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['organizations'] }),
+  });
+
   if (!me) {
     return (
-      <div className="mx-auto max-w-7xl px-6 py-10">
-        <p className="text-slate-500">Đang tải…</p>
+      <div style={{ padding: '24px 0' }}>
+        <p style={{ color: 'var(--ink-muted)' }}>Đang tải…</p>
       </div>
     );
   }
@@ -103,6 +111,9 @@ function DanhBaPage() {
   const items = orgsQuery.data?.items ?? [];
   const total = orgsQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const cols = 7;
+  const rangeFrom = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const rangeTo = Math.min(page * PAGE_SIZE, total);
 
   function switchRole(r: Role) {
     setRole(r);
@@ -110,181 +121,203 @@ function DanhBaPage() {
     setCategory('all');
   }
 
+  function confirmDelete(org: OrgRow) {
+    if (window.confirm(`Xoá cơ quan "${org.full_name}"? Cơ quan sẽ bị ẩn nhưng CV cũ vẫn giữ liên kết.`)) {
+      deleteOrg.mutate(org);
+    }
+  }
+
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8">
-      <div className="mb-1 flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">Danh bạ</p>
-          <h2 className="text-2xl font-semibold text-slate-800">Danh bạ cơ quan</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Quản lý nơi nhận công văn đi và cơ quan gửi công văn đến.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="flex items-center gap-2 rounded-md bg-amber-400 px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500"
-        >
-          <Plus size={16} />
-          Thêm cơ quan
-        </button>
-      </div>
-
-      <div className="my-4 flex flex-wrap items-center gap-3">
-        <div className="flex gap-1 rounded-md border border-slate-200 bg-slate-50 p-0.5">
-          <SegButton active={role === 'recipient'} onClick={() => switchRole('recipient')}>
-            Nơi nhận (CV đi)
-          </SegButton>
-          <SegButton active={role === 'sender'} onClick={() => switchRole('sender')}>
-            Cơ quan gửi (CV đến)
-          </SegButton>
-        </div>
-        <div className="relative max-w-xs flex-1">
-          <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            value={q}
-            onChange={(e) => {
-              setQ(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Tìm cơ quan…"
-            className="w-full rounded-md border border-slate-300 py-2 pl-9 pr-3 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
-          />
-        </div>
-        {role === 'recipient' && (
-          <select
-            value={category}
-            onChange={(e) => {
-              setCategory(e.target.value as Category | 'all');
-              setPage(1);
-            }}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-amber-400"
-          >
-            <option value="all">Tất cả phân loại</option>
-            <option value="common">Chung</option>
-            <option value="gdnn">Riêng GDNN</option>
-            <option value="dvdl">Riêng DVDL</option>
-          </select>
-        )}
-      </div>
-
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <table className="w-full text-sm">
-          <thead className="border-b bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-4 py-3 font-medium">Tên cơ quan</th>
-              <th className="px-4 py-3 font-medium">Viết tắt</th>
-              <th className="px-4 py-3 font-medium">Địa chỉ</th>
-              {role === 'recipient' && <th className="px-4 py-3 font-medium">Phân loại</th>}
-              <th className="px-4 py-3 font-medium">Liên hệ</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {orgsQuery.isLoading && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-400">Đang tải…</td>
-              </tr>
-            )}
-            {!orgsQuery.isLoading && items.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
-                  Chưa có cơ quan nào trong danh bạ.
-                </td>
-              </tr>
-            )}
-            {items.map((o) => (
-              <tr
-                key={o.id}
-                tabIndex={0}
-                onClick={() => setSelected(o)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setSelected(o);
-                  }
-                }}
-                className="cursor-pointer hover:bg-amber-50/50 focus:bg-amber-50 focus:outline-none"
+    <>
+      <PageHeader
+        breadcrumb={[{ label: 'Danh bạ' }]}
+        title="Danh bạ cơ quan"
+        subhead="Quản lý nơi nhận công văn đi và cơ quan gửi công văn đến"
+        actions={
+          <button type="button" className="btn-primary" onClick={() => setCreating(true)}>
+            <Plus size={14} /> Thêm cơ quan
+          </button>
+        }
+        filters={
+          <>
+            <div className="seg">
+              <button
+                type="button"
+                data-active={role === 'recipient' ? 'true' : undefined}
+                onClick={() => switchRole('recipient')}
               >
-                <td className="px-4 py-3 font-medium text-slate-800">{o.full_name}</td>
-                <td className="px-4 py-3 font-mono text-slate-600">{o.short_name ?? '—'}</td>
-                <td className="px-4 py-3 text-slate-600">{o.address ?? '—'}</td>
-                {role === 'recipient' && (
-                  <td className="px-4 py-3">
+                Nơi nhận (CV đi)
+              </button>
+              <button
+                type="button"
+                data-active={role === 'sender' ? 'true' : undefined}
+                onClick={() => switchRole('sender')}
+              >
+                Cơ quan gửi (CV đến)
+              </button>
+            </div>
+            <div className="relative">
+              <Search
+                size={16}
+                className="absolute"
+                style={{ left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-faint)' }}
+              />
+              <input
+                className="search-input"
+                style={{ width: 280 }}
+                value={q}
+                onChange={(e) => {
+                  setQ(e.target.value);
+                  setPage(1);
+                }}
+                placeholder="Tìm cơ quan…"
+              />
+            </div>
+            {role === 'recipient' && (
+              <FilterMenu
+                label="Phân loại:"
+                value={category}
+                onChange={(v) => {
+                  setCategory(v as Category | 'all');
+                  setPage(1);
+                }}
+                options={[
+                  { value: 'all', label: 'Tất cả' },
+                  { value: 'common', label: 'Chung' },
+                  { value: 'gdnn', label: 'Riêng GDNN' },
+                  { value: 'dvdl', label: 'Riêng DVDL' },
+                ]}
+              />
+            )}
+          </>
+        }
+      />
+
+      <div className="card" style={{ overflow: 'hidden' }}>
+        <div className="table-scroll">
+          <table className="qlcv-table">
+            <thead>
+              <tr>
+                <th style={{ paddingLeft: 24 }}>Tên cơ quan</th>
+                <th style={{ width: 120 }}>Viết tắt</th>
+                <th style={{ width: 160 }}>Địa chỉ</th>
+                <th style={{ width: 130 }}>Phân loại</th>
+                <th className="center" style={{ width: 110 }}>
+                  Số CV
+                </th>
+                <th style={{ width: 120 }}>Lần cuối</th>
+                <th style={{ width: 44, paddingRight: 24 }} />
+              </tr>
+            </thead>
+            <tbody>
+              {orgsQuery.isLoading && (
+                <tr>
+                  <td colSpan={cols} style={{ textAlign: 'center', padding: '32px 0', color: 'var(--ink-faint)' }}>
+                    Đang tải…
+                  </td>
+                </tr>
+              )}
+              {!orgsQuery.isLoading && items.length === 0 && (
+                <tr>
+                  <td colSpan={cols} style={{ textAlign: 'center', padding: '48px 0', color: 'var(--ink-faint)' }}>
+                    Chưa có cơ quan nào trong danh bạ.
+                  </td>
+                </tr>
+              )}
+              {items.map((o) => (
+                <tr
+                  key={o.id}
+                  tabIndex={0}
+                  onClick={() => setSelected(o)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSelected(o);
+                    }
+                  }}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <td style={{ paddingLeft: 24 }}>
+                    <span className="subject" style={{ fontWeight: 500 }}>
+                      {o.full_name}
+                    </span>
+                  </td>
+                  <td>
+                    <span className="cell-mono">{o.short_name ?? '—'}</span>
+                  </td>
+                  <td>
+                    <span className="cell-meta">{o.address ?? '—'}</span>
+                  </td>
+                  <td>
                     <CategoryPill category={o.category} />
                   </td>
-                )}
-                <td className="px-4 py-3 text-slate-600">{o.contact_person ?? o.phone ?? o.email ?? '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {totalPages > 1 && (
-        <div className="mt-4 flex items-center justify-end gap-2 text-sm">
-          <button
-            type="button"
-            disabled={page <= 1}
-            onClick={() => setPage((p) => p - 1)}
-            className="rounded-md border border-slate-300 px-3 py-1 disabled:opacity-40"
-          >
-            Trước
-          </button>
-          <span className="text-slate-500">Trang {page}/{totalPages}</span>
-          <button
-            type="button"
-            disabled={page >= totalPages}
-            onClick={() => setPage((p) => p + 1)}
-            className="rounded-md border border-slate-300 px-3 py-1 disabled:opacity-40"
-          >
-            Sau
-          </button>
+                  <td style={{ textAlign: 'center' }}>
+                    <span className="cell-meta dash">—</span>
+                  </td>
+                  <td>
+                    <span className="cell-meta dash">—</span>
+                  </td>
+                  <td style={{ paddingRight: 24 }}>
+                    <RowActions
+                      items={[
+                        { label: 'Sửa', onClick: () => setSelected(o) },
+                        { label: 'Xoá', danger: true, onClick: () => confirmDelete(o) },
+                      ]}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      )}
+
+        <div
+          className="flex items-center justify-between flex-wrap"
+          style={{ padding: '16px 24px', borderTop: '1px solid var(--rule)', gap: 12 }}
+        >
+          <div className="flex items-center" style={{ gap: 16 }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--ink-muted)' }}>
+              Hiện {rangeFrom}-{rangeTo} / {total} cơ quan
+            </span>
+            <div className="filter-select" style={{ height: 32 }}>
+              <span className="label">Mỗi trang:</span>
+              <span className="value">{PAGE_SIZE}</span>
+              <ChevronDown size={14} style={{ color: 'var(--ink-muted)' }} />
+            </div>
+          </div>
+          <div className="flex items-center" style={{ gap: 4 }}>
+            <button
+              type="button"
+              className="pg-btn"
+              aria-label="Trang trước"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => p - 1)}
+              style={page <= 1 ? { opacity: 0.4, cursor: 'default' } : undefined}
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <button type="button" className="pg-btn" data-active="true">
+              {page}
+            </button>
+            <button
+              type="button"
+              className="pg-btn"
+              aria-label="Trang sau"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => p + 1)}
+              style={page >= totalPages ? { opacity: 0.4, cursor: 'default' } : undefined}
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
 
       {creating && <OrgDrawer role={role} onClose={() => setCreating(false)} />}
       {selected && <OrgDrawer role={role} org={selected} onClose={() => setSelected(null)} />}
-    </div>
+    </>
   );
 }
-
-function SegButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded px-3 py-1.5 text-sm font-medium ${
-        active ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-600 hover:text-slate-800'
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function Drawer({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-40">
-      <button type="button" aria-label="Đóng" onClick={onClose} className="absolute inset-0 bg-slate-900/30" />
-      <div className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b px-6 py-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">Danh bạ cơ quan</p>
-            <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
-          </div>
-          <button type="button" onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100">
-            <X size={20} />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-const fieldClass =
-  'w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100';
-const labelClass = 'mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500';
 
 const orgSchema = z.object({
   full_name: z.string().trim().min(1, 'Nhập tên cơ quan').max(300),
@@ -297,6 +330,8 @@ const orgSchema = z.object({
   note: z.string().max(2000).optional(),
 });
 type OrgValues = z.infer<typeof orgSchema>;
+
+const errorTextStyle = { marginTop: 4, fontSize: '0.75rem', color: 'var(--danger)' } as const;
 
 function OrgDrawer({ role, org, onClose }: { role: Role; org?: OrgRow; onClose: () => void }) {
   const queryClient = useQueryClient();
@@ -374,28 +409,91 @@ function OrgDrawer({ role, org, onClose }: { role: Role; org?: OrgRow; onClose: 
   }
 
   return (
-    <Drawer title={isEdit ? org!.full_name : 'Thêm cơ quan'} onClose={onClose}>
+    <Drawer
+      open
+      onClose={onClose}
+      eyebrow="Danh bạ cơ quan"
+      title={isEdit ? org!.full_name : 'Thêm cơ quan'}
+      width={480}
+      actions={
+        <>
+          {isEdit && (
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ color: 'var(--danger)', marginRight: 'auto' }}
+              onClick={confirmDelete}
+              disabled={remove.isPending}
+            >
+              <Trash2 size={15} /> Xoá
+            </button>
+          )}
+          <button type="button" className="btn-secondary" onClick={onClose}>
+            Huỷ
+          </button>
+          <button type="submit" form="org-form" className="btn-primary" disabled={isSubmitting}>
+            {isEdit ? 'Lưu' : 'Tạo cơ quan'}
+          </button>
+        </>
+      }
+    >
       {serverError && (
-        <div role="alert" className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div
+          role="alert"
+          className="pill pill-cancelled"
+          style={{
+            display: 'block',
+            height: 'auto',
+            padding: '8px 12px',
+            textDecoration: 'none',
+            letterSpacing: 0,
+            textTransform: 'none',
+            fontFamily: 'inherit',
+            fontSize: '0.85rem',
+          }}
+        >
           {serverError}
         </div>
       )}
-      <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
-        <div>
-          <label className={labelClass} htmlFor="o_name">Tên đầy đủ</label>
-          <input id="o_name" className={fieldClass} placeholder="Tên cơ quan…" {...register('full_name')} />
-          {errors.full_name && <p className="mt-1 text-xs text-red-600">{errors.full_name.message}</p>}
+      {isEdit && (
+        <div className="card" style={{ padding: 16 }}>
+          <InfoRow label="Phân loại">
+            <CategoryPill category={org!.category} />
+          </InfoRow>
+          <InfoRow label="Số CV liên quan">
+            <span className="cell-meta dash">—</span>
+          </InfoRow>
+          <InfoRow label="Lần cuối">
+            <span className="cell-meta dash">—</span>
+          </InfoRow>
         </div>
-        <div className={role === 'recipient' ? 'grid grid-cols-2 gap-3' : ''}>
+      )}
+      <form id="org-form" onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col" style={{ gap: 16 }}>
+        <div>
+          <label className="field-label" htmlFor="o_name">
+            Tên đầy đủ
+          </label>
+          <input id="o_name" className="text-input" placeholder="Tên cơ quan…" {...register('full_name')} />
+          {errors.full_name && <p style={errorTextStyle}>{errors.full_name.message}</p>}
+        </div>
+
+        <div
+          className={role === 'recipient' ? 'grid' : undefined}
+          style={role === 'recipient' ? { gridTemplateColumns: '1fr 1fr', gap: 12 } : undefined}
+        >
           <div>
-            <label className={labelClass} htmlFor="o_short">Viết tắt</label>
-            <input id="o_short" className={fieldClass} {...register('short_name')} />
+            <label className="field-label" htmlFor="o_short">
+              Viết tắt
+            </label>
+            <input id="o_short" className="text-input" {...register('short_name')} />
           </div>
           {/* Phân loại chỉ áp dụng cho nơi nhận (M1) — cơ quan gửi không phân loại đơn vị. */}
           {role === 'recipient' && (
             <div>
-              <label className={labelClass} htmlFor="o_cat">Phân loại</label>
-              <select id="o_cat" className={fieldClass} {...register('category')}>
+              <label className="field-label" htmlFor="o_cat">
+                Phân loại
+              </label>
+              <select id="o_cat" className="text-input" {...register('category')}>
                 <option value="common">Chung</option>
                 <option value="gdnn">Riêng GDNN</option>
                 <option value="dvdl">Riêng DVDL</option>
@@ -403,52 +501,42 @@ function OrgDrawer({ role, org, onClose }: { role: Role; org?: OrgRow; onClose: 
             </div>
           )}
         </div>
+
         <div>
-          <label className={labelClass} htmlFor="o_addr">Địa chỉ</label>
-          <input id="o_addr" className={fieldClass} {...register('address')} />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={labelClass} htmlFor="o_email">Email</label>
-            <input id="o_email" className={fieldClass} placeholder="email@coquan.gov.vn" {...register('email')} />
-            {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>}
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="o_phone">Điện thoại</label>
-            <input id="o_phone" className={fieldClass} placeholder="0123 456 789" {...register('phone')} />
-          </div>
-        </div>
-        <div>
-          <label className={labelClass} htmlFor="o_contact">Người liên hệ</label>
-          <input id="o_contact" className={fieldClass} {...register('contact_person')} />
-        </div>
-        <div>
-          <label className={labelClass} htmlFor="o_note">Ghi chú</label>
-          <textarea id="o_note" rows={2} className={fieldClass} {...register('note')} />
+          <label className="field-label" htmlFor="o_addr">
+            Địa chỉ
+          </label>
+          <input id="o_addr" className="text-input" {...register('address')} />
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-2">
-          {isEdit && (
-            <button
-              type="button"
-              onClick={confirmDelete}
-              disabled={remove.isPending}
-              className="mr-auto flex items-center gap-1.5 rounded-md px-3 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
-            >
-              <Trash2 size={15} />
-              Xoá
-            </button>
-          )}
-          <button type="button" onClick={onClose} className="rounded-md border border-slate-300 px-4 py-2 text-sm">
-            Huỷ
-          </button>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="rounded-md bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500 disabled:opacity-60"
-          >
-            {isEdit ? 'Lưu' : 'Tạo cơ quan'}
-          </button>
+        <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div>
+            <label className="field-label" htmlFor="o_email">
+              Email
+            </label>
+            <input id="o_email" className="text-input" placeholder="email@coquan.gov.vn" {...register('email')} />
+            {errors.email && <p style={errorTextStyle}>{errors.email.message}</p>}
+          </div>
+          <div>
+            <label className="field-label" htmlFor="o_phone">
+              Điện thoại
+            </label>
+            <input id="o_phone" className="text-input" placeholder="0123 456 789" {...register('phone')} />
+          </div>
+        </div>
+
+        <div>
+          <label className="field-label" htmlFor="o_contact">
+            Người liên hệ
+          </label>
+          <input id="o_contact" className="text-input" {...register('contact_person')} />
+        </div>
+
+        <div>
+          <label className="field-label" htmlFor="o_note">
+            Ghi chú
+          </label>
+          <textarea id="o_note" rows={2} className="text-input" {...register('note')} />
         </div>
       </form>
     </Drawer>

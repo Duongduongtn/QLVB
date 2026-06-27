@@ -1,12 +1,22 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Ban, Download, FileCheck2, FileText, Plus, Search, Upload, X } from 'lucide-react';
+import { Ban, ChevronLeft, ChevronRight, Download, FileCheck2, FileSearch, Search, Tag as TagIcon, Upload } from 'lucide-react';
 
 import { api, type ApiErrorEnvelope } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
 import { fmtDate, fmtDateTime } from '~/lib/format';
 import { UnitPill, type UnitLite } from '~/components/sign-ui';
+import {
+  EmptyState,
+  FilterMenu,
+  FilterSelect,
+  InfoRow,
+  PageHeader,
+  SectionCard,
+  TypeTag,
+} from '~/components/ui';
+import { Drawer } from '~/components/Drawer';
 
 export const Route = createFileRoute('/cong-van-di')({
   component: CongVanDiPage,
@@ -38,11 +48,11 @@ interface OutDetail extends OutRow {
 }
 
 const PAGE_SIZE = 20;
-const STATUS_BADGE: Record<OutStatus, { label: string; cls: string }> = {
-  draft: { label: 'Nháp', cls: 'bg-slate-100 text-slate-600' },
-  numbered: { label: 'Đã cấp số · chờ ký', cls: 'bg-amber-100 text-amber-700' },
-  published: { label: 'Đã phát hành', cls: 'bg-green-100 text-green-700' },
-  cancelled: { label: 'Huỷ', cls: 'bg-red-100 text-red-600' },
+const STATUS_PILL: Record<OutStatus, { label: string; cls: string; dot: boolean }> = {
+  draft: { label: 'Nháp', cls: 'pill-draft', dot: false },
+  numbered: { label: 'Đã cấp số · chờ ký', cls: 'pill-warning', dot: false },
+  published: { label: 'Đã phát hành', cls: 'pill-published', dot: true },
+  cancelled: { label: 'Huỷ', cls: 'pill-cancelled', dot: false },
 };
 
 function errMsg(error: unknown, fallback: string): string {
@@ -50,8 +60,24 @@ function errMsg(error: unknown, fallback: string): string {
 }
 
 function StatusBadge({ status }: { status: OutStatus }) {
-  const s = STATUS_BADGE[status];
-  return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${s.cls}`}>{s.label}</span>;
+  const s = STATUS_PILL[status];
+  return (
+    <span className={`pill ${s.cls}`}>
+      {s.dot && <span className="dot" />}
+      {s.label}
+    </span>
+  );
+}
+
+function NumberCell({ number }: { number: string | null }) {
+  if (!number) return <span className="cell-meta dash">—</span>;
+  const [first, ...rest] = number.split('/');
+  return (
+    <div className="cell-mono">
+      <span className="num">{first}</span>
+      {rest.length > 0 ? `/${rest.join('/')}` : ''}
+    </div>
+  );
 }
 
 function CongVanDiPage() {
@@ -63,6 +89,14 @@ function CongVanDiPage() {
   const [statusFilter, setStatusFilter] = useState<OutStatus | 'all'>('all');
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [checked, setChecked] = useState<Set<number>>(new Set());
+
+  function resetFilters() {
+    setQ('');
+    setUnitFilter('all');
+    setStatusFilter('all');
+    setPage(1);
+  }
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -80,6 +114,16 @@ function CongVanDiPage() {
     },
   });
   const units = useMemo(() => unitsQuery.data?.items ?? [], [unitsQuery.data]);
+
+  const docTypesQuery = useQuery({
+    queryKey: ['document-types'],
+    queryFn: async () => {
+      const res = await api.GET('/api/document-types', {});
+      return (res.data ?? { items: [] }) as { items: { id: number; code: string }[] };
+    },
+  });
+  const docTypeCode = (id: number) =>
+    docTypesQuery.data?.items.find((d) => d.id === id)?.code ?? '—';
 
   const listQuery = useQuery({
     queryKey: ['outgoing', unitFilter, statusFilter, debouncedQ, page],
@@ -103,8 +147,8 @@ function CongVanDiPage() {
 
   if (!me) {
     return (
-      <div className="mx-auto max-w-7xl px-6 py-10">
-        <p className="text-slate-500">Đang tải…</p>
+      <div style={{ padding: '40px 0' }}>
+        <p className="cell-meta">Đang tải…</p>
       </div>
     );
   }
@@ -113,141 +157,248 @@ function CongVanDiPage() {
   const total = listQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const unitOf = (id: number) => units.find((u) => u.id === id);
+  const allChecked = items.length > 0 && items.every((r) => checked.has(r.id));
+  const toggleAll = () => setChecked(allChecked ? new Set() : new Set(items.map((r) => r.id)));
+  const toggleOne = (id: number) =>
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8">
-      <div className="mb-1 flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">Công văn đi</p>
-          <h2 className="text-2xl font-semibold text-slate-800">Danh sách công văn đi</h2>
-          <p className="mt-1 text-sm text-slate-500">Tổng {total} công văn của 2 đơn vị.</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => navigate({ to: '/cong-van-di/soan' })}
-          className="flex items-center gap-2 rounded-md bg-amber-400 px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500"
-        >
-          <Plus size={16} />
-          Soạn công văn mới
-        </button>
-      </div>
-
-      <div className="my-4 flex flex-wrap items-center gap-3">
-        <div className="relative max-w-xs flex-1">
-          <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            value={q}
-            onChange={(e) => {
-              setQ(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Tìm số CV / trích yếu…"
-            className="w-full rounded-md border border-slate-300 py-2 pl-9 pr-3 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
-          />
-        </div>
-        <select
-          value={unitFilter}
-          onChange={(e) => {
-            setUnitFilter(e.target.value === 'all' ? 'all' : Number(e.target.value));
-            setPage(1);
-          }}
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-amber-400"
-        >
-          <option value="all">Tất cả đơn vị</option>
-          {units.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.short_name ?? u.code}
-            </option>
-          ))}
-        </select>
-        <select
-          value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter(e.target.value as OutStatus | 'all');
-            setPage(1);
-          }}
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-amber-400"
-        >
-          <option value="all">Tất cả trạng thái</option>
-          <option value="draft">Nháp</option>
-          <option value="numbered">Đã cấp số</option>
-          <option value="published">Đã phát hành</option>
-          <option value="cancelled">Huỷ</option>
-        </select>
-      </div>
-
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <table className="w-full text-sm">
-          <thead className="border-b bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-4 py-3 font-medium">Số CV</th>
-              <th className="px-4 py-3 font-medium">Trích yếu</th>
-              <th className="px-4 py-3 font-medium">Đơn vị</th>
-              <th className="px-4 py-3 font-medium">Ngày phát hành</th>
-              <th className="px-4 py-3 font-medium">Trạng thái</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {listQuery.isLoading && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-400">Đang tải…</td>
-              </tr>
-            )}
-            {!listQuery.isLoading && items.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-slate-400">
-                  Chưa có công văn nào. Bấm “Soạn công văn mới” để bắt đầu.
-                </td>
-              </tr>
-            )}
-            {items.map((r) => (
-              <tr
-                key={r.id}
-                tabIndex={0}
-                onClick={() => setSelectedId(r.id)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setSelectedId(r.id);
-                  }
+    <>
+      <PageHeader
+        breadcrumb={[{ label: 'Công văn đi' }]}
+        title="Danh sách công văn đi"
+        subhead={`Tổng ${total} công văn của 2 đơn vị`}
+        actions={
+          <>
+            <button className="btn-secondary" type="button">
+              <Download size={14} />
+              Xuất Excel
+            </button>
+            <button
+              className="btn-primary"
+              type="button"
+              onClick={() => navigate({ to: '/cong-van-di/soan' })}
+            >
+              <Upload size={14} />
+              Nạp công văn mới
+            </button>
+          </>
+        }
+        filters={
+          <>
+            <div className="relative">
+              <Search
+                size={15}
+                className="absolute"
+                style={{ left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-faint)' }}
+              />
+              <input
+                className="search-input"
+                style={{ width: 240, height: 36 }}
+                placeholder="Tìm số CV / trích yếu…"
+                value={q}
+                onChange={(e) => {
+                  setQ(e.target.value);
+                  setPage(1);
                 }}
-                className="cursor-pointer hover:bg-amber-50/50 focus:bg-amber-50 focus:outline-none"
-              >
-                <td className="px-4 py-3 font-mono text-slate-700">{r.number ?? '—'}</td>
-                <td className="max-w-md px-4 py-3">
-                  <span className="line-clamp-2 text-slate-800">{r.subject}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <UnitPill unit={unitOf(r.unit_id)} />
-                </td>
-                <td className="px-4 py-3 text-slate-600">
-                  {r.status === 'draft' ? '—' : fmtDate(r.issue_date)}
-                </td>
-                <td className="px-4 py-3">
-                  <StatusBadge status={r.status} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+              />
+            </div>
+            <FilterMenu
+              label="Đơn vị:"
+              value={unitFilter === 'all' ? 'all' : String(unitFilter)}
+              onChange={(v) => {
+                setUnitFilter(v === 'all' ? 'all' : Number(v));
+                setPage(1);
+              }}
+              options={[
+                { value: 'all', label: 'Tất cả' },
+                ...units.map((u) => ({ value: String(u.id), label: u.short_name ?? u.code })),
+              ]}
+            />
+            <FilterSelect label="Thời gian:" value="Năm 2026" />
+            <FilterSelect label="Loại VB:" value="Tất cả" />
+            <FilterMenu
+              label="Trạng thái:"
+              value={statusFilter}
+              onChange={(v) => {
+                setStatusFilter(v as OutStatus | 'all');
+                setPage(1);
+              }}
+              options={[
+                { value: 'all', label: 'Tất cả' },
+                { value: 'draft', label: 'Nháp' },
+                { value: 'numbered', label: 'Đã cấp số' },
+                { value: 'published', label: 'Đã phát hành' },
+                { value: 'cancelled', label: 'Huỷ' },
+              ]}
+            />
+            <FilterSelect label="Người ký:" value="Tất cả" />
+            <FilterSelect label="Nơi nhận:" value="Tất cả" />
+            <div className="flex-1" />
+            <button className="btn-ghost" type="button" onClick={resetFilters}>
+              Đặt lại bộ lọc
+            </button>
+          </>
+        }
+      />
 
-      {totalPages > 1 && (
-        <div className="mt-4 flex items-center justify-end gap-2 text-sm">
-          <button type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="rounded-md border border-slate-300 px-3 py-1 disabled:opacity-40">
-            Trước
+      {checked.size > 0 && (
+        <div
+          className="card flex items-center flex-wrap"
+          style={{
+            padding: '10px 16px',
+            gap: 12,
+            marginBottom: 12,
+            background: 'var(--kinpaku-pale)',
+            borderColor: 'var(--rule-strong)',
+          }}
+        >
+          <span style={{ fontWeight: 600, color: 'var(--ink)', fontSize: '0.85rem' }}>
+            Đã chọn {checked.size}
+          </span>
+          <div className="flex-1" />
+          <button className="btn-secondary" type="button" style={{ height: 32 }}>
+            <Download size={13} /> Xuất Excel
           </button>
-          <span className="text-slate-500">Trang {page}/{totalPages}</span>
-          <button type="button" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="rounded-md border border-slate-300 px-3 py-1 disabled:opacity-40">
-            Sau
+          <button className="btn-secondary" type="button" style={{ height: 32 }}>
+            <TagIcon size={13} /> Gắn tag
+          </button>
+          <button className="btn-ghost" type="button" onClick={() => setChecked(new Set())}>
+            Bỏ chọn
           </button>
         </div>
       )}
+
+      <div className="card" style={{ overflow: 'hidden' }}>
+        <div className="table-scroll">
+          <table className="qlcv-table">
+            <thead>
+              <tr>
+                <th style={{ width: 48, paddingLeft: 24 }}>
+                  <input
+                    type="checkbox"
+                    className="qlcv-check"
+                    aria-label="Chọn tất cả"
+                    checked={allChecked}
+                    onChange={toggleAll}
+                  />
+                </th>
+                <th style={{ width: 200 }}>Số CV</th>
+                <th>Trích yếu</th>
+                <th className="center" style={{ width: 100 }}>
+                  Đơn vị
+                </th>
+                <th style={{ width: 80 }}>Loại</th>
+                <th style={{ width: 130 }}>Phát hành</th>
+                <th style={{ width: 130 }}>Trạng thái</th>
+              </tr>
+            </thead>
+            <tbody>
+              {listQuery.isLoading && (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'center', color: 'var(--ink-faint)', padding: '32px 16px' }}>
+                    Đang tải…
+                  </td>
+                </tr>
+              )}
+              {!listQuery.isLoading &&
+                items.map((r) => (
+                  <tr
+                    key={r.id}
+                    tabIndex={0}
+                    onClick={() => setSelectedId(r.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedId(r.id);
+                      }
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <td style={{ paddingLeft: 24 }} onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        className="qlcv-check"
+                        aria-label="Chọn dòng"
+                        checked={checked.has(r.id)}
+                        onChange={() => toggleOne(r.id)}
+                      />
+                    </td>
+                    <td>
+                      <NumberCell number={r.number} />
+                    </td>
+                    <td>
+                      <div className="subject">{r.subject}</div>
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <UnitPill unit={unitOf(r.unit_id)} />
+                    </td>
+                    <td>
+                      <TypeTag>{docTypeCode(r.doc_type_id)}</TypeTag>
+                    </td>
+                    <td>
+                      <span className={r.status === 'draft' ? 'cell-meta dash' : 'cell-meta'}>
+                        {r.status === 'draft' ? '—' : fmtDate(r.issue_date)}
+                      </span>
+                    </td>
+                    <td>
+                      <StatusBadge status={r.status} />
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+
+          {!listQuery.isLoading && items.length === 0 && (
+            <EmptyState
+              icon={FileSearch}
+              title="Chưa có công văn nào"
+              desc="Bấm “Soạn công văn mới” để bắt đầu."
+            />
+          )}
+        </div>
+
+        {totalPages > 1 && (
+          <div
+            className="flex items-center justify-end"
+            style={{ gap: 8, padding: '12px 16px', borderTop: '1px solid var(--rule)' }}
+          >
+            <button
+              type="button"
+              className="pg-btn"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => p - 1)}
+              style={page <= 1 ? { opacity: 0.4, cursor: 'default' } : undefined}
+              aria-label="Trang trước"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="cell-meta">
+              Trang {page}/{totalPages}
+            </span>
+            <button
+              type="button"
+              className="pg-btn"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => p + 1)}
+              style={page >= totalPages ? { opacity: 0.4, cursor: 'default' } : undefined}
+              aria-label="Trang sau"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
+      </div>
 
       {selectedId !== null && (
         <DetailDrawer id={selectedId} units={units} onClose={() => setSelectedId(null)} />
       )}
-    </div>
+    </>
   );
 }
 
@@ -322,139 +473,162 @@ function DetailDrawer({ id, units, onClose }: { id: number; units: UnitLite[]; o
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-40">
-      <button type="button" aria-label="Đóng" onClick={onClose} className="absolute inset-0 bg-slate-900/30" />
-      <div className="absolute inset-y-0 right-0 flex w-full max-w-lg flex-col bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b px-6 py-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">Công văn đi</p>
-            <h3 className="font-mono text-lg font-semibold text-slate-800">{d?.number ?? 'Bản nháp'}</h3>
-          </div>
-          <button type="button" onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100">
-            <X size={20} />
+  // Thu hồi CV đã phát hành: chỉ Quản lý (PRD máy trạng thái).
+  const showCancel = !!d && d.status !== 'cancelled' && !(d.status === 'published' && me?.role !== 'manager');
+
+  const actions = d ? (
+    <>
+      {d.original_file_id !== null && (
+        <button className="btn-secondary" style={{ height: 32 }} type="button" onClick={() => download(false)}>
+          <Download size={13} /> Tải bản {d.status === 'draft' ? 'gốc' : 'chưa ký'}
+        </button>
+      )}
+      {d.signed_file_id !== null && (
+        <button className="btn-secondary" style={{ height: 32 }} type="button" onClick={() => download(true)}>
+          <FileCheck2 size={13} /> Tải bản đã ký số
+        </button>
+      )}
+      {d.status === 'numbered' && d.original_file_id !== null && (
+        <>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="application/pdf"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void uploadSigned(f);
+              e.target.value = '';
+            }}
+          />
+          <button
+            className="btn-primary"
+            style={{ height: 32 }}
+            type="button"
+            disabled={busy}
+            onClick={() => fileRef.current?.click()}
+          >
+            <Upload size={13} /> {busy ? 'Đang tải…' : 'Tải lên bản đã ký số'}
           </button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-6 py-5">
-          {!d ? (
-            <p className="text-slate-400">Đang tải…</p>
-          ) : (
-            <div className="space-y-5">
-              <div className="flex items-center gap-2">
-                <UnitPill unit={unit} />
-                <StatusBadge status={d.status} />
-              </div>
+        </>
+      )}
+      {showCancel && (
+        <button
+          className="btn-secondary"
+          style={{ height: 32, color: 'var(--danger)' }}
+          type="button"
+          disabled={busy}
+          onClick={cancelDoc}
+        >
+          <Ban size={13} /> {d.status === 'published' ? 'Thu hồi' : 'Huỷ'}
+        </button>
+      )}
+    </>
+  ) : undefined;
 
-              <Section title="Thông tin công văn">
-                <Info label="Số CV">{d.number ?? '— (chưa cấp số)'}</Info>
-                <Info label="Trích yếu">{d.subject}</Info>
-                <Info label="Đơn vị">{unit?.full_name ?? '—'}</Info>
-                <Info label="Ngày phát hành">{fmtDate(d.issue_date)}</Info>
-                <Info label="Giáp lai">{rangeLabel(d.sealing_option?.giap_lai?.kind)}</Info>
-                <Info label="Ký nháy">{rangeLabel(d.sealing_option?.ky_nhay?.kind)}</Info>
-                <Info label="Tạo lúc">{fmtDateTime(d.created_at)}</Info>
-              </Section>
+  return (
+    <Drawer
+      open
+      onClose={onClose}
+      eyebrow="Công văn đi"
+      title={<span className="cell-mono num">{d?.number ?? 'Bản nháp'}</span>}
+      actions={actions}
+    >
+      {!d ? (
+        <p className="cell-meta">Đang tải…</p>
+      ) : (
+        <>
+          <div className="flex items-center flex-wrap" style={{ gap: 8 }}>
+            <UnitPill unit={unit} />
+            <StatusBadge status={d.status} />
+          </div>
 
-              <Section title={`Nơi nhận (${d.recipients.length})`}>
-                {d.recipients.length === 0 ? (
-                  <p className="text-sm text-slate-400">Chưa chọn nơi nhận.</p>
-                ) : (
-                  <ul className="space-y-1.5 text-sm text-slate-700">
-                    {d.recipients.map((o) => (
-                      <li key={o.id} className="flex items-center gap-2">
-                        <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-                        {o.full_name}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Section>
-
-              {d.status === 'cancelled' && d.cancel_reason && (
-                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                  <span className="font-medium">Đã huỷ.</span> Lý do: {d.cancel_reason}
-                </div>
-              )}
-
-              {d.status === 'numbered' && (
-                <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                  <FileCheck2 size={14} className="mt-0.5 shrink-0" />
-                  Đã cấp số, chưa ký số. Mở vSign + USB Token Viettel-CA để ký, rồi tải bản đã ký lên đây.
-                </div>
-              )}
-
-              {actionErr && (
-                <div role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                  {actionErr}
-                </div>
-              )}
-
-              {d.original_file_id !== null && (
-                <div className="space-y-2 rounded-md border border-slate-200 p-4">
-                  <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                    <FileText size={15} /> File PDF
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => download(false)}
-                      className="flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"
-                    >
-                      <Download size={15} /> Tải bản {d.status === 'draft' ? 'gốc' : 'chưa ký (_CHUA_KY_SO)'}
-                    </button>
-                    {d.signed_file_id !== null && (
-                      <button
-                        type="button"
-                        onClick={() => download(true)}
-                        className="flex items-center gap-2 rounded-md border border-green-300 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
-                      >
-                        <FileCheck2 size={15} /> Tải bản đã ký số
-                      </button>
-                    )}
-                  </div>
-
-                  {d.status === 'numbered' && (
-                    <>
-                      <input
-                        ref={fileRef}
-                        type="file"
-                        accept="application/pdf"
-                        className="hidden"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) void uploadSigned(f);
-                          e.target.value = '';
-                        }}
-                      />
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => fileRef.current?.click()}
-                        className="flex items-center gap-2 rounded-md bg-amber-400 px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500 disabled:opacity-60"
-                      >
-                        <Upload size={15} /> {busy ? 'Đang tải…' : 'Tải lên bản đã ký số'}
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* Thu hồi CV đã phát hành: chỉ Quản lý (PRD máy trạng thái). */}
-              {d.status !== 'cancelled' && !(d.status === 'published' && me?.role !== 'manager') && (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={cancelDoc}
-                  className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
-                >
-                  <Ban size={15} /> {d.status === 'published' ? 'Thu hồi công văn' : 'Huỷ công văn'}
-                </button>
-              )}
+          {actionErr && (
+            <div
+              role="alert"
+              style={{
+                borderRadius: 6,
+                border: '1px solid var(--danger)',
+                background: 'var(--danger-soft)',
+                padding: '8px 12px',
+                fontSize: '0.82rem',
+                color: 'var(--danger)',
+              }}
+            >
+              {actionErr}
             </div>
           )}
-        </div>
-      </div>
-    </div>
+
+          {d.status === 'cancelled' && d.cancel_reason && (
+            <div
+              style={{
+                borderRadius: 6,
+                border: '1px solid var(--danger)',
+                background: 'var(--danger-soft)',
+                padding: '10px 12px',
+                fontSize: '0.82rem',
+                color: 'var(--danger)',
+              }}
+            >
+              <strong>Đã huỷ.</strong> Lý do: {d.cancel_reason}
+            </div>
+          )}
+
+          {d.status === 'numbered' && (
+            <div
+              className="flex items-start"
+              style={{
+                gap: 8,
+                borderRadius: 6,
+                border: '1px solid var(--warning)',
+                background: 'var(--warning-soft)',
+                padding: '8px 12px',
+                fontSize: '0.78rem',
+                color: 'var(--warning)',
+              }}
+            >
+              <FileCheck2 size={14} style={{ marginTop: 2, flexShrink: 0 }} />
+              Đã cấp số, chưa ký số. Mở vSign + USB Token Viettel-CA để ký, rồi tải bản đã ký lên đây.
+            </div>
+          )}
+
+          <SectionCard title="Thông tin công văn">
+            <div>
+              <InfoRow label="Số CV">
+                <span className="cell-mono num">{d.number ?? '— (chưa cấp số)'}</span>
+              </InfoRow>
+              <InfoRow label="Trích yếu">{d.subject}</InfoRow>
+              <InfoRow label="Đơn vị">{unit?.full_name ?? '—'}</InfoRow>
+              <InfoRow label="Ngày phát hành">{fmtDate(d.issue_date)}</InfoRow>
+              <InfoRow label="Giáp lai">{rangeLabel(d.sealing_option?.giap_lai?.kind)}</InfoRow>
+              <InfoRow label="Ký nháy">{rangeLabel(d.sealing_option?.ky_nhay?.kind)}</InfoRow>
+              <InfoRow label="Tạo lúc">{fmtDateTime(d.created_at)}</InfoRow>
+            </div>
+          </SectionCard>
+
+          <SectionCard title={`Nơi nhận (${d.recipients.length})`}>
+            {d.recipients.length === 0 ? (
+              <p className="cell-meta">Chưa chọn nơi nhận.</p>
+            ) : (
+              <div className="flex flex-col" style={{ gap: 8 }}>
+                {d.recipients.map((o) => (
+                  <div
+                    key={o.id}
+                    className="flex items-center"
+                    style={{ gap: 8, fontSize: '0.85rem', color: 'var(--ink)' }}
+                  >
+                    <span
+                      style={{ width: 5, height: 5, borderRadius: 999, background: 'var(--kinpaku-rich)', flexShrink: 0 }}
+                    />
+                    {o.full_name}
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
+        </>
+      )}
+    </Drawer>
   );
 }
 
@@ -462,22 +636,4 @@ function rangeLabel(kind: string | undefined): string {
   if (kind === 'all') return 'Toàn bộ';
   if (kind === 'range') return 'Theo khoảng trang';
   return 'Không';
-}
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div className="rounded-md border border-slate-200 p-4">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{title}</p>
-      {children}
-    </div>
-  );
-}
-
-function Info({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex gap-3 border-b border-slate-100 py-1.5 last:border-0">
-      <span className="w-28 shrink-0 text-sm text-slate-500">{label}</span>
-      <span className="min-w-0 flex-1 text-sm text-slate-800">{children}</span>
-    </div>
-  );
 }

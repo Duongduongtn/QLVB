@@ -59,55 +59,79 @@ function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-[80vh] items-center justify-center px-4 py-10">
-      <div className="w-full max-w-[408px]">
+    <div className="login-bg">
+      <div className="w-full" style={{ maxWidth: 408 }}>
         {/* Thương hiệu (B3b — theo cấu hình app_settings) */}
-        <div className="mb-7 flex flex-col items-center gap-3">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col items-center" style={{ gap: 12, marginBottom: 28 }}>
+          <div className="flex items-center" style={{ gap: 12 }}>
             {branding?.logo_file_id ? (
               <img
                 src={`/api/settings/logo?v=${branding.logo_file_id}`}
                 alt="Logo"
-                className="h-10 w-10 rounded-md object-contain"
+                className="object-contain"
+                style={{ width: 32, height: 32, borderRadius: 4, flexShrink: 0 }}
               />
             ) : (
-              <span className="inline-block h-9 w-9 rounded-md bg-amber-400" aria-hidden="true" />
+              <div className="brand-mark" aria-hidden="true" />
             )}
-            <span className="text-xl font-bold tracking-wide text-slate-800">
-              {branding?.app_name ?? 'QLCV Thành Đạt'}
-            </span>
+            <div className="flex flex-col">
+              <span className="wordmark">{branding?.app_name ?? 'QLCV'}</span>
+              <span className="tagline">Thành Đạt</span>
+            </div>
           </div>
-          <p className="text-sm text-slate-500">Hệ thống Quản lý Công văn và Ký số</p>
+          <p style={{ fontSize: '0.85rem', color: 'var(--ink-muted)', textAlign: 'center' }}>
+            Hệ thống Quản lý Công văn và Ký số
+          </p>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-7 shadow-sm">
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">
+        <div className="card" style={{ padding: 28 }}>
+          <div className="eyebrow" style={{ marginBottom: 6 }}>
             Đăng nhập
-          </p>
-          <h1 className="mb-5 text-xl font-semibold text-slate-800">Chào mừng trở lại</h1>
+          </div>
+          <h1 className="section-title" style={{ marginBottom: 20 }}>
+            Chào mừng trở lại
+          </h1>
 
           {serverError && (
             <div
               role="alert"
-              className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+              className="pill pill-cancelled"
+              style={{
+                display: 'block',
+                height: 'auto',
+                padding: '8px 12px',
+                marginBottom: 16,
+                textDecoration: 'none',
+                letterSpacing: 0,
+                textTransform: 'none',
+                fontFamily: 'inherit',
+                fontSize: '0.85rem',
+              }}
             >
               {serverError}
             </div>
           )}
 
           <form onSubmit={handleSubmit(onSubmit)} noValidate>
-            <div className="mb-4">
-              <label htmlFor="username" className="mb-1.5 block text-sm font-medium text-slate-700">
+            <div style={{ marginBottom: 16 }}>
+              <label className="field-label" htmlFor="username">
                 Tên đăng nhập
               </label>
               <div className="relative">
                 <User
                   size={16}
-                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  className="absolute"
+                  style={{
+                    left: 12,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: 'var(--ink-faint)',
+                  }}
                 />
                 <input
                   id="username"
-                  className="w-full rounded-md border border-slate-300 py-2 pl-9 pr-3 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+                  className="text-input"
+                  style={{ paddingLeft: 38 }}
                   placeholder="vanthu.gdnn"
                   autoComplete="username"
                   autoFocus
@@ -115,59 +139,80 @@ function LoginPage() {
                 />
               </div>
               {errors.username && (
-                <p className="mt-1 text-xs text-red-600">{errors.username.message}</p>
+                <p style={{ marginTop: 4, fontSize: '0.75rem', color: 'var(--danger)' }}>
+                  {errors.username.message}
+                </p>
               )}
             </div>
 
-            <div className="mb-4">
-              <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-slate-700">
+            <div style={{ marginBottom: 16 }}>
+              <label className="field-label" htmlFor="password">
                 Mật khẩu
               </label>
               <div className="relative">
                 <Lock
                   size={16}
-                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  className="absolute"
+                  style={{
+                    left: 12,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: 'var(--ink-faint)',
+                  }}
                 />
                 <input
                   id="password"
                   type="password"
-                  className="w-full rounded-md border border-slate-300 py-2 pl-9 pr-3 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+                  className="text-input"
+                  style={{ paddingLeft: 38 }}
                   placeholder="••••••••"
                   autoComplete="current-password"
                   {...register('password')}
                 />
               </div>
               {errors.password && (
-                <p className="mt-1 text-xs text-red-600">{errors.password.message}</p>
+                <p style={{ marginTop: 4, fontSize: '0.75rem', color: 'var(--danger)' }}>
+                  {errors.password.message}
+                </p>
               )}
             </div>
 
-            <label className="mb-5 flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 text-amber-500 focus:ring-amber-300"
-                {...register('remember')}
-              />
-              Ghi nhớ đăng nhập (7 ngày)
+            <label
+              className="flex items-center"
+              style={{ gap: 8, marginBottom: 20, cursor: 'pointer', fontSize: '0.85rem' }}
+            >
+              <input type="checkbox" className="qlcv-check" {...register('remember')} />
+              <span className="text-ink-body">Ghi nhớ đăng nhập (7 ngày)</span>
             </label>
 
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex w-full items-center justify-center gap-2 rounded-md bg-amber-400 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
+              className="btn-primary"
+              style={{ width: '100%', justifyContent: 'center' }}
             >
               {isSubmitting && <Loader2 size={16} className="animate-spin" />}
               {isSubmitting ? 'Đang đăng nhập…' : 'Đăng nhập'}
             </button>
           </form>
 
-          <div className="mt-4 flex items-center gap-2 text-xs text-slate-400">
+          <div
+            className="flex items-center"
+            style={{ gap: 8, marginTop: 18, fontSize: '0.75rem', color: 'var(--ink-faint)' }}
+          >
             <ShieldCheck size={14} />
             Sai mật khẩu 5 lần trong 15 phút sẽ bị khoá tạm thời.
           </div>
         </div>
 
-        <p className="mt-5 text-center text-xs text-slate-400">
+        <p
+          style={{
+            textAlign: 'center',
+            marginTop: 20,
+            fontSize: '0.75rem',
+            color: 'var(--ink-faint)',
+          }}
+        >
           © 2026 Trung tâm GDNN &amp; Công ty CP DVDL Thành Đạt
         </p>
       </div>

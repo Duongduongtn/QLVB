@@ -1,17 +1,18 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, X } from 'lucide-react';
+import { Plus, Save, Stamp, UploadCloud } from 'lucide-react';
 
 import { api, type ApiErrorEnvelope } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
 import { fmtDate } from '~/lib/format';
-import { MocChuKyTabs } from '~/components/MocChuKyTabs';
+import { PageHeader, Pill, EmptyState, InfoRow } from '~/components/ui';
+import { Drawer } from '~/components/Drawer';
 import { TachNenModal } from '~/components/TachNenModal';
-import { StatusPill, UnitPill, type UnitLite } from '~/components/sign-ui';
+import { UnitPill, type UnitLite } from '~/components/sign-ui';
 
 export const Route = createFileRoute('/moc')({
   component: MocPage,
@@ -36,8 +37,11 @@ const SEAL_TYPE_LABEL: Record<SealType, string> = {
   overlap: 'Mộc giáp lai',
 };
 
-// Nền caro nhẹ → nhận biết PNG nền trong suốt (mộc đã tách nền).
-const CHECKER = 'bg-[repeating-conic-gradient(#f1f5f9_0%_25%,#fff_0%_50%)] bg-[length:16px_16px]';
+// Nền caro nhẹ → nhận biết PNG nền trong suốt (mộc đã tách nền). Dùng token giấy.
+const checkerBg =
+  'repeating-conic-gradient(var(--light-graphite) 0% 25%, var(--paper-raised) 0% 50%) 50% / 16px 16px';
+
+const BREADCRUMB = [{ label: 'Mộc & Chữ ký' }];
 
 function errMsg(error: unknown, fallback: string): string {
   return (error as ApiErrorEnvelope | undefined)?.error?.message ?? fallback;
@@ -76,51 +80,57 @@ function MocPage() {
 
   if (me && me.role !== 'manager') {
     return (
-      <div className="mx-auto max-w-6xl px-6 py-10">
-        <p className="text-slate-600">Trang này chỉ dành cho Quản lý.</p>
-      </div>
+      <>
+        <PageHeader breadcrumb={BREADCRUMB} title="Quản lý mộc" />
+        <div className="card" style={{ padding: 24, color: 'var(--ink-muted)', fontSize: '0.9rem' }}>
+          Trang này chỉ dành cho Quản lý.
+        </div>
+      </>
     );
   }
   if (!me) {
     return (
-      <div className="mx-auto max-w-6xl px-6 py-10">
-        <p className="text-slate-500">Đang tải…</p>
-      </div>
+      <>
+        <PageHeader breadcrumb={BREADCRUMB} title="Quản lý mộc" />
+        <div className="card" style={{ padding: 24, color: 'var(--ink-faint)', fontSize: '0.9rem' }}>
+          Đang tải…
+        </div>
+      </>
     );
   }
 
   const seals = sealsQuery.data?.items ?? [];
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">Mộc &amp; Chữ ký</p>
-          <h2 className="text-2xl font-semibold text-slate-800">Quản lý mộc</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Mỗi mộc gắn 1 đơn vị — chống nhầm khi phát hành công văn.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="flex items-center gap-2 rounded-md bg-amber-400 px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500"
-        >
-          <Plus size={16} />
-          Tải mộc mới
-        </button>
-      </div>
-
-      <MocChuKyTabs />
+    <>
+      <PageHeader
+        breadcrumb={BREADCRUMB}
+        title="Quản lý mộc"
+        subhead="Mỗi mộc gắn 1 đơn vị — chống nhầm khi phát hành công văn."
+        actions={
+          <button type="button" className="btn-primary" onClick={() => setCreating(true)}>
+            <Plus size={14} /> Tải mộc mới
+          </button>
+        }
+      />
 
       {sealsQuery.isLoading ? (
-        <p className="py-10 text-center text-slate-400">Đang tải…</p>
+        <div className="card" style={{ padding: 24, textAlign: 'center', color: 'var(--ink-faint)' }}>
+          Đang tải…
+        </div>
       ) : seals.length === 0 ? (
-        <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-white py-12 text-center text-slate-400">
-          Chưa có mộc nào. Bấm “Tải mộc mới” để tải lên.
+        <div className="card">
+          <EmptyState
+            icon={Stamp}
+            title="Chưa có mộc nào"
+            desc="Bấm “Tải mộc mới” để tải lên và tách nền."
+          />
         </div>
       ) : (
-        <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <div
+          className="grid"
+          style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}
+        >
           {seals.map((s) => (
             <SealCard
               key={s.id}
@@ -137,10 +147,14 @@ function MocPage() {
         <EditDrawer
           seal={selected}
           unit={units.find((u) => u.id === selected.unit_id)}
+          onReupload={() => {
+            setSelected(null);
+            setCreating(true);
+          }}
           onClose={() => setSelected(null)}
         />
       )}
-    </div>
+    </>
   );
 }
 
@@ -157,54 +171,48 @@ function SealCard({
     <button
       type="button"
       onClick={onClick}
-      className={`flex flex-col rounded-lg border border-slate-200 bg-white p-4 text-left transition hover:border-amber-300 hover:shadow-sm ${
-        seal.is_active ? '' : 'opacity-60'
-      }`}
+      className="card"
+      style={{
+        padding: 18,
+        textAlign: 'left',
+        cursor: 'pointer',
+        opacity: seal.is_active ? 1 : 0.6,
+        display: 'flex',
+        flexDirection: 'column',
+      }}
     >
-      <div className="mb-3 flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between" style={{ gap: 8, marginBottom: 14 }}>
         <UnitPill unit={unit} />
-        <StatusPill active={seal.is_active} />
+        <Pill variant={seal.is_active ? 'success' : 'draft'} dot={seal.is_active}>
+          {seal.is_active ? 'Đang dùng' : 'Ngừng dùng'}
+        </Pill>
       </div>
-      <div className={`mb-3 flex h-24 items-center justify-center rounded-md border border-slate-100 p-2 ${CHECKER}`}>
+      <div
+        className="flex items-center justify-center"
+        style={{
+          height: 96,
+          borderRadius: 6,
+          border: '1px solid var(--rule)',
+          background: checkerBg,
+          marginBottom: 14,
+          padding: 8,
+        }}
+      >
         <img
           src={`/api/seals/${seal.id}/image`}
           alt={seal.name}
-          className="max-h-full max-w-full object-contain"
+          style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }}
         />
       </div>
-      <p className="truncate font-semibold text-slate-800" title={seal.name}>
+      <div className="truncate" style={{ fontWeight: 600, color: 'var(--ink)', marginBottom: 4 }} title={seal.name}>
         {seal.name}
-      </p>
-      <p className="mt-0.5 text-xs text-slate-500">
+      </div>
+      <div className="cell-meta">
         {SEAL_TYPE_LABEL[seal.seal_type]} · Tải lên {fmtDate(seal.created_at)}
-      </p>
+      </div>
     </button>
   );
 }
-
-function Drawer({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-40">
-      <button type="button" aria-label="Đóng" onClick={onClose} className="absolute inset-0 bg-slate-900/30" />
-      <div className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b px-6 py-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">Mộc · Chỉnh sửa</p>
-            <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
-          </div>
-          <button type="button" onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100">
-            <X size={20} />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-const fieldClass =
-  'w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100';
-const labelClass = 'mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500';
 
 const editSchema = z.object({
   name: z.string().trim().min(1, 'Nhập tên mộc').max(150),
@@ -215,10 +223,12 @@ type EditValues = z.infer<typeof editSchema>;
 function EditDrawer({
   seal,
   unit,
+  onReupload,
   onClose,
 }: {
   seal: SealRow;
   unit: UnitLite | undefined;
+  onReupload: () => void;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -264,74 +274,117 @@ function EditDrawer({
   });
 
   return (
-    <Drawer title={seal.name} onClose={onClose}>
-      {serverError && (
-        <div role="alert" className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {serverError}
-        </div>
-      )}
-      <div className={`mb-5 flex h-36 items-center justify-center rounded-md border border-slate-200 p-3 ${CHECKER}`}>
-        <img src={`/api/seals/${seal.id}/image`} alt={seal.name} className="max-h-full max-w-full object-contain" />
-      </div>
-
-      <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
-        <div>
-          <label className={labelClass} htmlFor="e_name">Tên</label>
-          <input id="e_name" className={fieldClass} {...register('name')} />
-          {errors.name && <p className="mt-1 text-xs text-red-600">{errors.name.message}</p>}
-        </div>
-        <div>
-          <label className={labelClass} htmlFor="e_type">Loại mộc</label>
-          <select id="e_type" className={fieldClass} {...register('seal_type')}>
-            <option value="round">Mộc tròn</option>
-            <option value="hanging">Mộc treo</option>
-            <option value="overlap">Mộc giáp lai</option>
-          </select>
-        </div>
-
-        <div className="space-y-2 rounded-md border border-slate-200 p-4 text-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-slate-500">Đơn vị</span>
-            <UnitPill unit={unit} />
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-slate-500">Trạng thái</span>
-            <StatusPill active={seal.is_active} />
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-slate-500">Ngày tải lên</span>
-            <span className="text-slate-700">{fmtDate(seal.created_at)}</span>
-          </div>
-        </div>
-
-        <p className="text-xs text-slate-400">
-          Không đổi đơn vị sau khi tạo (chống nhầm mộc). Không xoá cứng — dùng “Ngừng dùng” để công văn cũ vẫn hiển thị đúng mộc.
-        </p>
-
-        <div className="flex items-center justify-end gap-2 pt-1">
+    <Drawer
+      open
+      onClose={onClose}
+      eyebrow="Mộc · Chỉnh sửa"
+      title={seal.name}
+      width={460}
+      actions={
+        <>
           <button
             type="button"
+            className="btn-secondary"
+            style={{ marginRight: 'auto', color: seal.is_active ? 'var(--danger)' : 'var(--success)' }}
             onClick={() => toggleActive.mutate()}
             disabled={toggleActive.isPending}
-            className={`mr-auto rounded-md border px-3 py-2 text-sm disabled:opacity-60 ${
-              seal.is_active
-                ? 'border-red-200 text-red-600 hover:bg-red-50'
-                : 'border-green-200 text-green-700 hover:bg-green-50'
-            }`}
           >
             {seal.is_active ? 'Ngừng dùng' : 'Kích hoạt'}
           </button>
-          <button type="button" onClick={onClose} className="rounded-md border border-slate-300 px-4 py-2 text-sm">
+          <button type="button" className="btn-secondary" onClick={onClose}>
             Huỷ
           </button>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="rounded-md bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500 disabled:opacity-60"
-          >
-            Lưu
+          <button type="submit" form="seal-form" className="btn-primary" disabled={isSubmitting}>
+            <Save size={14} /> Lưu
           </button>
+        </>
+      }
+    >
+      <form
+        id="seal-form"
+        onSubmit={handleSubmit(onSubmit)}
+        className="flex flex-col"
+        style={{ gap: 18 }}
+      >
+      {serverError && (
+        <div
+          role="alert"
+          style={{
+            background: 'var(--danger-soft)',
+            color: 'var(--danger)',
+            border: '1px solid var(--rule)',
+            borderRadius: 6,
+            padding: '8px 12px',
+            fontSize: '0.85rem',
+          }}
+        >
+          {serverError}
         </div>
+      )}
+
+      <div
+        className="flex items-center justify-center"
+        style={{
+          height: 150,
+          borderRadius: 6,
+          border: '1px solid var(--rule)',
+          background: checkerBg,
+          padding: 12,
+        }}
+      >
+        <img
+          src={`/api/seals/${seal.id}/image`}
+          alt={seal.name}
+          style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }}
+        />
+      </div>
+
+      <button
+        type="button"
+        className="btn-secondary"
+        style={{ width: '100%', justifyContent: 'center' }}
+        onClick={onReupload}
+      >
+        <UploadCloud size={14} /> Tải ảnh khác &amp; tách nền lại
+      </button>
+
+      <div>
+        <label className="field-label" htmlFor="e_name">
+          Tên
+        </label>
+        <input id="e_name" className="text-input" {...register('name')} />
+        {errors.name && (
+          <p style={{ marginTop: 4, fontSize: '0.75rem', color: 'var(--danger)' }}>{errors.name.message}</p>
+        )}
+      </div>
+
+      <div>
+        <label className="field-label" htmlFor="e_type">
+          Loại mộc
+        </label>
+        <select id="e_type" className="text-input" {...register('seal_type')}>
+          <option value="round">Mộc tròn</option>
+          <option value="hanging">Mộc treo</option>
+          <option value="overlap">Mộc giáp lai</option>
+        </select>
+      </div>
+
+      <div className="card" style={{ padding: 16 }}>
+        <InfoRow label="Đơn vị">
+          <UnitPill unit={unit} />
+        </InfoRow>
+        <InfoRow label="Trạng thái">
+          <Pill variant={seal.is_active ? 'success' : 'draft'} dot={seal.is_active}>
+            {seal.is_active ? 'Đang dùng' : 'Ngừng dùng'}
+          </Pill>
+        </InfoRow>
+        <InfoRow label="Ngày tải lên">{fmtDate(seal.created_at)}</InfoRow>
+      </div>
+
+      <p className="cell-meta">
+        Không đổi đơn vị sau khi tạo (chống nhầm mộc). Không xoá cứng — dùng “Ngừng dùng” để công văn cũ
+        vẫn hiển thị đúng mộc.
+      </p>
       </form>
     </Drawer>
   );

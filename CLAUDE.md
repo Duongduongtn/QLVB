@@ -121,11 +121,22 @@ docker compose -p qlcv logs -f qlcv_backend
 docker compose -p qlcv exec qlcv_backend alembic upgrade head
 ```
 
+# Frontend — Design system & ui-demo (LUẬT CỨNG, ưu tiên cao hơn memory)
+
+Giao diện app PHẢI khớp `ui-demo/`. Vỏ + bảng màu + typography đến từ **design system đã port** vào `apps/frontend/src/styles/index.css` (token OKLCH `--paper`/`--ink`/`--kinpaku`, font **Be Vietnam Pro**, component classes `.btn-primary`/`.btn-secondary`/`.card`/`.seg`/`.pill-*`/`.nav-item`/`.text-input`/`.search-input`/`.avatar`...). Shell = `AppShell` trong `__root.tsx` (sidebar 248px + header), điều hướng bám `ui-demo/src/nav.tsx`.
+
+**Bắt buộc khi viết / sửa BẤT KỲ FE nào:**
+1. **CẤM màu raw Tailwind** (`slate-*`, `gray-*`, `amber-*`, `green-*`, `red-*`, `violet-*`, `sky-*`...) trong `src/routes/` và `src/components/`. Dùng **token/class của design system** (`var(--ink-muted)`, `.btn-primary`, `.pill-success`, `bg-gdnn/dvdl` cho màu 2 đơn vị) — đúng như `ui-demo/src/components/ui.tsx`.
+2. Trước khi viết layout 1 màn: đọc `ui-demo/src/pages/<Màn>Page.tsx` **+ `ui-demo/src/components/ui.tsx` + `index.css`** để biết component/token có sẵn — KHÔNG tự chế card/button/pill mới.
+3. CI có guard chặn màu raw: `npm run check:design` (script `apps/frontend/scripts/check-design-tokens.mjs` + allowlist `design-allowlist.txt` cho file legacy CHƯA migrate). File mới / file đã migrate phải SẠCH token; migrate xong file nào → xoá khỏi allowlist.
+4. Verify FE không chỉ `tsc/eslint/build` xanh (= chạy được) mà phải **đối chiếu thị giác với ui-demo** (mắt, hoặc Playwright screenshot 3 viewport theo CORE_RULES rule 12). "Build pass" KHÔNG đủ.
+5. Coi cảnh báo design-hook (impeccable `gray-on-color`...) là **tín hiệu lệch token**, KHÔNG gạt mặc định là false-positive.
+
 # Quy ước khi implement user story
 1. Đọc story trong PRD + phần kỹ thuật liên quan trong TDD **trước** khi code.
 2. Theo Story-Skill Mapping (memory) để nạp skill cần thiết (`fastapi-pro`, `react-best-practices`, `tdd-workflow`...).
 3. Implement đầy đủ từng tiêu chí "Done khi" trong story.
-4. Đọc UI trong `ui-demo/` trước khi viết layout — KHÔNG tự sáng tạo layout mới.
+4. **FE: đọc `ui-demo/` + dùng design system (xem mục "Frontend — Design system" trên) — KHÔNG tự sáng tạo layout/màu/font.**
 5. Code xong → gọi subagent `review-nghiep-vu` (đối chiếu PRD/TDD) **và** `review-code` (chất lượng + security) trước khi merge.
 6. Cập nhật trạng thái story trong PRD.md (📝 Draft / ⏳ Todo / 🔄 In Progress / ⚠️ Partial / ✅ Done) **không chờ user nhắc**.
 7. Hỏi trước khi làm nếu PRD/TDD có gì chưa rõ.

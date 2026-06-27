@@ -1,7 +1,28 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, Outlet, createRootRoute, useNavigate } from '@tanstack/react-router';
+import {
+  Link,
+  Outlet,
+  createRootRoute,
+  useNavigate,
+  useRouterState,
+} from '@tanstack/react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, ChevronDown, LogOut } from 'lucide-react';
+import {
+  Bell,
+  ChevronDown,
+  Contact,
+  KeyRound,
+  LogOut,
+  Menu,
+  MonitorSmartphone,
+  Search,
+  Send,
+  Settings,
+  Stamp,
+  Users,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
 
 import { api } from '~/lib/api';
 import { useBranding } from '~/lib/branding';
@@ -12,13 +33,63 @@ export const Route = createRootRoute({
   component: RootLayout,
 });
 
+/* ------------------------------------------------------------------ */
+/* Cấu hình điều hướng — bám IA ui-demo (nav.tsx): nhóm Công việc /     */
+/* Danh mục / Hệ thống. Chỉ trỏ tới route đã có; gate theo vai trò.     */
+/* ------------------------------------------------------------------ */
+interface NavSub {
+  label: string;
+  to: string;
+}
+interface NavEntry {
+  label: string;
+  to: string;
+  icon: LucideIcon;
+  managerOnly?: boolean;
+  subs?: NavSub[];
+}
+interface NavGroup {
+  title: string;
+  items: NavEntry[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    title: 'Công việc',
+    items: [{ label: 'Công văn đi', to: '/cong-van-di', icon: Send }],
+  },
+  {
+    title: 'Danh mục',
+    items: [
+      { label: 'Danh bạ', to: '/danh-ba', icon: Contact },
+      {
+        label: 'Mộc & Chữ ký',
+        to: '/moc',
+        icon: Stamp,
+        managerOnly: true,
+        subs: [
+          { label: 'Mộc', to: '/moc' },
+          { label: 'Chữ ký', to: '/chu-ky' },
+          { label: 'Hồ sơ ký', to: '/ho-so-ky' },
+        ],
+      },
+    ],
+  },
+  {
+    title: 'Hệ thống',
+    items: [
+      { label: 'Cấu hình', to: '/cau-hinh', icon: Settings, managerOnly: true },
+      { label: 'Người dùng', to: '/nguoi-dung', icon: Users, managerOnly: true },
+    ],
+  },
+];
+
 function RootLayout() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const user = useAuth((s) => s.user);
   const setUser = useAuth((s) => s.setUser);
   const clear = useAuth((s) => s.clear);
-  const { data: branding } = useBranding();
 
   // Hydrate user từ cookie session (HttpOnly) khi tải app — phiên sống qua refresh.
   // 401 (chưa đăng nhập) trả về null, không retry.
@@ -47,82 +118,311 @@ function RootLayout() {
     }
   }
 
+  // Chưa đăng nhập → render trang trần (login full-screen, không khung app).
+  if (!user) {
+    return <Outlet />;
+  }
+
+  return <AppShell user={user} onLogout={handleLogout} />;
+}
+
+/* ------------------------------------------------------------------ */
+/* AppShell — sidebar 248px + header 52px, port từ ui-demo AppShell.tsx */
+/* ------------------------------------------------------------------ */
+function AppShell({
+  user,
+  onLogout,
+}: {
+  user: NonNullable<ReturnType<typeof useAuth.getState>['user']>;
+  onLogout: () => void;
+}) {
+  const { data: branding } = useBranding();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [userOpen, setUserOpen] = useState(false);
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  // Đóng sidebar mobile + menu tài khoản khi đổi route
+  useEffect(() => {
+    setMobileOpen(false);
+    setUserOpen(false);
+  }, [pathname]);
+
+  // Phím tắt Ctrl/Cmd + K cho ô tìm kiếm
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        document.getElementById('global-search')?.focus();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  const initials = useMemo(() => {
+    const parts = user.full_name.trim().split(/\s+/);
+    const last = parts.at(-1) ?? '';
+    const first = parts.at(-2) ?? parts.at(0) ?? '';
+    return `${first[0] ?? ''}${last[0] ?? ''}`.toUpperCase() || 'U';
+  }, [user.full_name]);
+
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-7xl items-center gap-3 px-6 py-3">
-          {branding?.logo_file_id ? (
-            <img
-              src={`/api/settings/logo?v=${branding.logo_file_id}`}
-              alt="Logo"
-              className="h-7 w-7 rounded object-contain"
-            />
-          ) : (
-            <span className="inline-block h-2 w-2 rounded-full bg-amber-400" />
-          )}
-          <h1 className="text-lg font-semibold">{branding?.app_name ?? 'QLCV Thành Đạt'}</h1>
-          <div className="ml-auto flex items-center gap-4 text-sm text-slate-600">
-            {user ? (
-              <>
-                <UnitViewSwitcher role={user.role} />
-                <Link
-                  to="/cong-van-di"
-                  className="font-medium text-slate-700 hover:text-amber-600 [&.active]:text-amber-600"
-                >
-                  Công văn đi
-                </Link>
-                <Link
-                  to="/danh-ba"
-                  className="font-medium text-slate-700 hover:text-amber-600 [&.active]:text-amber-600"
-                >
-                  Danh bạ
-                </Link>
-                {user.role === 'manager' && (
-                  <>
-                    <Link
-                      to="/cau-hinh"
-                      className="font-medium text-slate-700 hover:text-amber-600 [&.active]:text-amber-600"
-                    >
-                      Cấu hình
-                    </Link>
-                    <Link
-                      to="/moc"
-                      className="font-medium text-slate-700 hover:text-amber-600 [&.active]:text-amber-600"
-                    >
-                      Mộc &amp; Chữ ký
-                    </Link>
-                    <Link
-                      to="/nguoi-dung"
-                      className="font-medium text-slate-700 hover:text-amber-600 [&.active]:text-amber-600"
-                    >
-                      Người dùng
-                    </Link>
-                  </>
-                )}
-                <span>
-                  {user.full_name} · {user.role === 'manager' ? 'Quản lý' : 'Nhân viên'}
-                </span>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="flex items-center gap-1.5 rounded-md px-2 py-1 font-medium text-slate-700 hover:bg-slate-100"
-                >
-                  <LogOut size={15} />
-                  Đăng xuất
-                </button>
-              </>
+    <div>
+      {/* HEADER */}
+      <header
+        className="sticky top-0 z-30 bg-paper-raised border-b"
+        style={{ borderColor: 'var(--rule)', height: 'var(--header-h)' }}
+      >
+        <div className="h-full flex items-center" style={{ padding: '0 16px', gap: 16 }}>
+          <button
+            className="icon-btn lg:hidden"
+            aria-label="Mở menu"
+            onClick={() => setMobileOpen(true)}
+          >
+            <Menu size={20} />
+          </button>
+
+          {/* Brand lockup */}
+          <div className="flex items-center" style={{ gap: 10 }}>
+            {branding?.logo_file_id ? (
+              <img
+                src={`/api/settings/logo?v=${branding.logo_file_id}`}
+                alt="Logo"
+                className="object-contain"
+                style={{ width: 32, height: 32, borderRadius: 4, flexShrink: 0 }}
+              />
             ) : (
-              <Link to="/login" className="font-medium text-amber-600 hover:underline">
-                Đăng nhập
-              </Link>
+              <div className="brand-mark" aria-hidden="true" />
+            )}
+            <span className="wordmark hidden sm:inline">{branding?.app_name ?? 'QLCV'}</span>
+          </div>
+
+          <div className="flex-1" />
+
+          {/* Switch view đơn vị (B3a) */}
+          <UnitViewSeg role={user.role} />
+
+          {/* Search (Ctrl+K) — UI sẵn, nối trang tìm kiếm sau */}
+          <div className="relative hidden sm:block">
+            <Search
+              className="absolute"
+              size={16}
+              style={{ left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-faint)' }}
+            />
+            <input
+              id="global-search"
+              className="search-input"
+              type="search"
+              placeholder="Tìm công văn… (Ctrl+K)"
+            />
+            <span className="kbd absolute" style={{ right: 8, top: '50%', transform: 'translateY(-50%)' }}>
+              ⌘K
+            </span>
+          </div>
+
+          {/* Notification bell */}
+          <button className="icon-btn" aria-label="Thông báo">
+            <Bell size={20} />
+            <span className="noti-dot" />
+          </button>
+
+          {/* User menu */}
+          <div className="relative">
+            <button
+              className="flex items-center"
+              style={{ gap: 8, background: 'transparent', border: 'none', cursor: 'pointer' }}
+              aria-label="Tài khoản"
+              aria-haspopup="menu"
+              aria-expanded={userOpen}
+              onClick={() => setUserOpen((v) => !v)}
+            >
+              <span className="avatar">{initials}</span>
+              <ChevronDown size={12} style={{ color: 'var(--ink-muted)' }} />
+            </button>
+            {userOpen && (
+              <>
+                <div
+                  style={{ position: 'fixed', inset: 0, zIndex: 35 }}
+                  aria-hidden="true"
+                  onClick={() => setUserOpen(false)}
+                />
+                <div
+                  role="menu"
+                  className="card"
+                  style={{
+                    position: 'absolute',
+                    right: 0,
+                    top: 44,
+                    width: 220,
+                    padding: 6,
+                    zIndex: 36,
+                    boxShadow: '0 10px 30px oklch(18% 0.02 95 / 0.16)',
+                  }}
+                >
+                  <div style={{ padding: '8px 10px 10px' }}>
+                    <div style={{ fontWeight: 600, color: 'var(--ink)', fontSize: '0.85rem' }}>
+                      {user.full_name}
+                    </div>
+                    <div className="cell-meta">
+                      {user.role === 'manager' ? 'Quản lý' : 'Nhân viên'} · {user.username}
+                    </div>
+                  </div>
+                  <div style={{ height: 1, background: 'var(--rule)', margin: '0 -6px 6px' }} />
+                  <button
+                    type="button"
+                    className="nav-item w-full"
+                    style={{ borderLeft: 'none', opacity: 0.5, cursor: 'not-allowed' }}
+                    disabled
+                    title="Sắp có"
+                    role="menuitem"
+                  >
+                    <KeyRound className="nav-icon" size={16} /> Đổi mật khẩu
+                  </button>
+                  <button
+                    type="button"
+                    className="nav-item w-full"
+                    style={{ borderLeft: 'none', opacity: 0.5, cursor: 'not-allowed' }}
+                    disabled
+                    title="Sắp có"
+                    role="menuitem"
+                  >
+                    <MonitorSmartphone className="nav-icon" size={16} /> Phiên đăng nhập
+                  </button>
+                  <div style={{ height: 1, background: 'var(--rule)', margin: '6px -6px' }} />
+                  <button
+                    type="button"
+                    onClick={onLogout}
+                    className="nav-item w-full"
+                    style={{ borderLeft: 'none', color: 'var(--danger)' }}
+                    role="menuitem"
+                  >
+                    <LogOut className="nav-icon" size={16} style={{ color: 'var(--danger)' }} /> Đăng xuất
+                  </button>
+                </div>
+              </>
             )}
           </div>
         </div>
       </header>
-      <main className="flex-1">
-        <Outlet />
-      </main>
+
+      <div className="flex" style={{ minHeight: 'calc(100vh - var(--header-h))' }}>
+        {/* SIDEBAR — desktop */}
+        <aside
+          className="bg-paper-deep border-r flex-shrink-0 hidden lg:block"
+          style={{
+            width: 248,
+            borderColor: 'var(--rule)',
+            padding: '0 16px 24px',
+            height: 'calc(100vh - var(--header-h))',
+            position: 'sticky',
+            top: 'var(--header-h)',
+            overflowY: 'auto',
+          }}
+        >
+          <Sidebar role={user.role} pathname={pathname} />
+        </aside>
+
+        {/* SIDEBAR — mobile drawer */}
+        {mobileOpen && (
+          <>
+            <div className="backdrop lg:hidden" onClick={() => setMobileOpen(false)} aria-hidden="true" />
+            <aside
+              className="bg-paper-deep border-r lg:hidden"
+              style={{
+                width: 280,
+                borderColor: 'var(--rule)',
+                padding: '0 16px 24px',
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                bottom: 0,
+                zIndex: 50,
+                overflowY: 'auto',
+              }}
+            >
+              <div className="flex items-center justify-between" style={{ height: 64 }}>
+                <div className="flex items-center" style={{ gap: 12 }}>
+                  <div className="brand-mark" aria-hidden="true" />
+                  <span className="wordmark">{branding?.app_name ?? 'QLCV'}</span>
+                </div>
+                <button className="icon-btn" aria-label="Đóng menu" onClick={() => setMobileOpen(false)}>
+                  <X size={20} />
+                </button>
+              </div>
+              <Sidebar role={user.role} pathname={pathname} onNavigate={() => setMobileOpen(false)} />
+            </aside>
+          </>
+        )}
+
+        {/* CONTENT */}
+        <main className="flex-1" style={{ padding: '0 var(--main-pad-x) 40px', minWidth: 0 }}>
+          <div style={{ maxWidth: 1600, margin: '0 auto' }}>
+            <Outlet />
+          </div>
+        </main>
+      </div>
     </div>
+  );
+}
+
+function Sidebar({
+  role,
+  pathname,
+  onNavigate,
+}: {
+  role: Role;
+  pathname: string;
+  onNavigate?: () => void;
+}) {
+  return (
+    <nav aria-label="Điều hướng chính">
+      {NAV_GROUPS.map((group) => {
+        const items = group.items.filter((it) => !it.managerOnly || role === 'manager');
+        if (items.length === 0) return null;
+        return (
+          <div key={group.title}>
+            <div className="eyebrow" style={{ margin: '24px 0 12px' }}>
+              {group.title}
+            </div>
+            <div className="flex flex-col" style={{ gap: 2 }}>
+              {items.map((item) => {
+                const Icon = item.icon;
+                const subActive = item.subs?.some((s) => pathname === s.to);
+                const active = pathname === item.to || subActive;
+                return (
+                  <div key={item.to}>
+                    <Link
+                      to={item.to}
+                      onClick={onNavigate}
+                      className="nav-item"
+                      data-active={active ? 'true' : undefined}
+                    >
+                      <Icon className="nav-icon" size={18} strokeWidth={1.5} />
+                      <span>{item.label}</span>
+                    </Link>
+                    {item.subs && (
+                      <div>
+                        {item.subs.map((sub) => (
+                          <Link
+                            key={sub.to}
+                            to={sub.to}
+                            onClick={onNavigate}
+                            className="nav-sub"
+                            data-active={pathname === sub.to ? 'true' : undefined}
+                          >
+                            {sub.label}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -134,11 +434,10 @@ interface UnitItem {
   color: string;
 }
 
-/** Dropdown chuyển view Tất cả / GDNN / DVDL (B3a). "Tất cả" chỉ Quản lý thấy. */
-function UnitViewSwitcher({ role }: { role: Role }) {
+/** Segmented control chuyển view Tất cả / đơn vị (B3a). "Tất cả" chỉ Quản lý. */
+function UnitViewSeg({ role }: { role: Role }) {
   const view = useUnitView((s) => s.view);
   const setView = useUnitView((s) => s.setView);
-  const [open, setOpen] = useState(false);
 
   const { data } = useQuery({
     queryKey: ['units'],
@@ -156,76 +455,33 @@ function UnitViewSwitcher({ role }: { role: Role }) {
     }
   }, [role, view, units, setView]);
 
-  const current = view === 'all' ? null : units.find((u) => u.id === view);
-  const label = view === 'all' ? 'Tất cả đơn vị' : (current?.short_name ?? current?.code ?? 'Đơn vị');
-
-  function choose(v: UnitView) {
-    setView(v);
-    setOpen(false);
+  function unitTone(code: string): string | undefined {
+    const c = code.toLowerCase();
+    if (c.includes('gdnn')) return 'gdnn';
+    if (c.includes('dvdl')) return 'dvdl';
+    return undefined;
   }
 
   return (
-    <div className="relative">
-      <button
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-        onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}
-        className="flex items-center gap-2 rounded-md border border-slate-300 px-2.5 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
-      >
-        {current && (
-          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: current.color }} />
-        )}
-        {label}
-        <ChevronDown size={14} className="text-slate-400" />
-      </button>
-      {open && (
-        <>
-          <button
-            type="button"
-            aria-label="Đóng"
-            className="fixed inset-0 z-10 cursor-default"
-            onClick={() => setOpen(false)}
-          />
-          <div role="menu" className="absolute right-0 z-20 mt-1 w-48 overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-lg">
-            {role === 'manager' && (
-              <ViewOption active={view === 'all'} onClick={() => choose('all')}>
-                Tất cả đơn vị
-              </ViewOption>
-            )}
-            {units.map((u) => (
-              <ViewOption key={u.id} active={view === u.id} onClick={() => choose(u.id)}>
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: u.color }} />
-                {u.short_name ?? u.code}
-              </ViewOption>
-            ))}
-          </div>
-        </>
+    <div className="seg hidden md:inline-flex" role="tablist" aria-label="Chọn đơn vị">
+      {role === 'manager' && (
+        <button
+          data-active={view === 'all' ? 'true' : undefined}
+          onClick={() => setView('all' as UnitView)}
+        >
+          Tất cả
+        </button>
       )}
+      {units.map((u) => (
+        <button
+          key={u.id}
+          data-active={view === u.id ? 'true' : undefined}
+          data-unit={unitTone(u.code)}
+          onClick={() => setView(u.id)}
+        >
+          {u.short_name ?? u.code}
+        </button>
+      ))}
     </div>
-  );
-}
-
-function ViewOption({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50 ${
-        active ? 'font-semibold text-amber-600' : 'text-slate-700'
-      }`}
-    >
-      {children}
-      {active && <Check size={14} className="ml-auto" />}
-    </button>
   );
 }

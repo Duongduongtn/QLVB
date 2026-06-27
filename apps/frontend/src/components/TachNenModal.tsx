@@ -13,10 +13,9 @@ import { type UnitLite } from '~/components/sign-ui';
  */
 
 type Kind = 'seal' | 'signature';
-const CHECKER = 'bg-[repeating-conic-gradient(#f1f5f9_0%_25%,#fff_0%_50%)] bg-[length:16px_16px]';
-const fieldClass =
-  'w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100';
-const labelClass = 'mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500';
+// Nền caro preview "đã tách" — dùng token giấy thay màu hex Tailwind.
+const CHECKER_BG =
+  'repeating-conic-gradient(var(--light-graphite) 0% 25%, var(--paper-raised) 0% 50%)';
 
 function errMsg(error: unknown, fallback: string): string {
   return (error as ApiErrorEnvelope | undefined)?.error?.message ?? fallback;
@@ -209,27 +208,44 @@ export function TachNenModal({
 
   return (
     <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto p-4 sm:p-8">
-      <button type="button" aria-label="Đóng" onClick={onClose} className="fixed inset-0 bg-slate-900/40" />
-      <div className="relative z-10 w-full max-w-4xl rounded-xl bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b px-6 py-4">
+      <button type="button" aria-label="Đóng" onClick={onClose} className="backdrop" />
+      <div
+        className="card relative z-10 w-full max-w-4xl"
+        style={{ boxShadow: '0 20px 60px oklch(18% 0.02 95 / 0.28)' }}
+      >
+        <div
+          className="flex items-center justify-between"
+          style={{ padding: '16px 24px', borderBottom: '1px solid var(--rule)' }}
+        >
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">Mộc &amp; Chữ ký</p>
-            <h3 className="text-lg font-semibold text-slate-800">
+            <p className="eyebrow">Mộc &amp; Chữ ký</p>
+            <h3 className="section-title" style={{ marginTop: 2 }}>
               {isSeal ? 'Tải & tách nền mộc' : 'Tải & tách nền chữ ký'}
             </h3>
-            <p className="mt-0.5 text-xs text-slate-500">
+            <p className="cell-meta" style={{ marginTop: 2, textTransform: 'none', letterSpacing: 0 }}>
               {isSeal
                 ? 'Mộc đỏ tách nền bằng AI (rembg/U2Net), giữ nguyên màu đỏ gốc'
                 : 'Chữ ký tách nền bằng OpenCV threshold, giữ nét bút mảnh'}
             </p>
           </div>
-          <button type="button" onClick={onClose} className="flex items-center gap-1 rounded-md px-2 py-1 text-sm text-slate-500 hover:bg-slate-100">
+          <button type="button" onClick={onClose} className="btn-ghost">
             <ArrowLeft size={15} /> Quay lại
           </button>
         </div>
 
         {err && (
-          <div role="alert" className="mx-6 mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div
+            role="alert"
+            style={{
+              margin: '16px 24px 0',
+              background: 'var(--danger-soft)',
+              color: 'var(--danger)',
+              border: '1px solid var(--rule)',
+              borderRadius: 6,
+              padding: '8px 12px',
+              fontSize: '0.85rem',
+            }}
+          >
             {err}
           </div>
         )}
@@ -239,11 +255,12 @@ export function TachNenModal({
           <div className="space-y-4">
             <label
               htmlFor="bg_file"
-              className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center hover:border-amber-300"
+              className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed bg-paper-deep px-6 py-8 text-center"
+              style={{ borderColor: 'var(--rule-strong)' }}
             >
-              <UploadCloud size={32} className="text-amber-500" strokeWidth={1.5} />
-              <span className="text-sm font-medium text-slate-700">Bấm để chọn ảnh chụp giấy</span>
-              <span className="text-xs text-slate-400">
+              <UploadCloud size={32} style={{ color: 'var(--kinpaku-deep)' }} strokeWidth={1.5} />
+              <span className="text-sm font-medium text-ink-body">Bấm để chọn ảnh chụp giấy</span>
+              <span className="text-xs text-ink-faint">
                 PNG/JPG ≤ {isSeal ? '5MB' : '2MB'} · ảnh lớn tự thu nhỏ
               </span>
               <input id="bg_file" type="file" accept="image/png,image/jpeg" className="hidden" onChange={onPickFile} />
@@ -252,8 +269,10 @@ export function TachNenModal({
             {isSeal ? (
               <>
                 <div>
-                  <label className={labelClass} htmlFor="m_unit">Đơn vị (gắn cố định)</label>
-                  <select id="m_unit" className={fieldClass} value={unitId} onChange={(e) => setUnitId(e.target.value)}>
+                  <label className="field-label" htmlFor="m_unit">
+                    Đơn vị (gắn cố định)
+                  </label>
+                  <select id="m_unit" className="text-input" value={unitId} onChange={(e) => setUnitId(e.target.value)}>
                     {units.map((u) => (
                       <option key={u.id} value={u.id}>
                         {u.short_name ?? u.full_name}
@@ -262,12 +281,16 @@ export function TachNenModal({
                   </select>
                 </div>
                 <div>
-                  <label className={labelClass} htmlFor="m_name">Tên mộc</label>
-                  <input id="m_name" className={fieldClass} placeholder="VD: Mộc tròn GDNN" value={name} onChange={(e) => setName(e.target.value)} />
+                  <label className="field-label" htmlFor="m_name">
+                    Tên mộc
+                  </label>
+                  <input id="m_name" className="text-input" placeholder="VD: Mộc tròn GDNN" value={name} onChange={(e) => setName(e.target.value)} />
                 </div>
                 <div>
-                  <label className={labelClass} htmlFor="m_type">Loại mộc</label>
-                  <select id="m_type" className={fieldClass} value={sealType} onChange={(e) => setSealType(e.target.value)}>
+                  <label className="field-label" htmlFor="m_type">
+                    Loại mộc
+                  </label>
+                  <select id="m_type" className="text-input" value={sealType} onChange={(e) => setSealType(e.target.value)}>
                     <option value="round">Mộc tròn</option>
                     <option value="hanging">Mộc treo</option>
                     <option value="overlap">Mộc giáp lai</option>
@@ -277,16 +300,22 @@ export function TachNenModal({
             ) : (
               <>
                 <div>
-                  <label className={labelClass} htmlFor="g_name">Họ tên người ký</label>
-                  <input id="g_name" className={fieldClass} placeholder="VD: Nguyễn Văn A" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+                  <label className="field-label" htmlFor="g_name">
+                    Họ tên người ký
+                  </label>
+                  <input id="g_name" className="text-input" placeholder="VD: Nguyễn Văn A" value={fullName} onChange={(e) => setFullName(e.target.value)} />
                 </div>
                 <div>
-                  <label className={labelClass} htmlFor="g_title">Chức danh</label>
-                  <input id="g_title" className={fieldClass} placeholder="VD: Giám đốc" value={title} onChange={(e) => setTitle(e.target.value)} />
+                  <label className="field-label" htmlFor="g_title">
+                    Chức danh
+                  </label>
+                  <input id="g_title" className="text-input" placeholder="VD: Giám đốc" value={title} onChange={(e) => setTitle(e.target.value)} />
                 </div>
                 <div>
-                  <label className={labelClass} htmlFor="g_unit">Đơn vị mặc định</label>
-                  <select id="g_unit" className={fieldClass} value={unitId} onChange={(e) => setUnitId(e.target.value)}>
+                  <label className="field-label" htmlFor="g_unit">
+                    Đơn vị mặc định
+                  </label>
+                  <select id="g_unit" className="text-input" value={unitId} onChange={(e) => setUnitId(e.target.value)}>
                     <option value="">— Không gán —</option>
                     {units.map((u) => (
                       <option key={u.id} value={u.id}>
@@ -302,8 +331,10 @@ export function TachNenModal({
             {!isSeal ? (
               <div>
                 <div className="mb-1.5 flex items-center justify-between">
-                  <label className={labelClass + ' mb-0'} htmlFor="g_thr">Ngưỡng tách nền</label>
-                  <span className="font-mono text-sm text-slate-600">{threshold}%</span>
+                  <label className="field-label" style={{ marginBottom: 0 }} htmlFor="g_thr">
+                    Ngưỡng tách nền
+                  </label>
+                  <span className="cell-mono">{threshold}%</span>
                 </div>
                 <input
                   id="g_thr"
@@ -314,33 +345,37 @@ export function TachNenModal({
                   onChange={(e) => setThreshold(Number(e.target.value))}
                   onMouseUp={() => sourceKey && void runBgRemoval({ useSource: true })}
                   onTouchEnd={() => sourceKey && void runBgRemoval({ useSource: true })}
-                  className="w-full accent-amber-500"
+                  className="w-full"
+                  style={{ accentColor: 'var(--kinpaku)' }}
                 />
-                <p className="mt-1 text-xs text-slate-400">
+                <p className="mt-1 text-xs text-ink-faint">
                   Kéo rồi thả để xem lại preview. Tách thất bại → lưu ảnh đã tách sẵn.
                 </p>
               </div>
             ) : (
-              <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">
+              <p
+                className="rounded-md px-3 py-2 text-xs text-ink-muted"
+                style={{ background: 'var(--paper-deep)' }}
+              >
                 Mộc dùng AI (rembg/U2Net) tự tách nền, không cần chỉnh ngưỡng.
               </p>
             )}
           </div>
 
           {/* Cột phải: preview before/after */}
-          <div className="rounded-lg border border-slate-200 p-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Xem trước</p>
+          <div className="rounded-lg border border-rule p-4">
+            <p className="eyebrow mb-3">Xem trước</p>
             <div className="grid grid-cols-2 gap-3">
               <PreviewBox label="Ảnh gốc">
                 {originalUrl ? (
                   <img src={originalUrl} alt="Ảnh gốc" className="max-h-full max-w-full object-contain" />
                 ) : (
-                  <span className="text-xs text-slate-400">Chưa có ảnh</span>
+                  <span className="text-xs text-ink-faint">Chưa có ảnh</span>
                 )}
               </PreviewBox>
               <PreviewBox label="Đã tách nền" checker>
                 {phase === 'processing' ? (
-                  <span className="text-xs text-slate-400">Đang xử lý…</span>
+                  <span className="text-xs text-ink-faint">Đang xử lý…</span>
                 ) : phase === 'preview' && resultKey ? (
                   <img
                     src={`/api/bg-removal/asset?key=${encodeURIComponent(resultKey)}`}
@@ -348,15 +383,20 @@ export function TachNenModal({
                     className="max-h-full max-w-full object-contain"
                   />
                 ) : phase === 'failed' ? (
-                  <span className="px-2 text-center text-xs text-red-500">Tách nền thất bại</span>
+                  <span className="px-2 text-center text-xs" style={{ color: 'var(--danger)' }}>
+                    Tách nền thất bại
+                  </span>
                 ) : (
-                  <span className="text-xs text-slate-400">—</span>
+                  <span className="text-xs text-ink-faint">—</span>
                 )}
               </PreviewBox>
             </div>
 
-            <div className="mt-4 flex items-start gap-2 rounded-md bg-sky-50 px-3 py-2 text-xs text-sky-800">
-              <Sparkles size={14} className="mt-0.5 shrink-0 text-sky-500" />
+            <div
+              className="mt-4 flex items-start gap-2 rounded-md px-3 py-2 text-xs"
+              style={{ background: 'var(--info-soft)', color: 'var(--info)' }}
+            >
+              <Sparkles size={14} className="mt-0.5 shrink-0" style={{ color: 'var(--info)' }} />
               Xử lý ≤ 5 giây/file. Duyệt bằng mắt — không đo chất lượng tự động.
             </div>
 
@@ -364,7 +404,8 @@ export function TachNenModal({
               type="button"
               onClick={() => save(true)}
               disabled={saving || phase !== 'preview'}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-md bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500 disabled:opacity-50"
+              className="btn-primary mt-4"
+              style={{ width: '100%', justifyContent: 'center', opacity: saving || phase !== 'preview' ? 0.5 : 1 }}
             >
               <Save size={15} /> Lưu phiên bản đã tách nền
             </button>
@@ -373,7 +414,8 @@ export function TachNenModal({
                 type="button"
                 onClick={() => save(false)}
                 disabled={saving}
-                className="mt-2 w-full rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                className="btn-secondary mt-2"
+                style={{ width: '100%', justifyContent: 'center', opacity: saving ? 0.5 : 1 }}
               >
                 Lưu ảnh gốc (đã tách sẵn)
               </button>
@@ -396,11 +438,14 @@ function PreviewBox({
 }) {
   return (
     <div>
-      <p className="mb-1.5 text-center text-xs text-slate-400">{label}</p>
+      <p className="mb-1.5 text-center text-xs text-ink-faint">{label}</p>
       <div
-        className={`flex aspect-square items-center justify-center rounded-md border border-slate-200 p-2 ${
-          checker ? CHECKER : 'bg-slate-50'
-        }`}
+        className="flex aspect-square items-center justify-center rounded-md border border-rule p-2"
+        style={
+          checker
+            ? { background: CHECKER_BG, backgroundSize: '16px 16px' }
+            : { background: 'var(--paper-deep)' }
+        }
       >
         {children}
       </div>

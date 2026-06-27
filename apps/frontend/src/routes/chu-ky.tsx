@@ -1,17 +1,18 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, X } from 'lucide-react';
+import { PenTool, Plus, Save, UploadCloud } from 'lucide-react';
 
 import { api, type ApiErrorEnvelope } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
 import { fmtDate } from '~/lib/format';
-import { MocChuKyTabs } from '~/components/MocChuKyTabs';
+import { PageHeader, Pill, EmptyState, InfoRow } from '~/components/ui';
+import { Drawer } from '~/components/Drawer';
 import { TachNenModal } from '~/components/TachNenModal';
-import { StatusPill, UnitPill, type UnitLite } from '~/components/sign-ui';
+import { UnitPill, type UnitLite } from '~/components/sign-ui';
 
 export const Route = createFileRoute('/chu-ky')({
   component: ChuKyPage,
@@ -27,6 +28,8 @@ interface SignatureRow {
   is_active: boolean;
   created_at: string;
 }
+
+const BREADCRUMB = [{ label: 'Mộc & Chữ ký' }];
 
 function errMsg(error: unknown, fallback: string): string {
   return (error as ApiErrorEnvelope | undefined)?.error?.message ?? fallback;
@@ -64,51 +67,57 @@ function ChuKyPage() {
 
   if (me && me.role !== 'manager') {
     return (
-      <div className="mx-auto max-w-6xl px-6 py-10">
-        <p className="text-slate-600">Trang này chỉ dành cho Quản lý.</p>
-      </div>
+      <>
+        <PageHeader breadcrumb={BREADCRUMB} title="Quản lý chữ ký" />
+        <div className="card" style={{ padding: 24, color: 'var(--ink-muted)', fontSize: '0.9rem' }}>
+          Trang này chỉ dành cho Quản lý.
+        </div>
+      </>
     );
   }
   if (!me) {
     return (
-      <div className="mx-auto max-w-6xl px-6 py-10">
-        <p className="text-slate-500">Đang tải…</p>
-      </div>
+      <>
+        <PageHeader breadcrumb={BREADCRUMB} title="Quản lý chữ ký" />
+        <div className="card" style={{ padding: 24, color: 'var(--ink-faint)', fontSize: '0.9rem' }}>
+          Đang tải…
+        </div>
+      </>
     );
   }
 
   const sigs = sigsQuery.data?.items ?? [];
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">Mộc &amp; Chữ ký</p>
-          <h2 className="text-2xl font-semibold text-slate-800">Quản lý chữ ký</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Chữ ký người ký công văn. Một người có thể có nhiều chữ ký (cũ/mới).
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="flex items-center gap-2 rounded-md bg-amber-400 px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500"
-        >
-          <Plus size={16} />
-          Tải chữ ký mới
-        </button>
-      </div>
-
-      <MocChuKyTabs />
+    <>
+      <PageHeader
+        breadcrumb={BREADCRUMB}
+        title="Quản lý chữ ký"
+        subhead="Chữ ký người ký công văn. Một người có thể có nhiều chữ ký (cũ/mới)."
+        actions={
+          <button type="button" className="btn-primary" onClick={() => setCreating(true)}>
+            <Plus size={14} /> Tải chữ ký mới
+          </button>
+        }
+      />
 
       {sigsQuery.isLoading ? (
-        <p className="py-10 text-center text-slate-400">Đang tải…</p>
+        <div className="card" style={{ padding: 24, textAlign: 'center', color: 'var(--ink-faint)' }}>
+          Đang tải…
+        </div>
       ) : sigs.length === 0 ? (
-        <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-white py-12 text-center text-slate-400">
-          Chưa có chữ ký nào. Bấm “Tải chữ ký mới” để tải lên.
+        <div className="card">
+          <EmptyState
+            icon={PenTool}
+            title="Chưa có chữ ký nào"
+            desc="Bấm “Tải chữ ký mới” để tải lên và tách nền."
+          />
         </div>
       ) : (
-        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div
+          className="grid"
+          style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}
+        >
           {sigs.map((s) => (
             <SignatureCard
               key={s.id}
@@ -122,9 +131,17 @@ function ChuKyPage() {
 
       {creating && <TachNenModal kind="signature" units={units} onClose={() => setCreating(false)} />}
       {selected && (
-        <EditDrawer signature={selected} units={units} onClose={() => setSelected(null)} />
+        <EditDrawer
+          signature={selected}
+          units={units}
+          onReupload={() => {
+            setSelected(null);
+            setCreating(true);
+          }}
+          onClose={() => setSelected(null)}
+        />
       )}
-    </div>
+    </>
   );
 }
 
@@ -141,53 +158,51 @@ function SignatureCard({
     <button
       type="button"
       onClick={onClick}
-      className={`flex flex-col rounded-lg border border-slate-200 bg-white p-4 text-left transition hover:border-amber-300 hover:shadow-sm ${
-        sig.is_active ? '' : 'opacity-60'
-      }`}
+      className="card"
+      style={{
+        padding: 18,
+        textAlign: 'left',
+        cursor: 'pointer',
+        opacity: sig.is_active ? 1 : 0.6,
+        display: 'flex',
+        flexDirection: 'column',
+      }}
     >
-      <div className="mb-3 flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between" style={{ gap: 8, marginBottom: 14 }}>
         <UnitPill unit={unit} />
-        <StatusPill active={sig.is_active} />
+        <Pill variant={sig.is_active ? 'success' : 'draft'} dot={sig.is_active}>
+          {sig.is_active ? 'Đang dùng' : 'Ngừng dùng'}
+        </Pill>
       </div>
-      <div className="mb-3 flex h-24 items-center justify-center rounded-md border border-slate-100 bg-white p-2">
+      <div
+        className="flex items-center justify-center"
+        style={{
+          height: 96,
+          borderRadius: 6,
+          border: '1px solid var(--rule)',
+          background: 'var(--paper-raised)',
+          marginBottom: 14,
+          padding: 8,
+        }}
+      >
         <img
           src={`/api/signatures/${sig.id}/image`}
           alt={`Chữ ký ${sig.full_name}`}
-          className="max-h-full max-w-full object-contain"
+          style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }}
         />
       </div>
-      <p className="truncate font-semibold text-slate-800" title={sig.full_name}>
+      <div
+        className="truncate"
+        style={{ fontWeight: 600, color: 'var(--ink)', marginBottom: 4 }}
+        title={sig.full_name}
+      >
         {sig.full_name}
         {sig.title ? ` — ${sig.title}` : ''}
-      </p>
-      <p className="mt-0.5 text-xs text-slate-500">Tải lên {fmtDate(sig.created_at)}</p>
+      </div>
+      <div className="cell-meta">Tải lên {fmtDate(sig.created_at)}</div>
     </button>
   );
 }
-
-function Drawer({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-40">
-      <button type="button" aria-label="Đóng" onClick={onClose} className="absolute inset-0 bg-slate-900/30" />
-      <div className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b px-6 py-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">Chữ ký · Chỉnh sửa</p>
-            <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
-          </div>
-          <button type="button" onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100">
-            <X size={20} />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-const fieldClass =
-  'w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100';
-const labelClass = 'mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500';
 
 const createSchema = z.object({
   full_name: z.string().trim().min(1, 'Nhập họ tên').max(150),
@@ -203,10 +218,12 @@ type EditValues = CreateValues;
 function EditDrawer({
   signature,
   units,
+  onReupload,
   onClose,
 }: {
   signature: SignatureRow;
   units: UnitLite[];
+  onReupload: () => void;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -260,81 +277,129 @@ function EditDrawer({
   });
 
   return (
-    <Drawer title={signature.full_name} onClose={onClose}>
-      {serverError && (
-        <div role="alert" className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {serverError}
-        </div>
-      )}
-      <div className="mb-5 flex h-24 items-center justify-center rounded-md border border-slate-200 bg-white p-3">
-        <img
-          src={`/api/signatures/${signature.id}/image`}
-          alt={signature.full_name}
-          className="max-h-full max-w-full object-contain"
-        />
-      </div>
-
-      <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
-        <div>
-          <label className={labelClass} htmlFor="eg_name">Họ tên người ký</label>
-          <input id="eg_name" className={fieldClass} {...register('full_name')} />
-          {errors.full_name && <p className="mt-1 text-xs text-red-600">{errors.full_name.message}</p>}
-        </div>
-        <div>
-          <label className={labelClass} htmlFor="eg_title">Chức danh</label>
-          <input id="eg_title" className={fieldClass} {...register('title')} />
-        </div>
-        <div>
-          <label className={labelClass} htmlFor="eg_unit">Đơn vị mặc định</label>
-          <select id="eg_unit" className={fieldClass} {...register('default_unit_id')}>
-            <option value="">— Không gán —</option>
-            {units.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.short_name ?? u.full_name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="space-y-2 rounded-md border border-slate-200 p-4 text-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-slate-500">Trạng thái</span>
-            <StatusPill active={signature.is_active} />
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-slate-500">Ngày tải lên</span>
-            <span className="text-slate-700">{fmtDate(signature.created_at)}</span>
-          </div>
-        </div>
-
-        <p className="text-xs text-slate-400">
-          Đơn vị mặc định đổi được (1 người ký cho cả 2 đơn vị). Không xoá cứng — dùng “Ngừng dùng” để công văn cũ vẫn hiển thị đúng chữ ký.
-        </p>
-
-        <div className="flex items-center justify-end gap-2 pt-1">
+    <Drawer
+      open
+      onClose={onClose}
+      eyebrow="Chữ ký · Chỉnh sửa"
+      title={signature.full_name}
+      width={460}
+      actions={
+        <>
           <button
             type="button"
+            className="btn-secondary"
+            style={{
+              marginRight: 'auto',
+              color: signature.is_active ? 'var(--danger)' : 'var(--success)',
+            }}
             onClick={() => toggleActive.mutate()}
             disabled={toggleActive.isPending}
-            className={`mr-auto rounded-md border px-3 py-2 text-sm disabled:opacity-60 ${
-              signature.is_active
-                ? 'border-red-200 text-red-600 hover:bg-red-50'
-                : 'border-green-200 text-green-700 hover:bg-green-50'
-            }`}
           >
             {signature.is_active ? 'Ngừng dùng' : 'Kích hoạt'}
           </button>
-          <button type="button" onClick={onClose} className="rounded-md border border-slate-300 px-4 py-2 text-sm">
+          <button type="button" className="btn-secondary" onClick={onClose}>
             Huỷ
           </button>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="rounded-md bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500 disabled:opacity-60"
-          >
-            Lưu
+          <button type="submit" form="signature-form" className="btn-primary" disabled={isSubmitting}>
+            <Save size={14} /> Lưu
           </button>
+        </>
+      }
+    >
+      <form
+        id="signature-form"
+        onSubmit={handleSubmit(onSubmit)}
+        className="flex flex-col"
+        style={{ gap: 18 }}
+      >
+      {serverError && (
+        <div
+          role="alert"
+          style={{
+            background: 'var(--danger-soft)',
+            color: 'var(--danger)',
+            border: '1px solid var(--rule)',
+            borderRadius: 6,
+            padding: '8px 12px',
+            fontSize: '0.85rem',
+          }}
+        >
+          {serverError}
         </div>
+      )}
+
+      <div
+        className="flex items-center justify-center"
+        style={{
+          height: 110,
+          borderRadius: 6,
+          border: '1px solid var(--rule)',
+          background: 'var(--paper-raised)',
+          padding: 12,
+        }}
+      >
+        <img
+          src={`/api/signatures/${signature.id}/image`}
+          alt={signature.full_name}
+          style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }}
+        />
+      </div>
+
+      <button
+        type="button"
+        className="btn-secondary"
+        style={{ width: '100%', justifyContent: 'center' }}
+        onClick={onReupload}
+      >
+        <UploadCloud size={14} /> Tải ảnh khác &amp; tách nền lại
+      </button>
+
+      <div>
+        <label className="field-label" htmlFor="eg_name">
+          Họ tên người ký
+        </label>
+        <input id="eg_name" className="text-input" {...register('full_name')} />
+        {errors.full_name && (
+          <p style={{ marginTop: 4, fontSize: '0.75rem', color: 'var(--danger)' }}>
+            {errors.full_name.message}
+          </p>
+        )}
+      </div>
+
+      <div>
+        <label className="field-label" htmlFor="eg_title">
+          Chức danh
+        </label>
+        <input id="eg_title" className="text-input" {...register('title')} />
+      </div>
+
+      <div>
+        <label className="field-label" htmlFor="eg_unit">
+          Đơn vị mặc định
+        </label>
+        <select id="eg_unit" className="text-input" {...register('default_unit_id')}>
+          <option value="">— Không gán —</option>
+          {units.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.short_name ?? u.full_name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="card" style={{ padding: 16 }}>
+        <InfoRow label="Trạng thái">
+          <Pill variant={signature.is_active ? 'success' : 'draft'} dot={signature.is_active}>
+            {signature.is_active ? 'Đang dùng' : 'Ngừng dùng'}
+          </Pill>
+        </InfoRow>
+        <InfoRow label="Ngày tải lên">{fmtDate(signature.created_at)}</InfoRow>
+      </div>
+
+      <p className="cell-meta">
+        Đơn vị mặc định đổi được (1 người ký cho cả 2 đơn vị). Không xoá cứng — dùng “Ngừng dùng” để công
+        văn cũ vẫn hiển thị đúng chữ ký.
+      </p>
       </form>
     </Drawer>
   );

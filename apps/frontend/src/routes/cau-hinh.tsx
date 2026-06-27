@@ -1,15 +1,17 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Building2, FileText, ImageUp, Loader2, Plus, X } from 'lucide-react';
+import { FileText, ImageUp, Loader2, Plus, Save } from 'lucide-react';
 
 import { api, type ApiErrorEnvelope } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
 import { useBranding } from '~/lib/branding';
 import { fmtInt } from '~/lib/format';
+import { PageHeader, Pill } from '~/components/ui';
+import { Drawer } from '~/components/Drawer';
 
 export const Route = createFileRoute('/cau-hinh')({
   component: CauHinhPage,
@@ -47,9 +49,37 @@ function errMsg(error: unknown, fallback: string): string {
   return (error as ApiErrorEnvelope | undefined)?.error?.message ?? fallback;
 }
 
-const fieldClass =
-  'w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100';
-const labelClass = 'mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500';
+/** Suy ra biến thể pill từ mã đơn vị (GDNN / DVDL → màu riêng). */
+function unitVariant(code: string): string {
+  const c = code.toUpperCase();
+  if (c.includes('GDNN')) return 'gdnn';
+  if (c.includes('DVDL')) return 'dvdl';
+  return 'info';
+}
+
+/* ---------- Alert nhỏ dùng chung (thành công / lỗi) ---------- */
+function Alert({ kind, children }: { kind: 'error' | 'ok'; children: ReactNode }) {
+  const isErr = kind === 'error';
+  return (
+    <div
+      role={isErr ? 'alert' : 'status'}
+      style={{
+        background: isErr ? 'var(--danger-soft)' : 'var(--success-soft)',
+        color: isErr ? 'var(--danger)' : 'var(--success)',
+        border: `1px solid ${isErr ? 'var(--danger)' : 'var(--success)'}`,
+        borderRadius: 4,
+        padding: '8px 12px',
+        fontSize: '0.85rem',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function FieldError({ children }: { children: ReactNode }) {
+  return <p style={{ marginTop: 4, fontSize: '0.75rem', color: 'var(--danger)' }}>{children}</p>;
+}
 
 type Tab = 'don-vi' | 'so-cong-van' | 'branding';
 
@@ -69,15 +99,18 @@ function CauHinhPage() {
 
   if (me && me.role !== 'manager') {
     return (
-      <div className="mx-auto max-w-5xl px-6 py-10">
-        <p className="text-slate-600">Trang này chỉ dành cho Quản lý.</p>
-      </div>
+      <>
+        <PageHeader breadcrumb={[{ label: 'Cấu hình' }]} title="Cấu hình hệ thống" />
+        <div className="card" style={{ padding: 24 }}>
+          <p className="text-ink-muted">Trang này chỉ dành cho Quản lý.</p>
+        </div>
+      </>
     );
   }
   if (!me) {
     return (
-      <div className="mx-auto max-w-5xl px-6 py-10">
-        <p className="text-slate-500">Đang tải…</p>
+      <div style={{ padding: '40px 0' }}>
+        <p className="text-ink-faint">Đang tải…</p>
       </div>
     );
   }
@@ -85,61 +118,112 @@ function CauHinhPage() {
   const units = unitsQuery.data?.items ?? [];
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-8">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">Cấu hình</p>
-      <h2 className="text-2xl font-semibold text-slate-800">Cấu hình hệ thống</h2>
-      <p className="mt-1 text-sm text-slate-500">
-        Đơn vị, sổ công văn, format số công văn — áp dụng cho công văn đi của từng đơn vị.
-      </p>
+    <>
+      <PageHeader
+        breadcrumb={[{ label: 'Cấu hình' }]}
+        title="Cấu hình hệ thống"
+        subhead="Đơn vị, sổ công văn, format số công văn — áp dụng cho công văn đi của từng đơn vị."
+      />
 
-      <div className="mt-5 flex gap-1 border-b border-slate-200">
-        <TabButton active={tab === 'don-vi'} onClick={() => setTab('don-vi')}>
+      <div className="seg" style={{ marginBottom: 24 }}>
+        <button data-active={tab === 'don-vi' ? 'true' : undefined} onClick={() => setTab('don-vi')}>
           2 Đơn vị
-        </TabButton>
-        <TabButton active={tab === 'so-cong-van'} onClick={() => setTab('so-cong-van')}>
+        </button>
+        <button
+          data-active={tab === 'so-cong-van' ? 'true' : undefined}
+          onClick={() => setTab('so-cong-van')}
+        >
           Sổ công văn
-        </TabButton>
-        <TabButton active={tab === 'branding'} onClick={() => setTab('branding')}>
+        </button>
+        <button data-active={tab === 'branding' ? 'true' : undefined} onClick={() => setTab('branding')}>
           Branding
-        </TabButton>
+        </button>
       </div>
 
       {tab === 'don-vi' && <UnitsTab units={units} loading={unitsQuery.isLoading} />}
       {tab === 'so-cong-van' && <SoCongVanTab units={units} />}
       {tab === 'branding' && <BrandingTab />}
-    </div>
+    </>
   );
 }
 
-function TabButton({
-  active,
-  onClick,
-  children,
+/* ---------- Logo upload box dùng chung (đơn vị + branding) ---------- */
+function LogoBox({
+  src,
+  caption,
+  hasLogo,
+  uploading,
+  onPick,
+  alt,
 }: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
+  src: string;
+  caption: string;
+  hasLogo: boolean;
+  uploading: boolean;
+  onPick: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  alt: string;
 }) {
+  const fileInput = useRef<HTMLInputElement>(null);
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`-mb-px border-b-2 px-4 py-2.5 text-sm font-medium ${
-        active
-          ? 'border-amber-400 text-amber-600'
-          : 'border-transparent text-slate-500 hover:text-slate-700'
-      }`}
+    <div
+      className="flex items-center"
+      style={{
+        gap: 16,
+        padding: 14,
+        borderRadius: 6,
+        background: 'var(--paper-deep)',
+      }}
     >
-      {children}
-    </button>
+      <div
+        className="flex items-center justify-center"
+        style={{
+          width: 64,
+          height: 64,
+          borderRadius: 4,
+          border: '1px solid var(--rule)',
+          background: 'var(--paper-raised)',
+          overflow: 'hidden',
+          flexShrink: 0,
+        }}
+      >
+        {hasLogo ? (
+          <img src={src} alt={alt} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+        ) : (
+          <span style={{ fontSize: '0.7rem', color: 'var(--ink-faint)' }}>Chưa có</span>
+        )}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ fontSize: '0.78rem', color: 'var(--ink-muted)' }}>{caption}</p>
+        <button
+          type="button"
+          onClick={() => fileInput.current?.click()}
+          disabled={uploading}
+          className="btn-secondary"
+          style={{ marginTop: 8 }}
+        >
+          {uploading ? <Loader2 size={15} className="animate-spin" /> : <ImageUp size={15} />}
+          {hasLogo ? 'Đổi logo' : 'Tải logo'}
+        </button>
+        <input
+          ref={fileInput}
+          type="file"
+          accept="image/png,image/jpeg"
+          className="hidden"
+          onChange={onPick}
+        />
+      </div>
+    </div>
   );
 }
 
 /* ─────────────────────────── Tab Đơn vị (B1) ─────────────────────────── */
 function UnitsTab({ units, loading }: { units: Unit[]; loading: boolean }) {
   return (
-    <div className="mt-6 grid gap-6 md:grid-cols-2">
-      {loading && <p className="text-slate-400">Đang tải…</p>}
+    <div
+      className="grid"
+      style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}
+    >
+      {loading && <p className="text-ink-faint">Đang tải…</p>}
       {units.map((u) => (
         <UnitCard key={u.id} unit={u} />
       ))}
@@ -159,7 +243,6 @@ type UnitValues = z.infer<typeof unitSchema>;
 
 function UnitCard({ unit }: { unit: Unit }) {
   const queryClient = useQueryClient();
-  const fileInput = useRef<HTMLInputElement>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [logoVersion, setLogoVersion] = useState(0);
@@ -245,110 +328,93 @@ function UnitCard({ unit }: { unit: Unit }) {
   const hasLogo = unit.logo_file_id !== null;
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-5">
-      <div className="mb-4 flex items-center gap-3">
+    <div className="card" style={{ padding: 24 }}>
+      <div className="flex items-center justify-between" style={{ marginBottom: 18 }}>
+        <div className="flex items-center" style={{ gap: 8, minWidth: 0 }}>
+          <Pill variant={unitVariant(unit.code)} dot>
+            {unit.short_name || unit.code}
+          </Pill>
+          <span className="type-tag">{unit.code}</span>
+        </div>
         <span
-          className="flex h-9 w-9 items-center justify-center rounded-md text-white"
-          style={{ backgroundColor: unit.color }}
+          className="flex items-center"
+          style={{ gap: 6, fontSize: '0.75rem', color: 'var(--ink-muted)' }}
         >
-          <Building2 size={18} />
-        </span>
-        <div>
-          <p className="font-semibold text-slate-800">{unit.short_name || unit.full_name}</p>
-          <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-500">
-            {unit.code}
-          </span>
-        </div>
-      </div>
-
-      <div className="mb-4 flex items-center gap-4 rounded-md bg-slate-50 px-4 py-3">
-        <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded border border-slate-200 bg-white">
-          {hasLogo ? (
-            <img
-              src={`/api/units/${unit.id}/logo?v=${logoVersion}`}
-              alt={`Logo ${unit.code}`}
-              className="h-full w-full object-contain"
-            />
-          ) : (
-            <span className="text-[10px] text-slate-400">Chưa có</span>
-          )}
-        </div>
-        <div className="flex-1">
-          <p className="text-xs text-slate-500">Logo hiển thị trên công văn (PNG/JPG, ≤ 2MB)</p>
-          <button
-            type="button"
-            onClick={() => fileInput.current?.click()}
-            disabled={uploading}
-            className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium hover:bg-white disabled:opacity-60"
-          >
-            {uploading ? <Loader2 size={15} className="animate-spin" /> : <ImageUp size={15} />}
-            {hasLogo ? 'Đổi logo' : 'Tải logo'}
-          </button>
-          <input
-            ref={fileInput}
-            type="file"
-            accept="image/png,image/jpeg"
-            className="hidden"
-            onChange={onPickFile}
+          Mã màu
+          <span
+            title={unit.color}
+            style={{ width: 16, height: 16, borderRadius: 4, background: unit.color, display: 'inline-block' }}
           />
-        </div>
+        </span>
       </div>
 
-      {serverError && (
-        <div role="alert" className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {serverError}
-        </div>
-      )}
-      {okMsg && (
-        <div role="status" className="mb-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
-          {okMsg}
-        </div>
-      )}
+      <div className="flex flex-col" style={{ gap: 14 }}>
+        <LogoBox
+          src={`/api/units/${unit.id}/logo?v=${logoVersion}`}
+          alt={`Logo ${unit.code}`}
+          caption="Logo hiển thị trên công văn (PNG/JPG, ≤ 2MB)"
+          hasLogo={hasLogo}
+          uploading={uploading}
+          onPick={onPickFile}
+        />
 
-      <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-3">
-        <div>
-          <label className={labelClass} htmlFor={`fn_${unit.id}`}>Tên đầy đủ</label>
-          <input id={`fn_${unit.id}`} className={fieldClass} {...register('full_name')} />
-          {errors.full_name && <p className="mt-1 text-xs text-red-600">{errors.full_name.message}</p>}
-        </div>
-        <div>
-          <label className={labelClass} htmlFor={`sn_${unit.id}`}>Tên viết tắt</label>
-          <input id={`sn_${unit.id}`} className={fieldClass} {...register('short_name')} />
-        </div>
-        <div>
-          <label className={labelClass} htmlFor={`ad_${unit.id}`}>Địa chỉ</label>
-          <input id={`ad_${unit.id}`} className={fieldClass} {...register('address')} />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={labelClass} htmlFor={`tc_${unit.id}`}>Mã số thuế</label>
-            <input id={`tc_${unit.id}`} className={fieldClass} {...register('tax_code')} />
-          </div>
-          <div>
-            <label className={labelClass} htmlFor={`ph_${unit.id}`}>Số điện thoại</label>
-            <input id={`ph_${unit.id}`} className={fieldClass} {...register('phone')} />
-          </div>
-        </div>
-        <div>
-          <label className={labelClass} htmlFor={`em_${unit.id}`}>Email</label>
-          <input id={`em_${unit.id}`} className={fieldClass} {...register('email')} />
-          {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>}
-        </div>
+        {serverError && <Alert kind="error">{serverError}</Alert>}
+        {okMsg && <Alert kind="ok">{okMsg}</Alert>}
 
-        <div className="flex items-center justify-between pt-1">
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <span className="h-4 w-4 rounded-full border border-slate-300" style={{ backgroundColor: unit.color }} />
-            Mã màu cố định ({unit.color})
+        <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col" style={{ gap: 14 }}>
+          <div>
+            <label className="field-label" htmlFor={`fn_${unit.id}`}>
+              Tên đầy đủ
+            </label>
+            <input id={`fn_${unit.id}`} className="text-input" {...register('full_name')} />
+            {errors.full_name && <FieldError>{errors.full_name.message}</FieldError>}
           </div>
+          <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label className="field-label" htmlFor={`sn_${unit.id}`}>
+                Tên viết tắt
+              </label>
+              <input id={`sn_${unit.id}`} className="text-input" {...register('short_name')} />
+            </div>
+            <div>
+              <label className="field-label" htmlFor={`tc_${unit.id}`}>
+                Mã số thuế
+              </label>
+              <input id={`tc_${unit.id}`} className="text-input" {...register('tax_code')} />
+            </div>
+          </div>
+          <div>
+            <label className="field-label" htmlFor={`ad_${unit.id}`}>
+              Địa chỉ
+            </label>
+            <input id={`ad_${unit.id}`} className="text-input" {...register('address')} />
+          </div>
+          <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label className="field-label" htmlFor={`ph_${unit.id}`}>
+                Số điện thoại
+              </label>
+              <input id={`ph_${unit.id}`} className="text-input" {...register('phone')} />
+            </div>
+            <div>
+              <label className="field-label" htmlFor={`em_${unit.id}`}>
+                Email
+              </label>
+              <input id={`em_${unit.id}`} className="text-input" {...register('email')} />
+              {errors.email && <FieldError>{errors.email.message}</FieldError>}
+            </div>
+          </div>
+
           <button
             type="submit"
             disabled={isSubmitting || !isDirty}
-            className="rounded-md bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500 disabled:opacity-50"
+            className="btn-primary"
+            style={{ marginTop: 4, alignSelf: 'flex-start', opacity: isSubmitting || !isDirty ? 0.5 : 1 }}
           >
-            Lưu
+            <Save size={14} /> Lưu thay đổi
           </button>
-        </div>
-      </form>
+        </form>
+      </div>
     </div>
   );
 }
@@ -360,7 +426,6 @@ type BrandingValues = z.infer<typeof brandingSchema>;
 function BrandingTab() {
   const queryClient = useQueryClient();
   const { data: branding } = useBranding();
-  const fileInput = useRef<HTMLInputElement>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -427,71 +492,40 @@ function BrandingTab() {
   const hasLogo = !!branding?.logo_file_id;
 
   return (
-    <div className="mt-6 max-w-xl">
-      <div className="rounded-lg border border-slate-200 bg-white p-5">
-        <p className="text-sm text-slate-500">
+    <div className="card" style={{ padding: 24, maxWidth: 560 }}>
+      <div className="flex flex-col" style={{ gap: 16 }}>
+        <p style={{ fontSize: '0.875rem', color: 'var(--ink-muted)' }}>
           Tên ứng dụng và logo hiển thị trên header mọi trang (cả màn hình đăng nhập).
         </p>
 
-        <div className="my-4 flex items-center gap-4 rounded-md bg-slate-50 px-4 py-3">
-          <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded border border-slate-200 bg-white">
-            {hasLogo ? (
-              <img
-                src={`/api/settings/logo?v=${branding?.logo_file_id}`}
-                alt="Logo ứng dụng"
-                className="h-full w-full object-contain"
-              />
-            ) : (
-              <span className="text-[10px] text-slate-400">Chưa có</span>
-            )}
-          </div>
-          <div className="flex-1">
-            <p className="text-xs text-slate-500">Logo header (PNG/JPG, ≤ 2MB)</p>
-            <button
-              type="button"
-              onClick={() => fileInput.current?.click()}
-              disabled={uploading}
-              className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium hover:bg-white disabled:opacity-60"
-            >
-              {uploading ? <Loader2 size={15} className="animate-spin" /> : <ImageUp size={15} />}
-              {hasLogo ? 'Đổi logo' : 'Tải logo'}
-            </button>
-            <input
-              ref={fileInput}
-              type="file"
-              accept="image/png,image/jpeg"
-              className="hidden"
-              onChange={onPickFile}
-            />
-          </div>
-        </div>
+        <LogoBox
+          src={`/api/settings/logo?v=${branding?.logo_file_id}`}
+          alt="Logo ứng dụng"
+          caption="Logo header (PNG/JPG, ≤ 2MB)"
+          hasLogo={hasLogo}
+          uploading={uploading}
+          onPick={onPickFile}
+        />
 
-        {serverError && (
-          <div role="alert" className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-            {serverError}
-          </div>
-        )}
-        {okMsg && (
-          <div role="status" className="mb-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
-            {okMsg}
-          </div>
-        )}
+        {serverError && <Alert kind="error">{serverError}</Alert>}
+        {okMsg && <Alert kind="ok">{okMsg}</Alert>}
 
-        <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-3">
+        <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col" style={{ gap: 16 }}>
           <div>
-            <label className={labelClass} htmlFor="b_name">Tên ứng dụng</label>
-            <input id="b_name" className={fieldClass} {...register('app_name')} />
-            {errors.app_name && <p className="mt-1 text-xs text-red-600">{errors.app_name.message}</p>}
+            <label className="field-label" htmlFor="b_name">
+              Tên ứng dụng (header)
+            </label>
+            <input id="b_name" className="text-input" {...register('app_name')} />
+            {errors.app_name && <FieldError>{errors.app_name.message}</FieldError>}
           </div>
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={isSubmitting || !isDirty}
-              className="rounded-md bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500 disabled:opacity-50"
-            >
-              Lưu
-            </button>
-          </div>
+          <button
+            type="submit"
+            disabled={isSubmitting || !isDirty}
+            className="btn-primary"
+            style={{ alignSelf: 'flex-start', opacity: isSubmitting || !isDirty ? 0.5 : 1 }}
+          >
+            <Save size={14} /> Lưu branding
+          </button>
         </form>
       </div>
     </div>
@@ -551,100 +585,107 @@ function SoCongVanTab({ units }: { units: Unit[] }) {
   const items = typesQuery.data?.items ?? [];
 
   return (
-    <div className="mt-6">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex rounded-md border border-slate-200 bg-slate-50 p-1">
+    <div className="card" style={{ overflow: 'hidden' }}>
+      <div
+        className="flex items-center flex-wrap"
+        style={{ padding: 16, gap: 12, borderBottom: '1px solid var(--rule)' }}
+      >
+        <div className="seg">
           {books.map((b) => (
             <button
               key={b.key}
-              type="button"
+              data-active={b.key === activeKey ? 'true' : undefined}
               onClick={() => switchBook(b.key)}
-              className={`rounded px-3 py-1.5 text-sm font-medium ${
-                b.key === activeKey ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-              }`}
             >
               {b.label}
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="inline-flex items-center gap-1.5 rounded-md bg-amber-400 px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500"
-        >
-          <Plus size={16} />
-          Thêm loại
+        <div className="flex-1" />
+        <button type="button" className="btn-primary" onClick={() => setCreating(true)}>
+          <Plus size={14} /> Thêm loại
         </button>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <table className="w-full text-sm">
-          <thead className="border-b bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+      <table className="qlcv-table">
+        <thead>
+          <tr>
+            <th style={{ paddingLeft: 24 }}>Loại văn bản</th>
+            <th style={{ width: 100 }}>Mã</th>
+            <th>Format số</th>
+            <th style={{ width: 120 }}>Reset</th>
+            <th className="center" style={{ width: 90 }}>
+              Zero-pad
+            </th>
+            <th className="center" style={{ width: 110 }}>
+              STT hiện tại
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {typesQuery.isLoading && (
             <tr>
-              <th className="px-4 py-3 font-medium">Loại văn bản</th>
-              <th className="px-4 py-3 font-medium">Mã</th>
-              <th className="px-4 py-3 font-medium">Format số</th>
-              <th className="px-4 py-3 font-medium">Số kế tiếp</th>
-              <th className="px-4 py-3 font-medium">Reset</th>
+              <td colSpan={6} style={{ textAlign: 'center', padding: '32px 16px' }}>
+                <span className="cell-meta">Đang tải…</span>
+              </td>
             </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {typesQuery.isLoading && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-400">Đang tải…</td>
-              </tr>
-            )}
-            {!typesQuery.isLoading && items.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
-                  Chưa có loại văn bản nào trong sổ này.
-                </td>
-              </tr>
-            )}
-            {items.map((t) => (
-              <tr
-                key={t.id}
-                tabIndex={0}
-                onClick={() => setEditing(t)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setEditing(t);
-                  }
-                }}
-                className={`cursor-pointer hover:bg-amber-50/50 focus:bg-amber-50 focus:outline-none ${
-                  t.is_active ? '' : 'opacity-50'
-                }`}
-              >
-                <td className="px-4 py-3">
-                  <span className="flex items-center gap-2 font-medium text-slate-800">
-                    <FileText size={15} className="text-slate-400" />
-                    {t.name}
-                    {!t.is_active && (
-                      <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">
-                        Ngừng dùng
-                      </span>
-                    )}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-600">
-                    {t.code}
-                  </span>
-                </td>
-                <td className="px-4 py-3 font-mono text-xs text-slate-600">{t.number_format}</td>
-                <td className="px-4 py-3 font-semibold text-slate-700">{fmtInt(t.next_number)}</td>
-                <td className="px-4 py-3 text-slate-500">{RESET_LABEL[t.reset_policy]}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          )}
+          {!typesQuery.isLoading && items.length === 0 && (
+            <tr>
+              <td colSpan={6} style={{ textAlign: 'center', padding: '32px 16px' }}>
+                <span className="cell-meta">Chưa có loại văn bản nào trong sổ này.</span>
+              </td>
+            </tr>
+          )}
+          {items.map((t) => (
+            <tr
+              key={t.id}
+              tabIndex={0}
+              onClick={() => setEditing(t)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setEditing(t);
+                }
+              }}
+              style={{ cursor: 'pointer', opacity: t.is_active ? 1 : 0.5 }}
+            >
+              <td style={{ paddingLeft: 24 }}>
+                <span
+                  className="flex items-center"
+                  style={{ gap: 8, fontWeight: 500, color: 'var(--ink)' }}
+                >
+                  <FileText size={15} style={{ color: 'var(--ink-faint)', flexShrink: 0 }} />
+                  {t.name}
+                  {!t.is_active && (
+                    <span className="type-tag" style={{ textTransform: 'none' }}>
+                      Ngừng dùng
+                    </span>
+                  )}
+                </span>
+              </td>
+              <td>
+                <span className="type-tag">{t.code}</span>
+              </td>
+              <td>
+                <span className="cell-mono">{t.number_format}</span>
+              </td>
+              <td>
+                <span className="cell-meta">{RESET_LABEL[t.reset_policy]}</span>
+              </td>
+              <td style={{ textAlign: 'center' }}>
+                <span className="cell-mono">{t.zero_pad}</span>
+              </td>
+              <td style={{ textAlign: 'center' }}>
+                <span className="cell-mono num">{fmtInt(Math.max(t.next_number - 1, 0))}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
       {creating && <DocTypeDrawer book={book} onClose={() => setCreating(false)} />}
-      {editing && (
-        <DocTypeDrawer book={book} existing={editing} onClose={() => setEditing(null)} />
-      )}
+      {editing && <DocTypeDrawer book={book} existing={editing} onClose={() => setEditing(null)} />}
     </div>
   );
 }
@@ -676,6 +717,7 @@ function DocTypeDrawer({
   const queryClient = useQueryClient();
   const isEdit = !!existing;
   const [serverError, setServerError] = useState<string | null>(null);
+  const formId = existing ? `doctype-form-${existing.id}` : 'doctype-form-new';
 
   const {
     register,
@@ -765,118 +807,123 @@ function DocTypeDrawer({
   }
 
   return (
-    <div className="fixed inset-0 z-40">
-      <button type="button" aria-label="Đóng" onClick={onClose} className="absolute inset-0 bg-slate-900/30" />
-      <div className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b px-6 py-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">
-              {book.label}
-            </p>
-            <h3 className="text-lg font-semibold text-slate-800">
-              {isEdit ? 'Sửa loại văn bản' : 'Thêm loại văn bản'}
-            </h3>
-          </div>
-          <button type="button" onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100">
-            <X size={20} />
+    <Drawer
+      open
+      onClose={onClose}
+      eyebrow={book.label}
+      title={isEdit ? 'Sửa loại văn bản' : 'Thêm loại văn bản'}
+      width={480}
+      actions={
+        <>
+          <button type="button" className="btn-secondary" onClick={onClose}>
+            Huỷ
           </button>
+          <button
+            type="submit"
+            form={formId}
+            disabled={isSubmitting}
+            className="btn-primary"
+            style={{ opacity: isSubmitting ? 0.6 : 1 }}
+          >
+            <Save size={14} /> {isEdit ? 'Lưu' : 'Tạo loại'}
+          </button>
+        </>
+      }
+    >
+      {serverError && <Alert kind="error">{serverError}</Alert>}
+
+      <form
+        id={formId}
+        onSubmit={handleSubmit(onSubmit)}
+        noValidate
+        className="flex flex-col"
+        style={{ gap: 16 }}
+      >
+        <div className="grid" style={{ gridTemplateColumns: '2fr 1fr', gap: 12 }}>
+          <div>
+            <label className="field-label" htmlFor="d_name">
+              Tên loại văn bản
+            </label>
+            <input id="d_name" className="text-input" placeholder="vd: Kế hoạch" {...register('name')} />
+            {errors.name && <FieldError>{errors.name.message}</FieldError>}
+          </div>
+          <div>
+            <label className="field-label" htmlFor="d_code">
+              Mã viết tắt
+            </label>
+            <input id="d_code" className="text-input" placeholder="KH" {...register('code')} />
+            {errors.code && <FieldError>{errors.code.message}</FieldError>}
+          </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5">
-          {serverError && (
-            <div role="alert" className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {serverError}
+        <div>
+          <label className="field-label" htmlFor="d_fmt">
+            Format số
+          </label>
+          <input id="d_fmt" className="text-input font-mono" {...register('number_format')} />
+          <p className="cell-meta" style={{ marginTop: 6 }}>
+            Biến: {'{STT}'} {'{NĂM}'} {'{THÁNG}'} {'{ĐƠN VỊ}'} {'{LOẠI}'} — bắt buộc có {'{STT}'}.
+          </p>
+          {errors.number_format && <FieldError>{errors.number_format.message}</FieldError>}
+        </div>
+
+        <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div>
+            <label className="field-label" htmlFor="d_reset">
+              Chính sách reset
+            </label>
+            <select id="d_reset" className="text-input" {...register('reset_policy')}>
+              <option value="year">Theo năm</option>
+              <option value="month">Theo tháng</option>
+              <option value="none">Không reset</option>
+            </select>
+          </div>
+          <div>
+            <label className="field-label" htmlFor="d_pad">
+              Độ rộng STT (zero-pad)
+            </label>
+            <input id="d_pad" type="number" min={0} max={10} className="text-input" {...register('zero_pad')} />
+          </div>
+        </div>
+
+        <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          {!isEdit && (
+            <div>
+              <label className="field-label" htmlFor="d_start">
+                STT bắt đầu
+              </label>
+              <input id="d_start" type="number" min={1} className="text-input" {...register('start_stt')} />
             </div>
           )}
-          <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-2">
-                <label className={labelClass} htmlFor="d_name">Tên loại văn bản</label>
-                <input id="d_name" className={fieldClass} placeholder="vd: Kế hoạch" {...register('name')} />
-                {errors.name && <p className="mt-1 text-xs text-red-600">{errors.name.message}</p>}
-              </div>
-              <div>
-                <label className={labelClass} htmlFor="d_code">Mã viết tắt</label>
-                <input id="d_code" className={fieldClass} placeholder="KH" {...register('code')} />
-                {errors.code && <p className="mt-1 text-xs text-red-600">{errors.code.message}</p>}
-              </div>
-            </div>
-
-            <div>
-              <label className={labelClass} htmlFor="d_fmt">Format số</label>
-              <input id="d_fmt" className={`${fieldClass} font-mono`} {...register('number_format')} />
-              <p className="mt-1 text-xs text-slate-500">
-                Biến: <code>{'{STT}'}</code> <code>{'{NĂM}'}</code> <code>{'{THÁNG}'}</code>{' '}
-                <code>{'{ĐƠN VỊ}'}</code> <code>{'{LOẠI}'}</code> — bắt buộc có <code>{'{STT}'}</code>.
-              </p>
-              {errors.number_format && (
-                <p className="mt-1 text-xs text-red-600">{errors.number_format.message}</p>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelClass} htmlFor="d_reset">Chính sách reset</label>
-                <select id="d_reset" className={fieldClass} {...register('reset_policy')}>
-                  <option value="year">Theo năm</option>
-                  <option value="month">Theo tháng</option>
-                  <option value="none">Không reset</option>
-                </select>
-              </div>
-              <div>
-                <label className={labelClass} htmlFor="d_pad">Độ rộng STT (zero-pad)</label>
-                <input id="d_pad" type="number" min={0} max={10} className={fieldClass} {...register('zero_pad')} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              {!isEdit && (
-                <div>
-                  <label className={labelClass} htmlFor="d_start">STT bắt đầu</label>
-                  <input id="d_start" type="number" min={1} className={fieldClass} {...register('start_stt')} />
-                </div>
-              )}
-              <div>
-                <label className={labelClass} htmlFor="d_cur">
-                  {isEdit ? 'STT đã cấp gần nhất' : 'STT hiện tại'}
-                </label>
-                <input id="d_cur" type="number" min={0} className={fieldClass} {...register('current_stt')} />
-              </div>
-            </div>
-
-            {isEdit && (
-              <label className="flex items-center gap-2 text-sm text-slate-700">
-                <input type="checkbox" {...register('is_active')} className="h-4 w-4 rounded border-slate-300" />
-                Đang dùng (bỏ chọn = ngừng dùng, CV cũ vẫn giữ)
-              </label>
-            )}
-
-            <div className="rounded-md bg-slate-50 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Xem trước số kế tiếp
-              </p>
-              <p className={`mt-1 font-mono text-sm ${previewQuery.isError ? 'text-red-600' : 'text-slate-800'}`}>
-                {previewQuery.isError
-                  ? (previewQuery.error as Error).message
-                  : (previewQuery.data ?? '…')}
-              </p>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-1">
-              <button type="button" onClick={onClose} className="rounded-md border border-slate-300 px-4 py-2 text-sm">
-                Huỷ
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="rounded-md bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500 disabled:opacity-60"
-              >
-                {isEdit ? 'Lưu' : 'Tạo loại'}
-              </button>
-            </div>
-          </form>
+          <div>
+            <label className="field-label" htmlFor="d_cur">
+              {isEdit ? 'STT đã cấp gần nhất' : 'STT hiện tại'}
+            </label>
+            <input id="d_cur" type="number" min={0} className="text-input" {...register('current_stt')} />
+          </div>
         </div>
-      </div>
-    </div>
+
+        {isEdit && (
+          <label className="flex items-center" style={{ gap: 8, fontSize: '0.85rem', color: 'var(--ink-body)' }}>
+            <input type="checkbox" className="qlcv-check" {...register('is_active')} />
+            Đang dùng (bỏ chọn = ngừng dùng, CV cũ vẫn giữ)
+          </label>
+        )}
+
+        <div className="card" style={{ padding: 14, background: 'var(--paper-deep)' }}>
+          <div className="eyebrow" style={{ marginBottom: 6 }}>
+            Xem trước số kế tiếp
+          </div>
+          <div
+            className="cell-mono num"
+            style={previewQuery.isError ? { color: 'var(--danger)' } : undefined}
+          >
+            {previewQuery.isError
+              ? (previewQuery.error as Error).message
+              : (previewQuery.data ?? '…')}
+          </div>
+        </div>
+      </form>
+    </Drawer>
   );
 }

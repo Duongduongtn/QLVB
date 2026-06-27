@@ -18,7 +18,8 @@ import {
 
 import { api, type ApiErrorEnvelope } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
-import { type UnitLite } from '~/components/sign-ui';
+import { PageHeader } from '~/components/ui';
+import { UnitPill, type UnitLite } from '~/components/sign-ui';
 
 export const Route = createFileRoute('/cong-van-di/soan')({
   component: SoanCongVanPage,
@@ -74,6 +75,26 @@ function todayISO(): string {
 function unitCategory(u: UnitLite | undefined): 'gdnn' | 'dvdl' | null {
   if (!u) return null;
   return u.code.toUpperCase().includes('GDNN') ? 'gdnn' : 'dvdl';
+}
+
+// Hộp cảnh báo lỗi — dùng chung token "giấy + vàng kinpaku".
+function ErrorBox({ message }: { message: string }) {
+  return (
+    <div
+      role="alert"
+      style={{
+        marginBottom: 16,
+        padding: '10px 14px',
+        borderRadius: 6,
+        background: 'var(--danger-soft)',
+        border: '1px solid var(--danger)',
+        color: 'var(--danger)',
+        fontSize: '0.85rem',
+      }}
+    >
+      {message}
+    </div>
+  );
 }
 
 function SoanCongVanPage() {
@@ -313,57 +334,71 @@ function SoanCongVanPage() {
 
   if (!me) {
     return (
-      <div className="mx-auto max-w-7xl px-6 py-10">
-        <p className="text-slate-500">Đang tải…</p>
+      <div style={{ padding: '40px 0' }}>
+        <p className="cell-meta">Đang tải…</p>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-8">
-      <div className="mb-5 flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">Công văn đi</p>
-          <h2 className="text-2xl font-semibold text-slate-800">Soạn công văn đi</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Tải file → chèn mộc/chữ ký → cấp số → tải PDF sẵn sàng ký số.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => navigate({ to: '/cong-van-di' })}
-          className="flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"
-        >
-          <ArrowLeft size={15} /> Danh sách
-        </button>
-      </div>
+    <>
+      <PageHeader
+        breadcrumb={[{ label: 'Công văn đi', to: '/cong-van-di' }, { label: 'Soạn mới' }]}
+        title="Soạn công văn đi"
+        subhead="Quy trình phát hành: tải file → chèn mộc/ký → cấp số → tải PDF sẵn sàng ký số"
+        actions={
+          <button type="button" className="btn-ghost" onClick={() => navigate({ to: '/cong-van-di' })}>
+            <ArrowLeft size={14} /> Quay lại danh sách
+          </button>
+        }
+      />
 
-      <div className="flex flex-col gap-6 lg:flex-row">
+      <div className="flex flex-col lg:flex-row" style={{ gap: 24, alignItems: 'flex-start' }}>
         {/* Step rail */}
-        <div className="w-full shrink-0 rounded-lg border border-slate-200 bg-white p-3 lg:max-w-[260px]">
-          <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Các bước</p>
-          <div className="flex flex-col gap-0.5">
+        <div className="card" style={{ padding: 16, width: '100%', maxWidth: 280, flexShrink: 0 }}>
+          <div className="eyebrow" style={{ marginBottom: 12 }}>
+            Các bước
+          </div>
+          <div className="flex flex-col" style={{ gap: 2 }}>
             {STEPS.map((s) => {
               const done = s.id < step;
               const active = s.id === step;
+              // Khoá lại bước 1 sau khi đã tạo nháp + upload file (đổi file giữa chừng dễ lệch).
+              const clickable = s.id < step && !(s.id === 1 && draftId !== null);
               const Icon = s.icon;
               return (
                 <button
                   key={s.id}
                   type="button"
-                  // Khoá lại bước 1 sau khi đã tạo nháp + upload file (đổi file giữa chừng dễ lệch).
-                  onClick={() => s.id < step && !(s.id === 1 && draftId !== null) && setStep(s.id)}
+                  onClick={() => clickable && setStep(s.id)}
                   disabled={s.id > step || (s.id === 1 && draftId !== null)}
-                  className={`flex items-center gap-3 rounded-md px-3 py-2 text-left text-sm ${
-                    active ? 'bg-amber-50 font-semibold text-amber-700' : 'text-slate-600'
-                  } ${s.id < step ? 'cursor-pointer hover:bg-slate-50' : ''} ${s.id > step ? 'opacity-50' : ''}`}
+                  className="flex items-center"
+                  style={{
+                    gap: 12,
+                    padding: '10px 12px',
+                    borderRadius: 4,
+                    border: 'none',
+                    cursor: clickable ? 'pointer' : 'default',
+                    textAlign: 'left',
+                    background: active ? 'var(--paper-deep)' : 'transparent',
+                    color: active ? 'var(--ink)' : 'var(--ink-body)',
+                    fontWeight: active ? 600 : 500,
+                    fontSize: '0.85rem',
+                    opacity: s.id > step ? 0.5 : 1,
+                  }}
                 >
                   <span
-                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${
-                      done ? 'bg-green-500 text-white' : active ? 'bg-amber-400 text-slate-900' : 'bg-slate-100 text-slate-500'
-                    }`}
+                    className="flex items-center justify-center"
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: 999,
+                      flexShrink: 0,
+                      background: done ? 'var(--success)' : active ? 'var(--kinpaku)' : 'var(--light-graphite)',
+                      color: done || active ? 'var(--ink)' : 'var(--ink-muted)',
+                    }}
                   >
-                    {done ? <Check size={13} /> : <Icon size={13} />}
+                    {done ? <Check size={14} /> : <Icon size={13} />}
                   </span>
                   {s.label}
                 </button>
@@ -373,12 +408,8 @@ function SoanCongVanPage() {
         </div>
 
         {/* Step content */}
-        <div className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white p-6">
-          {err && (
-            <div role="alert" className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {err}
-            </div>
-          )}
+        <div className="card" style={{ padding: 28, flex: 1, minWidth: 0, width: '100%' }}>
+          {err && <ErrorBox message={err} />}
 
           {step === 1 && <StepUpload file={file} onPick={pickFile} />}
 
@@ -422,48 +453,65 @@ function SoanCongVanPage() {
           {step === 7 && <Step7 number={issuedNumber} docId={draftId} onDone={() => navigate({ to: '/cong-van-di' })} />}
 
           {step < 7 && (
-            <div className="mt-7 flex items-center justify-between border-t pt-5">
+            <div
+              className="flex items-center justify-between"
+              style={{ marginTop: 28, paddingTop: 20, borderTop: '1px solid var(--rule)' }}
+            >
               <button
                 type="button"
+                className="btn-secondary"
                 disabled={step === 1 || busy}
                 onClick={() => setStep((s) => Math.max(1, s - 1))}
-                className="flex items-center gap-1.5 rounded-md border border-slate-300 px-4 py-2 text-sm disabled:opacity-40"
+                style={step === 1 || busy ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
               >
-                <ArrowLeft size={15} /> Quay lại
+                <ArrowLeft size={14} /> Quay lại
               </button>
-              <span className="text-xs text-slate-400">Bước {step} / {STEPS.length}</span>
+              <span className="cell-meta">
+                Bước {step} / {STEPS.length}
+              </span>
               <button
                 type="button"
+                className="btn-primary"
                 disabled={busy}
                 onClick={next}
-                className="flex items-center gap-1.5 rounded-md bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500 disabled:opacity-60"
+                style={busy ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
               >
                 {busy ? 'Đang xử lý…' : step === 6 ? 'Xác nhận phát hành' : 'Tiếp tục'}
-                {!busy && <ArrowRight size={15} />}
+                {!busy && <ArrowRight size={14} />}
               </button>
             </div>
           )}
         </div>
       </div>
-    </div>
+    </>
   );
 }
-
-const labelClass = 'mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500';
-const fieldClass =
-  'w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100';
 
 function StepUpload({ file, onPick }: { file: File | null; onPick: (f: File | null) => void }) {
   return (
     <div>
-      <h3 className="mb-4 text-lg font-semibold text-slate-800">Tải file công văn gốc</h3>
+      <h2 className="section-title" style={{ marginBottom: 16 }}>
+        Tải file công văn gốc
+      </h2>
       <label
         htmlFor="cv_file"
-        className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center hover:border-amber-300"
+        className="flex flex-col items-center justify-center"
+        style={{
+          border: '1.5px dashed var(--rule-strong)',
+          borderRadius: 8,
+          padding: '48px 24px',
+          gap: 12,
+          background: 'var(--paper-deep)',
+          textAlign: 'center',
+          cursor: 'pointer',
+        }}
       >
-        <UploadCloud size={40} className="text-amber-500" strokeWidth={1.25} />
-        <span className="font-medium text-slate-700">Bấm để chọn file PDF hoặc Word</span>
-        <span className="text-xs text-slate-400">PDF / .docx / .doc — tối đa 50MB</span>
+        <UploadCloud size={40} strokeWidth={1.25} style={{ color: 'var(--kinpaku-deep)' }} />
+        <div style={{ fontWeight: 500, color: 'var(--ink)' }}>Bấm để chọn file PDF hoặc Word</div>
+        <div className="cell-meta">Hỗ trợ Word (.docx, .doc) hoặc PDF — tối đa 50MB</div>
+        <span className="btn-secondary" style={{ marginTop: 8 }}>
+          Chọn file
+        </span>
         <input
           id="cv_file"
           type="file"
@@ -473,12 +521,12 @@ function StepUpload({ file, onPick }: { file: File | null; onPick: (f: File | nu
         />
       </label>
       {file && (
-        <p className="mt-3 flex items-center gap-2 text-sm text-slate-700">
-          <FileText size={15} className="text-amber-500" /> {file.name}
+        <p className="flex items-center" style={{ gap: 8, marginTop: 12, fontSize: '0.875rem', color: 'var(--ink)' }}>
+          <FileText size={15} style={{ color: 'var(--kinpaku-deep)' }} /> {file.name}
         </p>
       )}
-      <p className="mt-3 text-xs text-slate-400">
-        File Word được tự động chuyển sang PDF (LibreOffice) trước khi chèn mộc.
+      <p className="cell-meta" style={{ marginTop: 12 }}>
+        File Word được tự động chuyển sang PDF bằng LibreOffice trước khi chèn mộc.
       </p>
     </div>
   );
@@ -505,58 +553,95 @@ function Step2(props: {
   }
   return (
     <div>
-      <h3 className="mb-4 text-lg font-semibold text-slate-800">Thông tin công văn</h3>
-      <div className="space-y-4">
-        <div>
-          <label className={labelClass} htmlFor="cv_subject">Trích yếu</label>
+      <h2 className="section-title" style={{ marginBottom: 16 }}>
+        Thông tin công văn
+      </h2>
+      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <label className="field-label" htmlFor="cv_subject">
+            Trích yếu
+          </label>
           <textarea
             id="cv_subject"
             rows={2}
-            className={fieldClass}
+            className="text-input"
             placeholder="V/v …"
             value={props.subject}
             onChange={(e) => props.setSubject(e.target.value)}
           />
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className={labelClass} htmlFor="cv_type">Loại văn bản (sổ đi)</label>
-            <select
-              id="cv_type"
-              className={fieldClass}
-              value={props.docTypeId ?? ''}
-              onChange={(e) => props.setDocTypeId(Number(e.target.value))}
-            >
-              <option value="" disabled>— Chọn loại —</option>
-              {props.outTypes.map((t) => {
-                const u = props.units.find((x) => x.id === t.unit_id);
-                return (
-                  <option key={t.id} value={t.id}>
-                    {t.name} ({t.code}) — {u?.short_name ?? u?.code ?? '?'}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="cv_date">Ngày phát hành</label>
-            <input id="cv_date" type="date" className={fieldClass} value={props.issueDate} onChange={(e) => props.setIssueDate(e.target.value)} />
-          </div>
+        <div>
+          <label className="field-label" htmlFor="cv_type">
+            Loại văn bản (sổ đi)
+          </label>
+          <select
+            id="cv_type"
+            className="text-input"
+            value={props.docTypeId ?? ''}
+            onChange={(e) => props.setDocTypeId(Number(e.target.value))}
+          >
+            <option value="" disabled>
+              — Chọn loại —
+            </option>
+            {props.outTypes.map((t) => {
+              const u = props.units.find((x) => x.id === t.unit_id);
+              return (
+                <option key={t.id} value={t.id}>
+                  {t.name} ({t.code}) — {u?.short_name ?? u?.code ?? '?'}
+                </option>
+              );
+            })}
+          </select>
         </div>
         <div>
-          <label className={labelClass}>Nơi nhận (chọn từ danh bạ)</label>
+          <label className="field-label" htmlFor="cv_date">
+            Ngày phát hành
+          </label>
+          <input
+            id="cv_date"
+            type="date"
+            className="text-input"
+            value={props.issueDate}
+            onChange={(e) => props.setIssueDate(e.target.value)}
+          />
+        </div>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <label className="field-label">Nơi nhận (chọn từ danh bạ)</label>
           {recipients.length === 0 ? (
-            <p className="text-sm text-slate-400">Chưa có nơi nhận trong danh bạ — thêm ở mục Danh bạ.</p>
+            <p className="cell-meta">Chưa có nơi nhận trong danh bạ — thêm ở mục Danh bạ.</p>
           ) : (
-            <div className="max-h-44 space-y-1 overflow-y-auto rounded-md border border-slate-200 p-2">
+            <div
+              className="flex flex-col"
+              style={{
+                maxHeight: 176,
+                overflowY: 'auto',
+                border: '1px solid var(--rule)',
+                borderRadius: 6,
+                padding: 8,
+                gap: 2,
+              }}
+            >
               {recipients.map((o) => (
-                <label key={o.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-slate-50">
-                  <input type="checkbox" checked={recipientIds.includes(o.id)} onChange={() => toggle(o.id)} className="rounded border-slate-300" />
+                <label
+                  key={o.id}
+                  className="flex items-center"
+                  style={{ gap: 8, padding: '6px 8px', borderRadius: 4, cursor: 'pointer', fontSize: '0.875rem', color: 'var(--ink)' }}
+                >
+                  <input
+                    type="checkbox"
+                    className="qlcv-check"
+                    checked={recipientIds.includes(o.id)}
+                    onChange={() => toggle(o.id)}
+                  />
                   {o.full_name}
                 </label>
               ))}
             </div>
           )}
+        </div>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <label className="field-label">Phản hồi công văn đến (tuỳ chọn)</label>
+          <input className="text-input" placeholder="Tìm công văn đến để liên kết…" disabled />
         </div>
       </div>
     </div>
@@ -576,30 +661,65 @@ function Step3({
 }) {
   return (
     <div>
-      <h3 className="mb-4 text-lg font-semibold text-slate-800">Đơn vị phát hành &amp; hồ sơ ký</h3>
-      <div className="mb-4 flex items-center gap-2 rounded-md bg-slate-50 px-3 py-2 text-sm">
-        <span className="text-slate-500">Đơn vị phát hành:</span>
-        <span className="font-medium text-slate-800">{unit?.full_name ?? '— (chọn loại VB ở bước trước)'}</span>
+      <h2 className="section-title" style={{ marginBottom: 16 }}>
+        Đơn vị phát hành &amp; hồ sơ ký
+      </h2>
+      <label className="field-label">Đơn vị phát hành</label>
+      <div
+        className="flex items-center"
+        style={{
+          gap: 10,
+          padding: 14,
+          border: '1px solid var(--rule)',
+          borderRadius: 6,
+          background: 'var(--paper-deep)',
+          marginBottom: 20,
+        }}
+      >
+        {unit && <UnitPill unit={unit} />}
+        <span style={{ fontWeight: 600, color: 'var(--ink)' }}>
+          {unit?.full_name ?? '— (chọn loại VB ở bước trước)'}
+        </span>
       </div>
-      <label className={labelClass}>Hồ sơ ký (lọc theo đơn vị — chống nhầm mộc)</label>
+
+      <label className="field-label">Hồ sơ ký (lọc theo đơn vị — chống nhầm mộc)</label>
       {profiles.length === 0 ? (
-        <p className="text-sm text-amber-600">Đơn vị này chưa có hồ sơ ký đang dùng. Tạo ở mục Hồ sơ ký.</p>
+        <p style={{ fontSize: '0.85rem', color: 'var(--warning)' }}>
+          Đơn vị này chưa có hồ sơ ký đang dùng. Tạo ở mục Hồ sơ ký.
+        </p>
       ) : (
-        <div className="space-y-2">
-          {profiles.map((p) => (
-            <label
-              key={p.id}
-              className={`flex cursor-pointer items-center gap-3 rounded-md border p-3.5 ${
-                profileId === p.id ? 'border-amber-400 bg-amber-50' : 'border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              <input type="radio" name="profile" checked={profileId === p.id} onChange={() => setProfileId(p.id)} />
-              <div>
-                <div className="font-medium text-slate-800">{p.name}</div>
-                <div className="text-xs text-slate-500">Chức danh: {p.display_title}</div>
-              </div>
-            </label>
-          ))}
+        <div className="flex flex-col" style={{ gap: 10 }}>
+          {profiles.map((p) => {
+            const selected = profileId === p.id;
+            return (
+              <label
+                key={p.id}
+                className="flex items-center"
+                style={{
+                  gap: 12,
+                  padding: 14,
+                  border: `1px solid ${selected ? 'var(--kinpaku)' : 'var(--rule)'}`,
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  background: selected ? 'var(--paper-deep)' : 'var(--paper-raised)',
+                }}
+              >
+                <input
+                  type="radio"
+                  name="profile"
+                  className="qlcv-check"
+                  style={{ borderRadius: 999 }}
+                  checked={selected}
+                  onChange={() => setProfileId(p.id)}
+                />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, color: 'var(--ink)' }}>{p.name}</div>
+                  <div className="cell-meta">Chức danh: {p.display_title}</div>
+                </div>
+                {unit && <UnitPill unit={unit} />}
+              </label>
+            );
+          })}
         </div>
       )}
     </div>
@@ -609,8 +729,10 @@ function Step3({
 function StepPreview({ previewUrl, busy, onReload }: { previewUrl: string | null; busy: boolean; onReload: () => void }) {
   return (
     <div>
-      <h3 className="mb-2 text-lg font-semibold text-slate-800">Vị trí mộc &amp; chữ ký</h3>
-      <p className="mb-4 text-sm text-slate-500">
+      <h2 className="section-title" style={{ marginBottom: 8 }}>
+        Vị trí mộc &amp; chữ ký
+      </h2>
+      <p style={{ fontSize: '0.85rem', color: 'var(--ink-muted)', marginBottom: 16 }}>
         Hệ thống tự đặt mộc + chữ ký ở góc dưới phải trang cuối. Xem trước bên dưới (kéo-thả tinh chỉnh sẽ bổ sung sau).
       </p>
       <PreviewFrame previewUrl={previewUrl} busy={busy} onReload={onReload} />
@@ -621,18 +743,36 @@ function StepPreview({ previewUrl, busy, onReload }: { previewUrl: string | null
 function PreviewFrame({ previewUrl, busy, onReload }: { previewUrl: string | null; busy: boolean; onReload: () => void }) {
   return (
     <div>
-      <div className="mb-2 flex justify-end">
-        <button type="button" onClick={onReload} disabled={busy} className="rounded-md border border-slate-300 px-3 py-1.5 text-xs hover:bg-slate-50 disabled:opacity-50">
+      <div className="flex justify-end" style={{ marginBottom: 8 }}>
+        <button
+          type="button"
+          className="btn-secondary"
+          onClick={onReload}
+          disabled={busy}
+          style={busy ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
+        >
           {busy ? 'Đang tạo…' : 'Tạo lại bản xem trước'}
         </button>
       </div>
-      <div className="h-[480px] overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+      <div
+        style={{
+          height: 480,
+          overflow: 'hidden',
+          borderRadius: 6,
+          border: '1px solid var(--rule)',
+          background: 'var(--paper-deep)',
+        }}
+      >
         {busy && !previewUrl ? (
-          <div className="flex h-full items-center justify-center text-sm text-slate-400">Đang tạo bản xem trước…</div>
+          <div className="flex items-center justify-center" style={{ height: '100%' }}>
+            <span className="cell-meta">Đang tạo bản xem trước…</span>
+          </div>
         ) : previewUrl ? (
-          <iframe src={previewUrl} title="Xem trước công văn" className="h-full w-full" />
+          <iframe src={previewUrl} title="Xem trước công văn" style={{ height: '100%', width: '100%', border: 'none' }} />
         ) : (
-          <div className="flex h-full items-center justify-center text-sm text-slate-400">Chưa có bản xem trước.</div>
+          <div className="flex items-center justify-center" style={{ height: '100%' }}>
+            <span className="cell-meta">Chưa có bản xem trước.</span>
+          </div>
         )}
       </div>
     </div>
@@ -641,38 +781,38 @@ function PreviewFrame({ previewUrl, busy, onReload }: { previewUrl: string | nul
 
 function RangeSeg({ value, onChange }: { value: RangeOpt; onChange: (v: RangeOpt) => void }) {
   return (
-    <div className="space-y-2">
-      <div className="flex gap-1 rounded-md border border-slate-200 bg-slate-50 p-0.5">
+    <div className="flex flex-col" style={{ gap: 10 }}>
+      <div className="seg">
         {(['none', 'all', 'range'] as RangeKind[]).map((k) => (
           <button
             key={k}
             type="button"
+            data-active={value.kind === k ? 'true' : undefined}
             onClick={() => onChange({ ...value, kind: k })}
-            className={`flex-1 rounded px-3 py-1.5 text-sm font-medium ${
-              value.kind === k ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-600 hover:text-slate-800'
-            }`}
           >
             {k === 'none' ? 'Không' : k === 'all' ? 'Toàn bộ' : 'Theo khoảng trang'}
           </button>
         ))}
       </div>
       {value.kind === 'range' && (
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-slate-500">Từ trang</span>
+        <div className="flex items-center" style={{ gap: 8, fontSize: '0.85rem' }}>
+          <span style={{ color: 'var(--ink-muted)' }}>Từ trang</span>
           <input
             type="number"
             min={1}
             value={value.page_from ?? ''}
             onChange={(e) => onChange({ ...value, page_from: Number(e.target.value) || undefined })}
-            className="w-20 rounded-md border border-slate-300 px-2 py-1"
+            className="text-input"
+            style={{ width: 80 }}
           />
-          <span className="text-slate-500">đến</span>
+          <span style={{ color: 'var(--ink-muted)' }}>đến</span>
           <input
             type="number"
             min={1}
             value={value.page_to ?? ''}
             onChange={(e) => onChange({ ...value, page_to: Number(e.target.value) || undefined })}
-            className="w-20 rounded-md border border-slate-300 px-2 py-1"
+            className="text-input"
+            style={{ width: 80 }}
           />
         </div>
       )}
@@ -699,16 +839,21 @@ function Step5({
 }) {
   return (
     <div>
-      <h3 className="mb-4 text-lg font-semibold text-slate-800">Đóng giáp lai &amp; ký nháy</h3>
-      <div className="space-y-5">
+      <h2 className="section-title" style={{ marginBottom: 16 }}>
+        Đóng giáp lai &amp; ký nháy
+      </h2>
+      <div className="flex flex-col" style={{ gap: 20 }}>
         <div>
-          <label className={labelClass}>Đóng giáp lai (dùng chính mộc của hồ sơ ký)</label>
+          <label className="field-label">Đóng giáp lai (dùng chính mộc của hồ sơ ký)</label>
           <RangeSeg value={giapLai} onChange={setGiapLai} />
         </div>
         <div>
-          <label className={labelClass}>Ký nháy mỗi trang (trừ trang cuối)</label>
+          <label className="field-label">Ký nháy mỗi trang (trừ trang cuối)</label>
           <RangeSeg value={kyNhay} onChange={setKyNhay} />
         </div>
+        <p style={{ fontSize: '0.8rem', color: 'var(--ink-muted)' }}>
+          Giáp lai dùng chính mộc của hồ sơ ký đã chọn, cắt thành nhiều phần dọc theo số trang.
+        </p>
         <PreviewFrame previewUrl={previewUrl} busy={busy} onReload={onPreview} />
       </div>
     </div>
@@ -732,33 +877,79 @@ function Step6({
 }) {
   return (
     <div>
-      <h3 className="mb-4 text-lg font-semibold text-slate-800">Xác nhận chống nhầm mộc</h3>
-      <div className="mb-5 flex items-start gap-3 rounded-md border border-amber-300 bg-amber-50 px-4 py-3">
-        <ShieldAlert size={20} className="mt-0.5 shrink-0 text-amber-600" />
-        <p className="text-sm text-slate-800">
+      <h2 className="section-title" style={{ marginBottom: 16 }}>
+        Xác nhận chống nhầm mộc
+      </h2>
+      <div
+        className="flex"
+        style={{
+          gap: 12,
+          padding: 18,
+          borderRadius: 6,
+          background: 'var(--warning-soft)',
+          border: '1px solid var(--rule-strong)',
+          marginBottom: 20,
+        }}
+      >
+        <ShieldAlert size={20} style={{ color: 'var(--warning)', flexShrink: 0 }} />
+        <div style={{ fontSize: '0.9rem', color: 'var(--ink)' }}>
           Phát hành công văn với mộc của{' '}
           <strong>{(unit?.full_name ?? 'đơn vị đã chọn').toUpperCase()}</strong>. Đúng chứ?
-        </p>
+        </div>
       </div>
 
-      <label className={labelClass}>Cấp số công văn</label>
-      <div className="space-y-2">
-        <label className={`flex cursor-pointer items-center gap-3 rounded-md border p-3.5 ${capSoMode === 'auto' ? 'border-amber-400 bg-amber-50' : 'border-slate-200'}`}>
-          <input type="radio" name="capso" checked={capSoMode === 'auto'} onChange={() => setCapSoMode('auto')} />
-          <div className="flex-1">
-            <div className="font-medium text-slate-800">Tự cấp số</div>
-            <div className="text-xs text-slate-500">
+      <label className="field-label">Cấp số công văn</label>
+      <div className="flex flex-col" style={{ gap: 10 }}>
+        <label
+          className="flex items-center"
+          style={{
+            gap: 12,
+            padding: 14,
+            border: `1px solid ${capSoMode === 'auto' ? 'var(--kinpaku)' : 'var(--rule)'}`,
+            borderRadius: 6,
+            cursor: 'pointer',
+            background: capSoMode === 'auto' ? 'var(--paper-deep)' : 'var(--paper-raised)',
+          }}
+        >
+          <input
+            type="radio"
+            name="capso"
+            className="qlcv-check"
+            style={{ borderRadius: 999 }}
+            checked={capSoMode === 'auto'}
+            onChange={() => setCapSoMode('auto')}
+          />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, color: 'var(--ink)' }}>Tự cấp số</div>
+            <div className="cell-meta">
               Hệ thống sinh số kế tiếp theo sổ (atomic, không trùng).
               {nextNumber ? ` Số kế tiếp dự kiến: ~${nextNumber}.` : ''}
             </div>
           </div>
-          <Hash size={16} className="text-slate-400" />
+          <Hash size={16} style={{ color: 'var(--ink-muted)' }} />
         </label>
-        <label className={`flex cursor-pointer items-center gap-3 rounded-md border p-3.5 ${capSoMode === 'manual' ? 'border-amber-400 bg-amber-50' : 'border-slate-200'}`}>
-          <input type="radio" name="capso" checked={capSoMode === 'manual'} onChange={() => setCapSoMode('manual')} />
-          <div className="flex-1">
-            <div className="font-medium text-slate-800">Dùng số có sẵn</div>
-            <div className="text-xs text-slate-500">Nhập số đã in trên file — hệ thống kiểm tra trùng + đồng bộ sổ.</div>
+        <label
+          className="flex items-center"
+          style={{
+            gap: 12,
+            padding: 14,
+            border: `1px solid ${capSoMode === 'manual' ? 'var(--kinpaku)' : 'var(--rule)'}`,
+            borderRadius: 6,
+            cursor: 'pointer',
+            background: capSoMode === 'manual' ? 'var(--paper-deep)' : 'var(--paper-raised)',
+          }}
+        >
+          <input
+            type="radio"
+            name="capso"
+            className="qlcv-check"
+            style={{ borderRadius: 999 }}
+            checked={capSoMode === 'manual'}
+            onChange={() => setCapSoMode('manual')}
+          />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, color: 'var(--ink)' }}>Dùng số có sẵn</div>
+            <div className="cell-meta">Nhập số đã in trên file — hệ thống kiểm tra trùng + đồng bộ sổ.</div>
             {capSoMode === 'manual' && (
               <input
                 type="number"
@@ -766,7 +957,8 @@ function Step6({
                 value={manualNumber}
                 onChange={(e) => setManualNumber(e.target.value)}
                 placeholder="VD: 247"
-                className="mt-2 w-32 rounded-md border border-slate-300 px-2 py-1 text-sm"
+                className="text-input"
+                style={{ width: 128, marginTop: 8 }}
               />
             )}
           </div>
@@ -804,75 +996,98 @@ function Step7({ number, docId, onDone }: { number: string | null; docId: number
 
   return (
     <div>
-      <div className="mb-5 flex items-center gap-3">
-        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-green-100">
-          <Check size={24} className="text-green-600" />
+      <div className="flex items-center" style={{ gap: 12, marginBottom: 20 }}>
+        <span
+          className="flex items-center justify-center"
+          style={{ width: 44, height: 44, borderRadius: 999, background: 'var(--success-soft)', flexShrink: 0 }}
+        >
+          <Check size={24} style={{ color: 'var(--success)' }} />
         </span>
         <div>
-          <h3 className="text-lg font-semibold text-slate-800">
-            {published ? 'Đã phát hành' : 'Đã cấp số — chờ ký số'}
-          </h3>
-          <div className="font-mono text-amber-700">{number}</div>
+          <h2 className="section-title">{published ? 'Đã phát hành' : 'Đã cấp số — chờ ký số'}</h2>
+          <div className="cell-mono">
+            <span className="num">{number}</span>
+          </div>
         </div>
       </div>
 
-      {err && (
-        <div role="alert" className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {err}
-        </div>
-      )}
+      {err && <ErrorBox message={err} />}
 
-      <div className="space-y-3">
-        <div className="rounded-md border border-slate-200 p-4">
-          <div className="font-medium text-slate-800">1. Tải PDF chưa ký số &amp; ký bằng USB Token</div>
-          <p className="mb-3 mt-1 text-sm text-slate-500">
-            Mở file bằng vSign + USB Token Viettel-CA để ký số (ngoài hệ thống), rồi quay lại tải lên.
-          </p>
-          <button
-            type="button"
-            disabled={docId === null}
-            onClick={() => docId !== null && window.open(`/api/outgoing/${docId}/download`, '_blank')}
-            className="flex items-center gap-2 rounded-md border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50 disabled:opacity-60"
-          >
-            <Download size={15} /> Tải PDF (_CHUA_KY_SO)
-          </button>
-        </div>
-
-        <div className="rounded-md border border-slate-200 p-4">
-          <div className="font-medium text-slate-800">2. Tải lên bản đã ký số → hoàn tất phát hành</div>
-          <p className="mb-3 mt-1 text-sm text-slate-500">
-            Hệ thống kiểm tra số CV trong tên file (chống nhầm) rồi chuyển “Đã phát hành”.
-          </p>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="application/pdf"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void uploadSigned(f);
-              e.target.value = '';
-            }}
-          />
-          {published ? (
-            <span className="flex items-center gap-1.5 text-sm font-medium text-green-700">
-              <Check size={15} /> Đã phát hành công văn.
-            </span>
-          ) : (
-            <button
-              type="button"
-              disabled={busy || docId === null}
-              onClick={() => fileRef.current?.click()}
-              className="flex items-center gap-2 rounded-md bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500 disabled:opacity-60"
+      <div className="flex flex-col" style={{ gap: 12 }}>
+        {/* Bước 1 */}
+        <div className="card" style={{ padding: 18 }}>
+          <div className="flex items-start" style={{ gap: 12 }}>
+            <span
+              className="flex items-center justify-center"
+              style={{ width: 24, height: 24, borderRadius: 999, background: 'var(--kinpaku)', color: 'var(--ink)', fontWeight: 600, fontSize: '0.8rem', flexShrink: 0 }}
             >
-              <Upload size={15} /> {busy ? 'Đang tải…' : 'Tải lên bản đã ký số'}
-            </button>
-          )}
+              1
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, color: 'var(--ink)' }}>Tải PDF chưa ký số &amp; ký bằng USB Token</div>
+              <div className="cell-meta" style={{ marginBottom: 12 }}>
+                Mở file bằng vSign + USB Token Viettel-CA để ký số (ngoài hệ thống), rồi quay lại tải lên.
+              </div>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={docId === null}
+                onClick={() => docId !== null && window.open(`/api/outgoing/${docId}/download`, '_blank')}
+                style={docId === null ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
+              >
+                <Download size={14} /> Tải PDF (_CHUA_KY_SO)
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Bước 2 */}
+        <div className="card" style={{ padding: 18 }}>
+          <div className="flex items-start" style={{ gap: 12 }}>
+            <span
+              className="flex items-center justify-center"
+              style={{ width: 24, height: 24, borderRadius: 999, background: 'var(--kinpaku)', color: 'var(--ink)', fontWeight: 600, fontSize: '0.8rem', flexShrink: 0 }}
+            >
+              2
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, color: 'var(--ink)' }}>Tải lên bản đã ký số → hoàn tất phát hành</div>
+              <div className="cell-meta" style={{ marginBottom: 12 }}>
+                Hệ thống kiểm tra số CV trong tên file (chống nhầm) rồi chuyển “Đã phát hành”.
+              </div>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void uploadSigned(f);
+                  e.target.value = '';
+                }}
+              />
+              {published ? (
+                <span className="flex items-center" style={{ gap: 6, fontSize: '0.85rem', fontWeight: 600, color: 'var(--success)' }}>
+                  <Check size={15} /> Đã phát hành công văn.
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={busy || docId === null}
+                  onClick={() => fileRef.current?.click()}
+                  style={busy || docId === null ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
+                >
+                  <Upload size={14} /> {busy ? 'Đang tải…' : 'Tải lên bản đã ký số'}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="mt-5 flex justify-end">
-        <button type="button" onClick={onDone} className="rounded-md border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50">
+      <div className="flex items-center justify-end" style={{ marginTop: 20 }}>
+        <button type="button" className="btn-ghost" onClick={onDone}>
           {published ? 'Xong, về danh sách' : 'Để sau, về danh sách'}
         </button>
       </div>

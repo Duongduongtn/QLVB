@@ -1,12 +1,13 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ArrowLeft, Check, IdCard, PenTool, Plus, Save, Stamp, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, IdCard, PenTool, Plus, Save, Stamp } from 'lucide-react';
 
 import { api, type ApiErrorEnvelope } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
-import { MocChuKyTabs } from '~/components/MocChuKyTabs';
-import { StatusPill, UnitPill, type UnitLite } from '~/components/sign-ui';
+import { PageHeader, Pill, EmptyState, InfoRow } from '~/components/ui';
+import { Drawer } from '~/components/Drawer';
+import { UnitPill, type UnitLite } from '~/components/sign-ui';
 
 export const Route = createFileRoute('/ho-so-ky')({
   component: HoSoKyPage,
@@ -37,6 +38,8 @@ interface SealRow {
   name: string;
   is_active: boolean;
 }
+
+const BREADCRUMB = [{ label: 'Mộc & Chữ ký' }];
 
 function errMsg(error: unknown, fallback: string): string {
   return (error as ApiErrorEnvelope | undefined)?.error?.message ?? fallback;
@@ -96,16 +99,22 @@ function HoSoKyPage() {
 
   if (me && me.role !== 'manager') {
     return (
-      <div className="mx-auto max-w-6xl px-6 py-10">
-        <p className="text-slate-600">Trang này chỉ dành cho Quản lý.</p>
-      </div>
+      <>
+        <PageHeader breadcrumb={BREADCRUMB} title="Hồ sơ ký" />
+        <div className="card" style={{ padding: 24, color: 'var(--ink-muted)', fontSize: '0.9rem' }}>
+          Trang này chỉ dành cho Quản lý.
+        </div>
+      </>
     );
   }
   if (!me) {
     return (
-      <div className="mx-auto max-w-6xl px-6 py-10">
-        <p className="text-slate-500">Đang tải…</p>
-      </div>
+      <>
+        <PageHeader breadcrumb={BREADCRUMB} title="Hồ sơ ký" />
+        <div className="card" style={{ padding: 24, color: 'var(--ink-faint)', fontSize: '0.9rem' }}>
+          Đang tải…
+        </div>
+      </>
     );
   }
 
@@ -116,35 +125,35 @@ function HoSoKyPage() {
   const assetsReady = sigsQuery.isSuccess && sealsQuery.isSuccess;
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">Mộc &amp; Chữ ký</p>
-          <h2 className="text-2xl font-semibold text-slate-800">Hồ sơ ký</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Mỗi hồ sơ = người ký + chữ ký + chức danh + mộc cùng đơn vị → chọn 1 lần là áp đủ, chống nhầm mộc.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="flex items-center gap-2 rounded-md bg-amber-400 px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500"
-        >
-          <Plus size={16} />
-          Tạo hồ sơ ký
-        </button>
-      </div>
-
-      <MocChuKyTabs />
+    <>
+      <PageHeader
+        breadcrumb={BREADCRUMB}
+        title="Hồ sơ ký"
+        subhead="Mỗi hồ sơ = người ký + chữ ký + chức danh + mộc cùng đơn vị → chọn 1 lần là áp đủ, chống nhầm mộc."
+        actions={
+          <button type="button" className="btn-primary" onClick={() => setCreating(true)}>
+            <Plus size={14} /> Tạo hồ sơ ký
+          </button>
+        }
+      />
 
       {profilesQuery.isLoading ? (
-        <p className="py-10 text-center text-slate-400">Đang tải…</p>
+        <div className="card" style={{ padding: 24, textAlign: 'center', color: 'var(--ink-faint)' }}>
+          Đang tải…
+        </div>
       ) : profiles.length === 0 ? (
-        <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-white py-12 text-center text-slate-400">
-          Chưa có hồ sơ ký nào. Bấm “Tạo hồ sơ ký” để bắt đầu.
+        <div className="card">
+          <EmptyState
+            icon={IdCard}
+            title="Chưa có hồ sơ ký nào"
+            desc="Bấm “Tạo hồ sơ ký” để bắt đầu."
+          />
         </div>
       ) : (
-        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div
+          className="grid"
+          style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}
+        >
           {profiles.map((p) => (
             <ProfileCard
               key={p.id}
@@ -173,10 +182,14 @@ function HoSoKyPage() {
           unit={units.find((u) => u.id === selected.unit_id)}
           signature={sigById.get(selected.signature_id)}
           seal={sealById.get(selected.seal_id)}
+          onRecreate={() => {
+            setSelected(null);
+            setCreating(true);
+          }}
           onClose={() => setSelected(null)}
         />
       )}
-    </div>
+    </>
   );
 }
 
@@ -200,30 +213,59 @@ function ProfileCard({
     <button
       type="button"
       onClick={onClick}
-      className={`flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 text-left transition hover:border-amber-300 hover:shadow-sm ${
-        profile.is_active ? '' : 'opacity-60'
-      }`}
+      className="card"
+      style={{
+        padding: 16,
+        textAlign: 'left',
+        cursor: 'pointer',
+        opacity: profile.is_active ? 1 : 0.6,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+      }}
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between" style={{ gap: 8 }}>
         <UnitPill unit={unit} />
-        <StatusPill active={profile.is_active} />
+        <Pill variant={profile.is_active ? 'success' : 'draft'} dot={profile.is_active}>
+          {profile.is_active ? 'Đang dùng' : 'Ngừng dùng'}
+        </Pill>
       </div>
-      <div className="flex items-center gap-3">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-500">
+      <div className="flex items-center" style={{ gap: 12 }}>
+        <span
+          className="flex items-center justify-center"
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 6,
+            background: 'var(--paper-deep)',
+            color: 'var(--ink-muted)',
+            flexShrink: 0,
+          }}
+        >
           <IdCard size={20} />
         </span>
-        <div className="min-w-0">
-          <p className="truncate font-semibold text-slate-800" title={profile.name}>
+        <div style={{ minWidth: 0 }}>
+          <div className="truncate" style={{ fontWeight: 600, color: 'var(--ink)' }} title={profile.name}>
             {profile.name}
-          </p>
-          <p className="truncate text-xs text-slate-500">
+          </div>
+          <div className="cell-meta truncate">
             {signature?.full_name ?? '—'} + {seal?.name ?? '—'}
-          </p>
+          </div>
         </div>
       </div>
       {warning && (
-        <p className="flex items-start gap-1.5 rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-700">
-          <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+        <p
+          className="flex items-start"
+          style={{
+            gap: 6,
+            borderRadius: 6,
+            background: 'var(--warning-soft)',
+            color: 'var(--warning)',
+            padding: '6px 8px',
+            fontSize: '0.78rem',
+          }}
+        >
+          <AlertTriangle size={13} style={{ marginTop: 2, flexShrink: 0 }} />
           {warning}
         </p>
       )}
@@ -232,10 +274,6 @@ function ProfileCard({
 }
 
 /* ─────────────────────────── Tạo hồ sơ ký (form 2 cột + live preview) ─────────────────────────── */
-
-const fieldClass =
-  'w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100';
-const labelClass = 'mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500';
 
 function CreateModal({
   units,
@@ -309,169 +347,248 @@ function CreateModal({
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto p-4 sm:p-8">
-      <button type="button" aria-label="Đóng" onClick={onClose} className="fixed inset-0 bg-slate-900/40" />
-      <div className="relative z-10 w-full max-w-4xl rounded-xl bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b px-6 py-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">Hồ sơ ký</p>
-            <h3 className="text-lg font-semibold text-slate-800">Tạo hồ sơ ký</h3>
+    <div className="modal-backdrop" onClick={onClose}>
+      <div
+        className="card"
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: '100%', maxWidth: 920, maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}
+      >
+        <div
+          className="flex items-center justify-between"
+          style={{ gap: 12, padding: '16px 20px', borderBottom: '1px solid var(--rule)', flexShrink: 0 }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div className="eyebrow">Hồ sơ ký</div>
+            <div className="section-title">Tạo hồ sơ ký</div>
           </div>
-          <button type="button" onClick={onClose} className="flex items-center gap-1 rounded-md px-2 py-1 text-sm text-slate-500 hover:bg-slate-100">
-            <ArrowLeft size={15} /> Quay lại
+          <button type="button" className="btn-ghost" onClick={onClose} style={{ flexShrink: 0 }}>
+            <ArrowLeft size={14} /> Quay lại
           </button>
         </div>
 
-        <div className="grid gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-          {/* Form */}
-          <div className="min-w-0 space-y-5">
-            {serverError && (
-              <div role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                {serverError}
-              </div>
-            )}
-
-            <div>
-              <label className={labelClass}>1. Đơn vị</label>
-              <div className="grid grid-cols-2 gap-2">
-                {units.map((u) => (
-                  <button
-                    key={u.id}
-                    type="button"
-                    onClick={() => chooseUnit(u.id)}
-                    className={`rounded-md border px-3 py-2.5 text-sm font-medium ${
-                      unitId === u.id
-                        ? 'border-amber-400 bg-amber-50 text-amber-700'
-                        : 'border-slate-300 text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    {u.short_name ?? u.full_name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className={labelClass}>2. Chữ ký (lọc theo đơn vị)</label>
-              {!unitId ? (
-                <p className="text-sm text-slate-400">Chọn đơn vị trước.</p>
-              ) : sigOptions.length === 0 ? (
-                <p className="text-sm text-amber-600">Đơn vị này chưa có chữ ký đang dùng. Thêm ở tab Chữ ký.</p>
-              ) : (
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {sigOptions.map((s) => (
-                    <SelectCard
-                      key={s.id}
-                      icon={<PenTool size={16} />}
-                      active={sigId === s.id}
-                      onClick={() => chooseSig(s)}
-                      title={s.full_name}
-                      sub={s.title ?? undefined}
-                    />
-                  ))}
+        <div style={{ overflowY: 'auto', padding: 20 }}>
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]" style={{ alignItems: 'start' }}>
+            {/* Form */}
+            <div className="flex flex-col" style={{ gap: 20, minWidth: 0 }}>
+              {serverError && (
+                <div
+                  role="alert"
+                  style={{
+                    background: 'var(--danger-soft)',
+                    color: 'var(--danger)',
+                    border: '1px solid var(--rule)',
+                    borderRadius: 6,
+                    padding: '8px 12px',
+                    fontSize: '0.85rem',
+                  }}
+                >
+                  {serverError}
                 </div>
               )}
-            </div>
 
-            <div>
-              <label className={labelClass}>
-                3. Mộc đi kèm {unit ? `(chỉ mộc ${unit.short_name ?? unit.code} — chống nhầm)` : ''}
-              </label>
-              {!unitId ? (
-                <p className="text-sm text-slate-400">Chọn đơn vị trước.</p>
-              ) : sealOptions.length === 0 ? (
-                <p className="text-sm text-amber-600">Đơn vị này chưa có mộc đang dùng. Thêm ở tab Mộc.</p>
-              ) : (
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {sealOptions.map((s) => (
-                    <SelectCard
-                      key={s.id}
-                      icon={<Stamp size={16} />}
-                      active={sealId === s.id}
-                      onClick={() => setSealId(s.id)}
-                      title={s.name}
-                    />
-                  ))}
+              <div>
+                <label className="field-label">1. Đơn vị</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {units.map((u) => {
+                    const on = unitId === u.id;
+                    return (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={() => chooseUnit(u.id)}
+                        style={{
+                          padding: '10px 12px',
+                          borderRadius: 6,
+                          fontSize: '0.85rem',
+                          fontWeight: 500,
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          border: `1px solid ${on ? 'var(--rule-strong)' : 'var(--rule)'}`,
+                          background: on ? 'var(--paper-deep)' : 'transparent',
+                          color: on ? 'var(--ink)' : 'var(--ink-body)',
+                        }}
+                      >
+                        {u.short_name ?? u.full_name}
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
-            </div>
+              </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label className={labelClass}>4. Chức danh hiển thị trên CV</label>
-                <input
-                  className={fieldClass}
-                  placeholder="VD: GIÁM ĐỐC"
-                  value={displayTitle}
-                  onChange={(e) => setDisplayTitle(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>5. Tên hồ sơ (ngắn gọn)</label>
-                <input
-                  className={fieldClass}
-                  placeholder="VD: GĐ TT GDNN"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={submit}
-              disabled={create.isPending}
-              className="flex items-center gap-2 rounded-md bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500 disabled:opacity-60"
-            >
-              <Save size={15} /> Lưu hồ sơ ký
-            </button>
-          </div>
-
-          {/* Live preview block ký */}
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-5">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Xem trước block ký</p>
-            <div className="mb-4 flex items-center justify-between">
-              <UnitPill unit={unit} />
-              {unit && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                  Cùng đơn vị
-                </span>
-              )}
-            </div>
-
-            <div className="rounded-md border border-slate-200 bg-white px-4 py-5 text-center">
-              <div className="text-sm font-bold uppercase tracking-wide text-slate-800">
-                {displayTitle || 'CHỨC DANH'}
-              </div>
-              <div className="relative mx-auto mt-2 flex h-28 items-center justify-center">
-                {seal ? (
-                  <img
-                    src={`/api/seals/${seal.id}/image`}
-                    alt={seal.name}
-                    className="absolute top-0 h-20 w-20 object-contain opacity-70"
-                  />
+                <label className="field-label">2. Chữ ký (lọc theo đơn vị)</label>
+                {!unitId ? (
+                  <p style={{ fontSize: '0.85rem', color: 'var(--ink-faint)' }}>Chọn đơn vị trước.</p>
+                ) : sigOptions.length === 0 ? (
+                  <p style={{ fontSize: '0.85rem', color: 'var(--warning)' }}>
+                    Đơn vị này chưa có chữ ký đang dùng. Thêm ở tab Chữ ký.
+                  </p>
                 ) : (
-                  <span className="absolute top-0 flex h-20 w-20 items-center justify-center rounded-full border-2 border-dashed border-slate-300 text-[10px] text-slate-400">
-                    Mộc
-                  </span>
-                )}
-                {sig ? (
-                  <img
-                    src={`/api/signatures/${sig.id}/image`}
-                    alt={sig.full_name}
-                    className="absolute bottom-1 h-14 max-w-[140px] object-contain"
-                  />
-                ) : (
-                  <span className="absolute bottom-3 text-xs text-slate-400">Chữ ký</span>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {sigOptions.map((s) => (
+                      <SelectCard
+                        key={s.id}
+                        icon={<PenTool size={16} />}
+                        active={sigId === s.id}
+                        onClick={() => chooseSig(s)}
+                        title={s.full_name}
+                        sub={s.title ?? undefined}
+                      />
+                    ))}
+                  </div>
                 )}
               </div>
-              <div className="mt-1 text-sm font-semibold text-slate-800">{sig?.full_name ?? 'Người ký'}</div>
+
+              <div>
+                <label className="field-label">
+                  3. Mộc đi kèm {unit ? `(chỉ mộc ${unit.short_name ?? unit.code} — chống nhầm)` : ''}
+                </label>
+                {!unitId ? (
+                  <p style={{ fontSize: '0.85rem', color: 'var(--ink-faint)' }}>Chọn đơn vị trước.</p>
+                ) : sealOptions.length === 0 ? (
+                  <p style={{ fontSize: '0.85rem', color: 'var(--warning)' }}>
+                    Đơn vị này chưa có mộc đang dùng. Thêm ở tab Mộc.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {sealOptions.map((s) => (
+                      <SelectCard
+                        key={s.id}
+                        icon={<Stamp size={16} />}
+                        active={sealId === s.id}
+                        onClick={() => setSealId(s.id)}
+                        title={s.name}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="field-label">4. Chức danh hiển thị trên CV</label>
+                  <input
+                    className="text-input"
+                    placeholder="VD: GIÁM ĐỐC"
+                    value={displayTitle}
+                    onChange={(e) => setDisplayTitle(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="field-label">5. Tên hồ sơ (ngắn gọn)</label>
+                  <input
+                    className="text-input"
+                    placeholder="VD: GĐ TT GDNN"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <button type="button" className="btn-primary" onClick={submit} disabled={create.isPending}>
+                <Save size={14} /> Lưu hồ sơ ký
+              </button>
             </div>
 
-            <p className="mt-3 text-xs text-slate-400">
-              Khi soạn CV, chọn hồ sơ này sẽ tự áp chữ ký + mộc + chức danh ở trên. Mộc luôn cùng đơn vị với chữ ký.
-            </p>
+            {/* Live preview block ký */}
+            <div className="card" style={{ padding: 20, background: 'var(--paper-deep)' }}>
+              <div className="eyebrow" style={{ marginBottom: 14 }}>
+                Xem trước block ký
+              </div>
+              <div className="flex items-center justify-between" style={{ marginBottom: 16 }}>
+                <UnitPill unit={unit} />
+                {unit && (
+                  <Pill variant="success" dot>
+                    Cùng đơn vị
+                  </Pill>
+                )}
+              </div>
+
+              <div
+                style={{
+                  border: '1px solid var(--rule)',
+                  borderRadius: 6,
+                  padding: '20px 16px',
+                  background: 'var(--paper-raised)',
+                  textAlign: 'center',
+                }}
+              >
+                <div
+                  style={{
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    color: 'var(--ink)',
+                    fontSize: '0.82rem',
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  {displayTitle || 'CHỨC DANH'}
+                </div>
+                {/* mộc đè 1/3 lên chữ ký */}
+                <div
+                  className="flex items-center justify-center"
+                  style={{ position: 'relative', height: 112, marginTop: 8 }}
+                >
+                  {seal ? (
+                    <img
+                      src={`/api/seals/${seal.id}/image`}
+                      alt={seal.name}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        height: 80,
+                        width: 80,
+                        objectFit: 'contain',
+                        opacity: 0.7,
+                      }}
+                    />
+                  ) : (
+                    <span
+                      className="flex items-center justify-center"
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        width: 80,
+                        height: 80,
+                        borderRadius: 999,
+                        border: '2px dashed var(--rule-strong)',
+                        color: 'var(--ink-faint)',
+                        fontSize: '0.6rem',
+                      }}
+                    >
+                      Mộc
+                    </span>
+                  )}
+                  {sig ? (
+                    <img
+                      src={`/api/signatures/${sig.id}/image`}
+                      alt={sig.full_name}
+                      style={{
+                        position: 'absolute',
+                        bottom: 4,
+                        height: 56,
+                        maxWidth: 140,
+                        objectFit: 'contain',
+                      }}
+                    />
+                  ) : (
+                    <span style={{ position: 'absolute', bottom: 12, fontSize: '0.8rem', color: 'var(--ink-faint)' }}>
+                      Chữ ký
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontWeight: 600, color: 'var(--ink)', fontSize: '0.9rem', marginTop: 4 }}>
+                  {sig?.full_name ?? 'Người ký'}
+                </div>
+              </div>
+
+              <p className="cell-meta" style={{ marginTop: 14 }}>
+                Khi soạn CV, chọn hồ sơ này sẽ tự áp chữ ký + mộc + chức danh ở trên. Mộc luôn cùng đơn vị
+                với chữ ký.
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -496,55 +613,49 @@ function SelectCard({
     <button
       type="button"
       onClick={onClick}
-      className={`flex items-center gap-3 rounded-md border px-3 py-2.5 text-left ${
-        active ? 'border-amber-400 bg-amber-50' : 'border-slate-300 hover:bg-slate-50'
-      }`}
+      className="flex items-center"
+      style={{
+        gap: 10,
+        padding: 12,
+        borderRadius: 6,
+        textAlign: 'left',
+        cursor: 'pointer',
+        border: `1px solid ${active ? 'var(--rule-strong)' : 'var(--rule)'}`,
+        background: active ? 'var(--paper-deep)' : 'transparent',
+      }}
     >
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-500">
+      <span
+        className="flex items-center justify-center"
+        style={{ width: 32, height: 32, borderRadius: 6, background: 'var(--paper-deep)', color: 'var(--ink-muted)', flexShrink: 0 }}
+      >
         {icon}
       </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold text-slate-800">{title}</span>
-        {sub && <span className="block truncate text-xs text-slate-500">{sub}</span>}
+      <span style={{ minWidth: 0, flex: 1 }}>
+        <span className="truncate" style={{ display: 'block', fontWeight: 600, color: 'var(--ink)', fontSize: '0.85rem' }}>
+          {title}
+        </span>
+        {sub && <span className="cell-meta truncate" style={{ display: 'block' }}>{sub}</span>}
       </span>
-      {active && <Check size={15} className="shrink-0 text-green-600" />}
+      {active && <Check size={15} style={{ color: 'var(--success)', flexShrink: 0 }} />}
     </button>
   );
 }
 
 /* ─────────────────────────── Sửa hồ sơ ─────────────────────────── */
 
-function Drawer({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-40">
-      <button type="button" aria-label="Đóng" onClick={onClose} className="absolute inset-0 bg-slate-900/30" />
-      <div className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b px-6 py-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">Hồ sơ ký · Chỉnh sửa</p>
-            <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
-          </div>
-          <button type="button" onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100">
-            <X size={20} />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
-      </div>
-    </div>
-  );
-}
-
 function EditDrawer({
   profile,
   unit,
   signature,
   seal,
+  onRecreate,
   onClose,
 }: {
   profile: ProfileRow;
   unit: UnitLite | undefined;
   signature: SignatureRow | undefined;
   seal: SealRow | undefined;
+  onRecreate: () => void;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -586,76 +697,118 @@ function EditDrawer({
   });
 
   return (
-    <Drawer title={profile.name} onClose={onClose}>
+    <Drawer
+      open
+      onClose={onClose}
+      eyebrow="Hồ sơ ký · Chỉnh sửa"
+      title={profile.name}
+      width={460}
+      actions={
+        <>
+          <button
+            type="button"
+            className="btn-secondary"
+            style={{ marginRight: 'auto', color: profile.is_active ? 'var(--danger)' : 'var(--success)' }}
+            onClick={() => toggleActive.mutate()}
+            disabled={toggleActive.isPending}
+          >
+            {profile.is_active ? 'Ngừng dùng' : 'Kích hoạt'}
+          </button>
+          <button type="button" className="btn-secondary" onClick={onClose}>
+            Huỷ
+          </button>
+          <button type="button" className="btn-primary" onClick={() => save.mutate()} disabled={save.isPending}>
+            <Save size={14} /> Lưu
+          </button>
+        </>
+      }
+    >
       {serverError && (
-        <div role="alert" className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div
+          role="alert"
+          style={{
+            background: 'var(--danger-soft)',
+            color: 'var(--danger)',
+            border: '1px solid var(--rule)',
+            borderRadius: 6,
+            padding: '8px 12px',
+            fontSize: '0.85rem',
+          }}
+        >
           {serverError}
         </div>
       )}
       {warning && (
-        <p className="mb-4 flex items-start gap-1.5 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700">
-          <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+        <p
+          className="flex items-start"
+          style={{
+            gap: 6,
+            borderRadius: 6,
+            background: 'var(--warning-soft)',
+            color: 'var(--warning)',
+            padding: '8px 12px',
+            fontSize: '0.85rem',
+          }}
+        >
+          <AlertTriangle size={15} style={{ marginTop: 2, flexShrink: 0 }} />
           {warning} — tạo hồ sơ mới với chữ ký/mộc đang dùng để thay thế.
         </p>
       )}
 
-      <div className="mb-5 space-y-2 rounded-md border border-slate-200 p-4 text-sm">
-        <div className="flex items-center justify-between">
-          <span className="text-slate-500">Đơn vị</span>
+      <div
+        className="flex items-center justify-center"
+        style={{
+          height: 150,
+          borderRadius: 6,
+          border: '1px solid var(--rule)',
+          background: 'var(--paper-deep)',
+          color: unit?.color ?? 'var(--ink-muted)',
+        }}
+      >
+        <IdCard size={64} strokeWidth={1.1} />
+      </div>
+
+      <button
+        type="button"
+        className="btn-secondary"
+        style={{ width: '100%', justifyContent: 'center' }}
+        onClick={onRecreate}
+      >
+        <PenTool size={14} /> Sửa chữ ký / mộc / chức danh
+      </button>
+
+      <div className="card" style={{ padding: 16 }}>
+        <InfoRow label="Đơn vị">
           <UnitPill unit={unit} />
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-slate-500">Người ký</span>
-          <span className="text-slate-700">{signature?.full_name ?? '—'}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-slate-500">Mộc</span>
-          <span className="text-slate-700">{seal?.name ?? '—'}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-slate-500">Trạng thái</span>
-          <StatusPill active={profile.is_active} />
-        </div>
-        <p className="pt-1 text-xs text-slate-400">
+        </InfoRow>
+        <InfoRow label="Người ký">{signature?.full_name ?? '—'}</InfoRow>
+        <InfoRow label="Mộc">{seal?.name ?? '—'}</InfoRow>
+        <InfoRow label="Trạng thái">
+          <Pill variant={profile.is_active ? 'success' : 'draft'} dot={profile.is_active}>
+            {profile.is_active ? 'Đang dùng' : 'Ngừng dùng'}
+          </Pill>
+        </InfoRow>
+        <p className="cell-meta" style={{ paddingTop: 8 }}>
           Người ký và mộc không đổi được (chống nhầm). Cần đổi → tạo hồ sơ mới, ngừng dùng hồ sơ này.
         </p>
       </div>
 
-      <div className="space-y-4">
-        <div>
-          <label className={labelClass} htmlFor="ep_title">Chức danh hiển thị</label>
-          <input id="ep_title" className={fieldClass} value={displayTitle} onChange={(e) => setDisplayTitle(e.target.value)} />
-        </div>
-        <div>
-          <label className={labelClass} htmlFor="ep_name">Tên hồ sơ</label>
-          <input id="ep_name" className={fieldClass} value={name} onChange={(e) => setName(e.target.value)} />
-        </div>
-
-        <div className="flex items-center justify-end gap-2 pt-1">
-          <button
-            type="button"
-            onClick={() => toggleActive.mutate()}
-            disabled={toggleActive.isPending}
-            className={`mr-auto rounded-md border px-3 py-2 text-sm disabled:opacity-60 ${
-              profile.is_active
-                ? 'border-red-200 text-red-600 hover:bg-red-50'
-                : 'border-green-200 text-green-700 hover:bg-green-50'
-            }`}
-          >
-            {profile.is_active ? 'Ngừng dùng' : 'Kích hoạt'}
-          </button>
-          <button type="button" onClick={onClose} className="rounded-md border border-slate-300 px-4 py-2 text-sm">
-            Huỷ
-          </button>
-          <button
-            type="button"
-            onClick={() => save.mutate()}
-            disabled={save.isPending}
-            className="rounded-md bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500 disabled:opacity-60"
-          >
-            Lưu
-          </button>
-        </div>
+      <div>
+        <label className="field-label" htmlFor="ep_title">
+          Chức danh hiển thị
+        </label>
+        <input
+          id="ep_title"
+          className="text-input"
+          value={displayTitle}
+          onChange={(e) => setDisplayTitle(e.target.value)}
+        />
+      </div>
+      <div>
+        <label className="field-label" htmlFor="ep_name">
+          Tên hồ sơ
+        </label>
+        <input id="ep_name" className="text-input" value={name} onChange={(e) => setName(e.target.value)} />
       </div>
     </Drawer>
   );

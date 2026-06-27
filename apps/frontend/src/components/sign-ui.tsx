@@ -1,7 +1,7 @@
 /**
  * Pill dùng chung cho mục Mộc & Chữ ký (theo ui-demo: UnitPill + trạng thái Đang/Ngừng
- * dùng trên đầu mỗi card). Dịch token demo (var(--unit-*), .pill) sang Tailwind +
- * màu đơn vị động.
+ * dùng trên đầu mỗi card). Màu đơn vị động theo `unit.color`; còn lại dùng token/pill
+ * của design system (KHÔNG màu Tailwind raw).
  */
 
 export interface UnitLite {
@@ -15,7 +15,10 @@ export interface UnitLite {
 export function UnitPill({ unit }: { unit?: UnitLite }) {
   if (!unit) {
     return (
-      <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-400">
+      <span
+        className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+        style={{ background: 'var(--light-graphite)', color: 'var(--ink-faint)' }}
+      >
         Chưa gán đơn vị
       </span>
     );
@@ -33,13 +36,11 @@ export function UnitPill({ unit }: { unit?: UnitLite }) {
 
 export function StatusPill({ active }: { active: boolean }) {
   return active ? (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
-      <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+    <span className="pill pill-success">
+      <span className="dot" />
       Đang dùng
     </span>
   ) : (
-    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
-      Ngừng dùng
-    </span>
+    <span className="pill pill-draft">Ngừng dùng</span>
   );
 }

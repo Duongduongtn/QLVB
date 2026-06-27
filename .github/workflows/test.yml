@@ -91,6 +91,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Design tokens (chặn màu raw Tailwind — bám ui-demo)
+        run: npm run check:design
+
       - name: Type-check
         run: npm run typecheck
 

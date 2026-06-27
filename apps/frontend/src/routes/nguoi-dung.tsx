@@ -4,11 +4,32 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { KeyRound, Lock, Search, Trash2, Unlock, UserPlus, X } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  KeyRound,
+  Lock,
+  Plus,
+  Search,
+  ShieldAlert,
+  Trash2,
+  Unlock,
+  Users,
+} from 'lucide-react';
 
 import { api, type ApiErrorEnvelope } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
 import { fmtDateTime } from '~/lib/format';
+import {
+  Avatar,
+  EmptyState,
+  InfoRow,
+  PageHeader,
+  Pill,
+  RowActions,
+  type Crumb,
+} from '~/components/ui';
+import { Drawer } from '~/components/Drawer';
 
 export const Route = createFileRoute('/nguoi-dung')({
   component: NguoiDungPage,
@@ -37,15 +58,55 @@ interface Stats {
 
 const PAGE_SIZE = 20;
 
+const BREADCRUMB: Crumb[] = [{ label: 'QLCV' }, { label: 'Người dùng' }];
+
 function errMsg(error: unknown, fallback: string): string {
   return (error as ApiErrorEnvelope | undefined)?.error?.message ?? fallback;
 }
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  const last = parts[parts.length - 1] ?? '';
-  const first = parts.length > 1 ? (parts[0] ?? '') : '';
-  return ((first[0] ?? '') + (last[0] ?? '')).toUpperCase() || '?';
+/* Hộp thông báo lỗi từ máy chủ — tái dùng style pill cảnh báo. */
+function Alert({ children }: { children: ReactNode }) {
+  return (
+    <div
+      role="alert"
+      className="pill pill-cancelled"
+      style={{
+        display: 'block',
+        height: 'auto',
+        padding: '8px 12px',
+        marginBottom: 16,
+        textDecoration: 'none',
+        letterSpacing: 0,
+        textTransform: 'none',
+        fontFamily: 'inherit',
+        fontSize: '0.85rem',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+const fieldErrStyle = { marginTop: 4, fontSize: '0.75rem', color: 'var(--danger)' } as const;
+
+function RoleBadge({ role }: { role: Role }) {
+  return role === 'manager' ? (
+    <Pill variant="gdnn" dot>
+      Quản lý
+    </Pill>
+  ) : (
+    <Pill variant="draft">Nhân viên</Pill>
+  );
+}
+
+function StatusBadge({ active }: { active: boolean }) {
+  return active ? (
+    <Pill variant="success" dot>
+      Hoạt động
+    </Pill>
+  ) : (
+    <Pill variant="cancelled">Đã khoá</Pill>
+  );
 }
 
 function NguoiDungPage() {
@@ -70,16 +131,26 @@ function NguoiDungPage() {
   // Chỉ Quản lý mới vào được trang này.
   if (me && me.role !== 'manager') {
     return (
-      <div className="mx-auto max-w-7xl px-6 py-10">
-        <p className="text-slate-600">Trang này chỉ dành cho Quản lý.</p>
-      </div>
+      <>
+        <PageHeader breadcrumb={BREADCRUMB} title="Quản lý người dùng" />
+        <div className="card">
+          <EmptyState
+            icon={ShieldAlert}
+            title="Chỉ dành cho Quản lý"
+            desc="Trang này chỉ dành cho tài khoản có vai trò Quản lý."
+          />
+        </div>
+      </>
     );
   }
   if (!me) {
     return (
-      <div className="mx-auto max-w-7xl px-6 py-10">
-        <p className="text-slate-500">Đang tải…</p>
-      </div>
+      <>
+        <PageHeader breadcrumb={BREADCRUMB} title="Quản lý người dùng" />
+        <div className="card">
+          <EmptyState icon={Users} title="Đang tải…" />
+        </div>
+      </>
     );
   }
 
@@ -89,127 +160,178 @@ function NguoiDungPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8">
-      <div className="mb-1 flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">
-            Người dùng
-          </p>
-          <h2 className="text-2xl font-semibold text-slate-800">Quản lý người dùng</h2>
-          {stats && (
-            <p className="mt-1 text-sm text-slate-500">
-              {stats.total} tài khoản: {stats.managers} Quản lý, {stats.staff} Nhân viên
-              {stats.locked > 0 && ` — ${stats.locked} đang khoá`}
-            </p>
-          )}
+    <>
+      <PageHeader
+        breadcrumb={BREADCRUMB}
+        title="Quản lý người dùng"
+        subhead={
+          stats
+            ? `${stats.total} tài khoản: ${stats.managers} Quản lý, ${stats.staff} Nhân viên${
+                stats.locked > 0 ? ` — ${stats.locked} đang khoá` : ''
+              }`
+            : undefined
+        }
+        actions={
+          <button type="button" className="btn-primary" onClick={() => setCreating(true)}>
+            <Plus size={14} /> Thêm user mới
+          </button>
+        }
+        filters={
+          <div className="relative" style={{ width: '100%', maxWidth: 340 }}>
+            <Search
+              size={16}
+              className="absolute"
+              style={{
+                left: 12,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: 'var(--ink-faint)',
+                pointerEvents: 'none',
+              }}
+            />
+            <input
+              value={q}
+              onChange={(e) => {
+                setQ(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Tìm theo tên, tên đăng nhập, email…"
+              className="text-input"
+              style={{ paddingLeft: 38 }}
+            />
+          </div>
+        }
+      />
+
+      <div className="card" style={{ overflow: 'hidden' }}>
+        <div className="table-scroll">
+          <table className="qlcv-table">
+            <thead>
+              <tr>
+                <th style={{ paddingLeft: 24 }}>Họ tên</th>
+                <th style={{ width: 140 }}>Tên đăng nhập</th>
+                <th style={{ width: 220 }}>Email</th>
+                <th style={{ width: 120 }}>Vai trò</th>
+                <th style={{ width: 120 }}>Trạng thái</th>
+                <th style={{ width: 100, paddingRight: 24 }} className="center">
+                  Thao tác
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {usersQuery.isLoading && (
+                <tr>
+                  <td colSpan={6}>
+                    <EmptyState icon={Users} title="Đang tải…" />
+                  </td>
+                </tr>
+              )}
+              {!usersQuery.isLoading && items.length === 0 && (
+                <tr>
+                  <td colSpan={6}>
+                    <EmptyState
+                      icon={Users}
+                      title="Không có người dùng nào"
+                      desc="Thử đổi từ khoá tìm kiếm hoặc thêm user mới."
+                    />
+                  </td>
+                </tr>
+              )}
+              {items.map((u) => (
+                <tr
+                  key={u.id}
+                  tabIndex={0}
+                  onClick={() => setSelected(u)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSelected(u);
+                    }
+                  }}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <td style={{ paddingLeft: 24 }}>
+                    <div className="flex items-center" style={{ gap: 10 }}>
+                      <Avatar name={u.full_name} />
+                      <span style={{ fontWeight: 500 }}>{u.full_name}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <span className="cell-mono">{u.username}</span>
+                  </td>
+                  <td>
+                    {u.email ? (
+                      <span className="cell-meta">{u.email}</span>
+                    ) : (
+                      <span className="cell-meta dash">—</span>
+                    )}
+                  </td>
+                  <td>
+                    <RoleBadge role={u.role} />
+                  </td>
+                  <td>
+                    <StatusBadge active={u.is_active} />
+                  </td>
+                  <td style={{ paddingRight: 24 }}>
+                    <div className="flex items-center justify-center" style={{ gap: 4 }}>
+                      <button
+                        type="button"
+                        className="action-btn"
+                        aria-label="Reset mật khẩu"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelected(u);
+                        }}
+                      >
+                        <KeyRound size={15} />
+                      </button>
+                      <RowActions
+                        items={[
+                          { label: 'Sửa thông tin', onClick: () => setSelected(u) },
+                          { label: 'Reset mật khẩu', onClick: () => setSelected(u) },
+                          {
+                            label: u.is_active ? 'Khoá tài khoản' : 'Mở khoá',
+                            danger: u.is_active,
+                            onClick: () => setSelected(u),
+                          },
+                        ]}
+                      />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="flex items-center gap-2 rounded-md bg-amber-400 px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500"
-        >
-          <UserPlus size={16} />
-          Thêm user
-        </button>
-      </div>
-
-      <div className="relative my-4 max-w-sm">
-        <Search
-          size={16}
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-        />
-        <input
-          value={q}
-          onChange={(e) => {
-            setQ(e.target.value);
-            setPage(1);
-          }}
-          placeholder="Tìm theo tên, tên đăng nhập, email…"
-          className="w-full rounded-md border border-slate-300 py-2 pl-9 pr-3 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
-        />
-      </div>
-
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <table className="w-full text-sm">
-          <thead className="border-b bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-4 py-3 font-medium">Họ tên</th>
-              <th className="px-4 py-3 font-medium">Tên đăng nhập</th>
-              <th className="px-4 py-3 font-medium">Email</th>
-              <th className="px-4 py-3 font-medium">Vai trò</th>
-              <th className="px-4 py-3 font-medium">Trạng thái</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {usersQuery.isLoading && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
-                  Đang tải…
-                </td>
-              </tr>
-            )}
-            {!usersQuery.isLoading && items.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
-                  Không có người dùng nào.
-                </td>
-              </tr>
-            )}
-            {items.map((u) => (
-              <tr
-                key={u.id}
-                tabIndex={0}
-                onClick={() => setSelected(u)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setSelected(u);
-                  }
-                }}
-                className="cursor-pointer hover:bg-amber-50/50 focus:bg-amber-50 focus:outline-none"
-              >
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600">
-                      {initials(u.full_name)}
-                    </span>
-                    <span className="font-medium text-slate-800">{u.full_name}</span>
-                  </div>
-                </td>
-                <td className="px-4 py-3 font-mono text-slate-600">{u.username}</td>
-                <td className="px-4 py-3 text-slate-600">{u.email ?? '—'}</td>
-                <td className="px-4 py-3">
-                  <RoleBadge role={u.role} />
-                </td>
-                <td className="px-4 py-3">
-                  <StatusBadge active={u.is_active} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
 
       {totalPages > 1 && (
-        <div className="mt-4 flex items-center justify-end gap-2 text-sm">
+        <div
+          className="flex items-center justify-end"
+          style={{ gap: 8, marginTop: 16 }}
+        >
           <button
             type="button"
+            className="pg-btn"
             disabled={page <= 1}
             onClick={() => setPage((p) => p - 1)}
-            className="rounded-md border border-slate-300 px-3 py-1 disabled:opacity-40"
+            aria-label="Trang trước"
+            style={{ opacity: page <= 1 ? 0.4 : 1 }}
           >
-            Trước
+            <ChevronLeft size={16} />
           </button>
-          <span className="text-slate-500">
+          <span className="cell-meta">
             Trang {page}/{totalPages}
           </span>
           <button
             type="button"
+            className="pg-btn"
             disabled={page >= totalPages}
             onClick={() => setPage((p) => p + 1)}
-            className="rounded-md border border-slate-300 px-3 py-1 disabled:opacity-40"
+            aria-label="Trang sau"
+            style={{ opacity: page >= totalPages ? 0.4 : 1 }}
           >
-            Sau
+            <ChevronRight size={16} />
           </button>
         </div>
       )}
@@ -222,66 +344,9 @@ function NguoiDungPage() {
           onClose={() => setSelected(null)}
         />
       )}
-    </div>
+    </>
   );
 }
-
-function RoleBadge({ role }: { role: Role }) {
-  return role === 'manager' ? (
-    <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700">
-      Quản lý
-    </span>
-  ) : (
-    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-      Nhân viên
-    </span>
-  );
-}
-
-function StatusBadge({ active }: { active: boolean }) {
-  return active ? (
-    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-700">
-      <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-      Hoạt động
-    </span>
-  ) : (
-    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-red-600">
-      <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-      Đã khoá
-    </span>
-  );
-}
-
-function Drawer({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-40">
-      <button
-        type="button"
-        aria-label="Đóng"
-        onClick={onClose}
-        className="absolute inset-0 bg-slate-900/30"
-      />
-      <div className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b px-6 py-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">
-              Người dùng
-            </p>
-            <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
-          </div>
-          <button type="button" onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100">
-            <X size={20} />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-const fieldClass =
-  'w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100';
-const labelClass = 'mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500';
 
 const createSchema = z.object({
   full_name: z.string().min(1, 'Nhập họ tên'),
@@ -322,51 +387,88 @@ function CreateDrawer({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Drawer title="Thêm user mới" onClose={onClose}>
-      {serverError && (
-        <div role="alert" className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {serverError}
-        </div>
-      )}
-      <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+    <Drawer
+      open
+      onClose={onClose}
+      eyebrow="Người dùng"
+      title="Thêm user mới"
+      width={480}
+      actions={
+        <>
+          <button type="button" className="btn-secondary" onClick={onClose}>
+            Huỷ
+          </button>
+          <button
+            type="submit"
+            form="create-user-form"
+            className="btn-primary"
+            disabled={isSubmitting}
+          >
+            Tạo user
+          </button>
+        </>
+      }
+    >
+      {serverError && <Alert>{serverError}</Alert>}
+      <form
+        id="create-user-form"
+        onSubmit={handleSubmit(onSubmit)}
+        noValidate
+        className="flex flex-col"
+        style={{ gap: 16 }}
+      >
         <div>
-          <label className={labelClass} htmlFor="c_full">Họ tên</label>
-          <input id="c_full" className={fieldClass} {...register('full_name')} />
-          {errors.full_name && <p className="mt-1 text-xs text-red-600">{errors.full_name.message}</p>}
+          <label className="field-label" htmlFor="c_full">
+            Họ tên
+          </label>
+          <input id="c_full" className="text-input" placeholder="Nguyễn Văn A" {...register('full_name')} />
+          {errors.full_name && <p style={fieldErrStyle}>{errors.full_name.message}</p>}
         </div>
         <div>
-          <label className={labelClass} htmlFor="c_user">Tên đăng nhập</label>
-          <input id="c_user" className={fieldClass} autoComplete="off" {...register('username')} />
-          {errors.username && <p className="mt-1 text-xs text-red-600">{errors.username.message}</p>}
+          <label className="field-label" htmlFor="c_user">
+            Tên đăng nhập
+          </label>
+          <input
+            id="c_user"
+            className="text-input"
+            placeholder="vanthu3"
+            autoComplete="off"
+            {...register('username')}
+          />
+          {errors.username && <p style={fieldErrStyle}>{errors.username.message}</p>}
         </div>
         <div>
-          <label className={labelClass} htmlFor="c_email">Email</label>
-          <input id="c_email" className={fieldClass} placeholder="email@thanhdat.vn" {...register('email')} />
-          {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>}
+          <label className="field-label" htmlFor="c_email">
+            Email
+          </label>
+          <input
+            id="c_email"
+            className="text-input"
+            placeholder="email@thanhdat.vn"
+            {...register('email')}
+          />
+          {errors.email && <p style={fieldErrStyle}>{errors.email.message}</p>}
         </div>
         <div>
-          <label className={labelClass} htmlFor="c_role">Vai trò</label>
-          <select id="c_role" className={fieldClass} {...register('role')}>
+          <label className="field-label" htmlFor="c_role">
+            Vai trò
+          </label>
+          <select id="c_role" className="text-input" {...register('role')}>
             <option value="staff">Nhân viên</option>
             <option value="manager">Quản lý</option>
           </select>
         </div>
         <div>
-          <label className={labelClass} htmlFor="c_pw">Mật khẩu tạm</label>
-          <input id="c_pw" className={fieldClass} autoComplete="new-password" {...register('password')} />
-          {errors.password && <p className="mt-1 text-xs text-red-600">{errors.password.message}</p>}
-        </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="rounded-md border border-slate-300 px-4 py-2 text-sm">
-            Huỷ
-          </button>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="rounded-md bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500 disabled:opacity-60"
-          >
-            Tạo user
-          </button>
+          <label className="field-label" htmlFor="c_pw">
+            Mật khẩu tạm
+          </label>
+          <input
+            id="c_pw"
+            className="text-input"
+            autoComplete="new-password"
+            {...register('password')}
+          />
+          {errors.password && <p style={fieldErrStyle}>{errors.password.message}</p>}
         </div>
       </form>
     </Drawer>
@@ -470,126 +572,141 @@ function EditDrawer({
 
   if (resetPw) {
     return (
-      <Drawer title="Mật khẩu mới" onClose={onClose}>
-        <p className="mb-3 text-sm text-slate-600">
-          Mật khẩu mới của <strong>{user.full_name}</strong> (chỉ hiện 1 lần — hãy lưu lại và gửi cho người dùng):
+      <Drawer
+        open
+        onClose={onClose}
+        eyebrow="Người dùng"
+        title="Mật khẩu mới"
+        width={480}
+        actions={
+          <button type="button" className="btn-primary" onClick={onClose}>
+            Đã lưu, đóng
+          </button>
+        }
+      >
+        <p style={{ fontSize: '0.875rem', color: 'var(--ink-body)', marginBottom: 12 }}>
+          Mật khẩu mới của <strong>{user.full_name}</strong> (chỉ hiện 1 lần — hãy lưu lại và gửi
+          cho người dùng):
         </p>
-        <div className="flex items-center justify-between rounded-md border border-amber-200 bg-amber-50 px-4 py-3">
-          <code className="text-base font-semibold text-slate-800">{resetPw}</code>
+        <div
+          className="flex items-center justify-between"
+          style={{
+            gap: 12,
+            padding: '12px 16px',
+            borderRadius: 6,
+            background: 'var(--kinpaku-pale)',
+            border: '1px solid var(--rule)',
+          }}
+        >
+          <code style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--ink)' }}>{resetPw}</code>
           <button
             type="button"
+            className="btn-secondary"
             onClick={() => navigator.clipboard?.writeText(resetPw)}
-            className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-medium hover:bg-slate-50"
           >
             Sao chép
           </button>
         </div>
-        <p className="mt-3 text-xs text-slate-500">
+        <p className="cell-meta" style={{ marginTop: 12 }}>
           Mật khẩu cũ đã vô hiệu và mọi phiên đăng nhập của người dùng này đã bị đẩy ra.
         </p>
-        <div className="mt-5 flex justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500"
-          >
-            Đã lưu, đóng
-          </button>
-        </div>
       </Drawer>
     );
   }
 
   return (
-    <Drawer title={user.full_name} onClose={onClose}>
-      {serverError && (
-        <div role="alert" className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {serverError}
-        </div>
-      )}
-      <div className="mb-5 flex items-center gap-3">
-        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-600">
-          {initials(user.full_name)}
-        </span>
-        <div>
-          <p className="font-semibold text-slate-800">{user.full_name}</p>
-          <p className="font-mono text-sm text-slate-500">{user.username}</p>
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
-        <div>
-          <label className={labelClass} htmlFor="e_full">Họ tên</label>
-          <input id="e_full" className={fieldClass} {...register('full_name')} />
-          {errors.full_name && <p className="mt-1 text-xs text-red-600">{errors.full_name.message}</p>}
-        </div>
-        <div>
-          <label className={labelClass} htmlFor="e_email">Email</label>
-          <input id="e_email" className={fieldClass} {...register('email')} />
-          {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>}
-        </div>
-        <div>
-          <label className={labelClass} htmlFor="e_role">Vai trò</label>
-          <select id="e_role" className={fieldClass} {...register('role')}>
-            <option value="staff">Nhân viên</option>
-            <option value="manager">Quản lý</option>
-          </select>
-        </div>
-
-        <div className="rounded-md bg-slate-50 px-4 py-3 text-sm">
-          <div className="flex justify-between py-1">
-            <span className="text-slate-500">Trạng thái</span>
-            <StatusBadge active={user.is_active} />
-          </div>
-          <div className="flex justify-between py-1">
-            <span className="text-slate-500">Đăng nhập cuối</span>
-            <span className="text-slate-700">{fmtDateTime(user.last_login_at) || '—'}</span>
-          </div>
-          <div className="flex justify-between py-1">
-            <span className="text-slate-500">Phiên đang mở</span>
-            <span className="text-slate-700">{user.active_sessions ?? 0} thiết bị</span>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
+    <Drawer
+      open
+      onClose={onClose}
+      eyebrow="Người dùng"
+      title={user.full_name}
+      width={480}
+      actions={
+        <>
           <button
             type="button"
             onClick={confirmDelete}
             disabled={isSelf || removeUser.isPending}
             title={isSelf ? 'Không thể tự xoá tài khoản của mình' : undefined}
-            className="mr-auto flex items-center gap-1.5 rounded-md px-3 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-40"
+            className="btn-ghost"
+            style={{ color: 'var(--danger)', marginRight: 'auto' }}
           >
-            <Trash2 size={15} />
-            Xoá
+            <Trash2 size={14} /> Xoá
           </button>
           <button
             type="button"
             onClick={() => resetPassword.mutate()}
             disabled={resetPassword.isPending}
-            className="flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-60"
+            className="btn-secondary"
           >
-            <KeyRound size={15} />
-            Reset mật khẩu
+            <KeyRound size={14} /> Reset mật khẩu
           </button>
           <button
             type="button"
             onClick={() => toggleLock.mutate()}
             disabled={toggleLock.isPending || (isSelf && user.is_active)}
             title={isSelf && user.is_active ? 'Không thể tự khoá tài khoản của mình' : undefined}
-            className="flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
+            className="btn-secondary"
+            style={{ color: user.is_active ? 'var(--danger)' : 'var(--success)' }}
           >
-            {user.is_active ? <Lock size={15} /> : <Unlock size={15} />}
+            {user.is_active ? <Lock size={14} /> : <Unlock size={14} />}
             {user.is_active ? 'Khoá tài khoản' : 'Mở khoá'}
           </button>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="rounded-md bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-500 disabled:opacity-60"
-          >
+          <button type="submit" form="edit-user-form" className="btn-primary" disabled={isSubmitting}>
             Lưu
           </button>
+        </>
+      }
+    >
+      {serverError && <Alert>{serverError}</Alert>}
+
+      <div className="flex items-center" style={{ gap: 12 }}>
+        <Avatar name={user.full_name} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 600, color: 'var(--ink)' }}>{user.full_name}</div>
+          <div className="cell-mono">{user.username}</div>
+        </div>
+      </div>
+
+      <form
+        id="edit-user-form"
+        onSubmit={handleSubmit(onSubmit)}
+        noValidate
+        className="flex flex-col"
+        style={{ gap: 16, marginTop: 18 }}
+      >
+        <div>
+          <label className="field-label" htmlFor="e_full">
+            Họ tên
+          </label>
+          <input id="e_full" className="text-input" {...register('full_name')} />
+          {errors.full_name && <p style={fieldErrStyle}>{errors.full_name.message}</p>}
+        </div>
+        <div>
+          <label className="field-label" htmlFor="e_email">
+            Email
+          </label>
+          <input id="e_email" className="text-input" {...register('email')} />
+          {errors.email && <p style={fieldErrStyle}>{errors.email.message}</p>}
+        </div>
+        <div>
+          <label className="field-label" htmlFor="e_role">
+            Vai trò
+          </label>
+          <select id="e_role" className="text-input" {...register('role')}>
+            <option value="staff">Nhân viên</option>
+            <option value="manager">Quản lý</option>
+          </select>
         </div>
       </form>
+
+      <div className="card" style={{ padding: 16, marginTop: 18 }}>
+        <InfoRow label="Trạng thái">
+          <StatusBadge active={user.is_active} />
+        </InfoRow>
+        <InfoRow label="Đăng nhập cuối">{fmtDateTime(user.last_login_at) || '—'}</InfoRow>
+        <InfoRow label="Phiên đang mở">{user.active_sessions ?? 0} thiết bị</InfoRow>
+      </div>
     </Drawer>
   );
 }
