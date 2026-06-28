@@ -334,7 +334,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [OUT.PUB-01] Là Quản lý/Nhân viên, tôi muốn upload file công văn → chọn đơn vị + hồ sơ ký → chèn mộc/chữ ký → cấp số → tải về PDF sẵn sàng ký số, để rút quy trình từ 30 phút (in/đóng/scan) xuống 5 phút.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⚠️ Partial (27/06/2026) — **backend + FE XONG gồm trọn vòng đời + convert Word**: tải **PDF hoặc Word (.docx/.doc → convert PDF ở WORKER LibreOffice, async poll; backend image vẫn gọn, 503 graceful nếu thiếu)**→metadata→hồ sơ ký lọc đơn vị→preview chèn mộc (PyMuPDF, auto góc dưới phải trang cuối)→giáp lai/ký nháy→**xác nhận chống nhầm hiện tên đơn vị**→cấp số atomic / dùng số có sẵn→tải `_CHUA_KY_SO`→**upload bản đã ký số (D1.12) → "Đã phát hành"**; **Huỷ/Thu hồi** (giữ số, **thu hồi CV đã phát hành chỉ Quản lý**). Chống nhầm mộc enforce server; khoá row mọi thao tác đổi trạng thái. **Defer:** kéo-thả vị trí mộc (D2-D, đang auto), verify chữ ký số PAdES bản upload (E1.5), watermark khi tải (D1.11/H2).
+- **Trạng thái**: ⚠️ Partial (27/06/2026) — **backend + FE XONG gồm trọn vòng đời + convert Word**: tải **PDF hoặc Word (.docx/.doc → convert PDF ở WORKER LibreOffice, async poll; backend image vẫn gọn, 503 graceful nếu thiếu)**→metadata→hồ sơ ký lọc đơn vị→preview chèn mộc (PyMuPDF, auto góc dưới phải trang cuối)→giáp lai/ký nháy→**xác nhận chống nhầm hiện tên đơn vị**→cấp số atomic / dùng số có sẵn→tải `_CHUA_KY_SO`→**upload bản đã ký số (D1.12) → "Đã phát hành"**; **Huỷ/Thu hồi** (giữ số, **thu hồi CV đã phát hành chỉ Quản lý**). Chống nhầm mộc enforce server; khoá row mọi thao tác đổi trạng thái. **Defer:** kéo-thả vị trí mộc (D2-D, đang auto), verify chữ ký số PAdES bản upload (E1.5). ~~watermark khi tải (D1.11/H2)~~ → **✅ Done qua H2** (watermark on-the-fly khi tải, bỏ qua CV đã ký số).
 - **Steps to Complete**:
   1. Vào "Công văn đi → Soạn mới".
   2. Upload file gốc (Word `.docx`/`.doc` hoặc PDF). Nếu Word → web convert sang PDF bằng LibreOffice headless.
@@ -390,7 +390,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [OUT.GLA-01] Là người phát hành CV nhiều trang, tôi muốn đóng giáp lai để chống đánh tráo trang, theo quy định cơ quan nhà nước.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⚠️ Partial (27/06/2026) — **backend xong** (`pdf_stamp.giap_lai`: 3 lựa chọn none/all/range, cắt mộc N cột đặt mép phải, validate X≤Y≤page_count). Cần FE + **in thử kiểm ghép mép liền mạch**.
+- **Trạng thái**: ✅ Done (28/06/2026) — backend `pdf_stamp.giap_lai` (3 lựa chọn none/all/range, cắt mộc N cột mép phải, validate X≤Y≤page_count) + **FE wizard Step5** (`cong-van-di.soan.tsx` `RangeSeg` giáp lai) → gửi `sealing_option` → `outgoing.render_stamped` áp `giap_lai` (dùng chính mộc của hồ sơ ký, chặn thiếu mộc). **Còn lại = kiểm tra vận hành**: in thử ghép mép liền mạch (manual ops, ngoài phạm vi code).
 - **Steps to Complete**:
   1. Trong luồng D1 bước 7, chọn 1 trong 3 option:
      - **Không giáp lai** (mặc định cho CV 1 trang).
@@ -411,7 +411,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [OUT.INI-01] Là người phát hành CV nhiều trang, tôi muốn chèn chữ ký nháy nhỏ ở góc dưới mỗi trang, để xác nhận từng trang đã đọc.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⚠️ Partial (27/06/2026) — **backend xong** (`pdf_stamp.ky_nhay`: góc dưới phải, range, TRỪ trang cuối; range chỉ trang cuối→không chèn). Cần FE.
+- **Trạng thái**: ✅ Done (28/06/2026) — backend `pdf_stamp.ky_nhay` (góc dưới phải, range, TRỪ trang cuối) + **FE wizard Step5** (`RangeSeg` ký nháy) → `sealing_option.ky_nhay` → `render_stamped` áp (dùng chữ ký của hồ sơ ký, chặn thiếu chữ ký).
 - **Steps to Complete**:
   1. Trong luồng D1 bước 7, tick "Ký nháy mỗi trang".
   2. Chọn range tương tự D3: Không / Toàn bộ / Range.
