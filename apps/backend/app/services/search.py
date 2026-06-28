@@ -19,7 +19,10 @@ from sqlalchemy import ColumnElement, Select, func, literal, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.models.incoming_document import IncomingDocument
-from app.models.outgoing_document import OutgoingDocument
+from app.models.organization import Organization
+from app.models.outgoing_document import OutgoingDocument, OutgoingRecipient
+from app.models.signature import Signature
+from app.models.signing_profile import SigningProfile
 
 _VN_TZ = timezone(timedelta(hours=7))  # biên ngày lọc theo giờ VN
 
@@ -55,9 +58,20 @@ def _incoming_select(
     date_to: date | None,
 ) -> Select[Any]:
     inc = IncomingDocument
+    # F1 mở rộng — khớp thêm TÊN cơ quan gửi (EXISTS, trgm không dấu). manager_only vẫn là
+    # điều kiện AND riêng bên dưới → không nới lỏng bảo mật.
+    sender_match = (
+        select(1)
+        .select_from(Organization)
+        .where(
+            Organization.id == inc.sender_org_id,
+            or_(_fuzzy(Organization.full_name, q), _fuzzy(Organization.short_name, q)),
+        )
+        .exists()
+    )
     conds: list[ColumnElement[bool]] = [
         inc.deleted_at.is_(None),
-        or_(inc.search_vector.op("@@")(tsq), _fuzzy(inc.subject, q)),
+        or_(inc.search_vector.op("@@")(tsq), _fuzzy(inc.subject, q), sender_match),
     ]
     if not include_manager_only:  # lớp 1: Nhân viên không thấy CV "Chỉ Quản lý xem"
         conds.append(inc.manager_only.is_(False))
@@ -88,9 +102,27 @@ def _outgoing_select(
     date_to: date | None,
 ) -> Select[Any]:
     out = OutgoingDocument
+    # F1 mở rộng — khớp thêm TÊN người ký (qua hồ sơ ký → chữ ký) + TÊN nơi nhận (M2M).
+    signer_match = (
+        select(1)
+        .select_from(SigningProfile)
+        .join(Signature, SigningProfile.signature_id == Signature.id)
+        .where(SigningProfile.id == out.signing_profile_id, _fuzzy(Signature.full_name, q))
+        .exists()
+    )
+    recipient_match = (
+        select(1)
+        .select_from(OutgoingRecipient)
+        .join(Organization, OutgoingRecipient.organization_id == Organization.id)
+        .where(
+            OutgoingRecipient.outgoing_id == out.id,
+            or_(_fuzzy(Organization.full_name, q), _fuzzy(Organization.short_name, q)),
+        )
+        .exists()
+    )
     conds: list[ColumnElement[bool]] = [
         out.deleted_at.is_(None),
-        or_(out.search_vector.op("@@")(tsq), _fuzzy(out.subject, q)),
+        or_(out.search_vector.op("@@")(tsq), _fuzzy(out.subject, q), signer_match, recipient_match),
     ]
     if status:
         conds.append(out.status == status)
