@@ -957,6 +957,21 @@ body {
     }
   }
 
+  /* PWA L1 — touch target ≥ 44px trên thiết bị cảm ứng (min-height thắng inline height nhỏ) */
+  @media (max-width: 768px) and (pointer: coarse) {
+    .btn-primary,
+    .btn-secondary,
+    .btn-ghost,
+    .icon-btn,
+    .action-btn,
+    .seg button,
+    .text-input,
+    .search-input,
+    .nav-item {
+      min-height: 44px;
+    }
+  }
+
   /* Modal (centered dialog) */
   .modal-backdrop {
     position: fixed;

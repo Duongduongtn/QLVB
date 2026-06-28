@@ -125,6 +125,9 @@ function RootLayout() {
 
   useEffect(() => {
     if (me) setUser({ ...me, role: me.role as Role });
+    // PWA L1: chưa/đã hết đăng nhập (me === null, không phải undefined-đang-tải) → dọn cache
+    // API offline để thiết bị chung không phục vụ lại CV của phiên trước (gồm CV mật).
+    else if (me === null && 'caches' in window) void caches.delete('qlcv-api');
   }, [me, setUser]);
 
   async function handleLogout() {
@@ -134,6 +137,9 @@ function RootLayout() {
     } finally {
       clear();
       queryClient.setQueryData(['me'], null);
+      // PWA L1: dọn cache API của service worker để user khác (thiết bị chung) không
+      // xem được dữ liệu CV đã cache offline của phiên trước.
+      if ('caches' in window) void caches.delete('qlcv-api');
       navigate({ to: '/login' });
     }
   }
