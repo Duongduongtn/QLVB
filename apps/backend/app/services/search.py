@@ -18,6 +18,7 @@ from typing import Any
 from sqlalchemy import ColumnElement, Select, func, literal, or_, select, text
 from sqlalchemy.orm import Session
 
+from app.models.incoming_attachment import IncomingAttachment
 from app.models.incoming_document import IncomingDocument
 from app.models.organization import Organization
 from app.models.outgoing_document import OutgoingDocument, OutgoingRecipient
@@ -69,9 +70,21 @@ def _incoming_select(
         )
         .exists()
     )
+    # F1 — khớp thêm nội dung OCR PHỤ LỤC (search_vector riêng, GIN index). Bảo mật 2 lớp như
+    # parent: (1) `inc.manager_only=FALSE` (AND dưới) loại CV cha mật với Nhân viên; (2) trigger
+    # 0018 đặt search_vector phụ lục = NULL khi CV cha manager_only → OCR mật không nằm trong index.
+    attachment_match = (
+        select(1)
+        .select_from(IncomingAttachment)
+        .where(
+            IncomingAttachment.incoming_id == inc.id,
+            IncomingAttachment.search_vector.op("@@")(tsq),
+        )
+        .exists()
+    )
     conds: list[ColumnElement[bool]] = [
         inc.deleted_at.is_(None),
-        or_(inc.search_vector.op("@@")(tsq), _fuzzy(inc.subject, q), sender_match),
+        or_(inc.search_vector.op("@@")(tsq), _fuzzy(inc.subject, q), sender_match, attachment_match),
     ]
     if not include_manager_only:  # lớp 1: Nhân viên không thấy CV "Chỉ Quản lý xem"
         conds.append(inc.manager_only.is_(False))

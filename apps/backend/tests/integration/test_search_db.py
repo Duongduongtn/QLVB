@@ -14,6 +14,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.document_type import DocumentType
+from app.models.file import File
+from app.models.incoming_attachment import IncomingAttachment
 from app.models.incoming_document import IncomingDocument
 from app.models.organization import Organization
 from app.models.outgoing_document import OutgoingDocument, OutgoingRecipient
@@ -28,6 +30,18 @@ def _add(db: Session, **kw: object) -> IncomingDocument:
     db.add(doc)
     db.flush()  # trigger DB điền search_vector ngay khi INSERT
     return doc
+
+
+def _attach(db: Session, incoming_id: int, ocr_text: str) -> IncomingAttachment:
+    f = File(storage_key="k", location="local", sha256="0" * 64, size_bytes=1)
+    db.add(f)
+    db.flush()
+    att = IncomingAttachment(
+        incoming_id=incoming_id, file_id=f.id, size_bytes=1, ocr_text=ocr_text
+    )
+    db.add(att)
+    db.flush()  # trigger điền search_vector phụ lục
+    return att
 
 
 def test_unaccent_finds_with_and_without_diacritics(db_session: Session) -> None:
@@ -65,6 +79,65 @@ def test_ocr_text_dropped_for_manager_only(db_session: Session) -> None:
     doc2 = _add(db_session, subject="Văn bản thường", ocr_text="ngân sách quyết toán xyzkw")
     mgr2, _ = sv.global_search(db_session, "xyzkw", doc_type="in", include_manager_only=False)
     assert doc2.id in [it["id"] for it in mgr2]
+
+
+def test_find_incoming_by_attachment_ocr(db_session: Session) -> None:
+    # Từ khoá CHỈ nằm trong OCR phụ lục (không có ở trích yếu CV cha) → vẫn tìm ra CV cha.
+    doc = _add(db_session, subject="Công văn kèm phụ lục")
+    _attach(db_session, doc.id, "Phụ lục báo cáo tài chính có từ khoá zxqphuluc nội dung")
+    items, _ = sv.global_search(db_session, "zxqphuluc", doc_type="in", include_manager_only=True)
+    assert doc.id in [it["id"] for it in items]
+    # Không dấu cũng ra.
+    items2, _ = sv.global_search(db_session, "tai chinh", doc_type="in", include_manager_only=True)
+    assert doc.id in [it["id"] for it in items2]
+
+
+def test_attachment_ocr_dropped_for_manager_only(db_session: Session) -> None:
+    # Bất biến (parity parent 0015): CV cha manager_only → OCR phụ lục KHÔNG vào index → kể cả
+    # Quản lý cũng không tìm trúng OCR body phụ lục (lớp 2 defense-in-depth).
+    doc = _add(db_session, subject="CV mật có phụ lục", manager_only=True)
+    _attach(db_session, doc.id, "Số liệu ngân sách bí mật wqxattach")
+    staff, _ = sv.global_search(db_session, "wqxattach", doc_type="in", include_manager_only=False)
+    mgr, _ = sv.global_search(db_session, "wqxattach", doc_type="in", include_manager_only=True)
+    assert doc.id not in [it["id"] for it in staff]  # NV không thấy (lớp 1)
+    assert doc.id not in [it["id"] for it in mgr]  # cả Quản lý cũng không (lớp 2 — OCR không index)
+
+
+def test_attachment_ocr_indexed_on_update_path(db_session: Session) -> None:
+    # Luồng worker thật: phụ lục tạo với ocr_text=NULL, OCR xong mới UPDATE → trigger BEFORE
+    # UPDATE phải index lại.
+    doc = _add(db_session, subject="CV có phụ lục chờ OCR")
+    att = _attach(db_session, doc.id, ocr_text="")  # chưa OCR
+    before, _ = sv.global_search(db_session, "krtupdate", doc_type="in", include_manager_only=True)
+    assert doc.id not in [it["id"] for it in before]
+    att.ocr_text = "Nội dung sau khi OCR có từ khoá krtupdate"
+    db_session.flush()  # UPDATE → trigger recompute search_vector
+    after, _ = sv.global_search(db_session, "krtupdate", doc_type="in", include_manager_only=True)
+    assert doc.id in [it["id"] for it in after]
+
+
+def test_attachment_reindexed_when_manager_only_toggled(db_session: Session) -> None:
+    # Đổi cờ manager_only CV cha SAU khi phụ lục đã OCR → trigger AFTER UPDATE rebuild phụ lục.
+    doc = _add(db_session, subject="CV thường có phụ lục")
+    _attach(db_session, doc.id, "Báo cáo có từ khoá ftoggle ngân sách")
+    found, _ = sv.global_search(db_session, "ftoggle", doc_type="in", include_manager_only=True)
+    assert doc.id in [it["id"] for it in found]
+    # Bật manager_only → OCR phụ lục phải bị gỡ khỏi index.
+    doc.manager_only = True
+    db_session.flush()
+    gone, _ = sv.global_search(db_session, "ftoggle", doc_type="in", include_manager_only=True)
+    assert doc.id not in [it["id"] for it in gone]
+
+
+def test_multiple_matching_attachments_no_duplicate(db_session: Session) -> None:
+    # 1 CV có nhiều phụ lục cùng khớp → EXISTS trả 1 dòng CV cha, không nhân bản.
+    doc = _add(db_session, subject="CV nhiều phụ lục")
+    _attach(db_session, doc.id, "Phụ lục một có từ khoá dupkey alpha")
+    _attach(db_session, doc.id, "Phụ lục hai cũng có từ khoá dupkey beta")
+    items, total = sv.global_search(db_session, "dupkey", doc_type="in", include_manager_only=True)
+    ids = [it["id"] for it in items]
+    assert ids.count(doc.id) == 1
+    assert total == 1
 
 
 def test_blank_query_returns_empty(db_session: Session) -> None:
