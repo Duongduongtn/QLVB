@@ -7,7 +7,7 @@ import { api } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
 import { PageHeader } from '~/components/ui';
 
-export const Route = createFileRoute('/bao-cao/tuy-chinh')({
+export const Route = createFileRoute('/bao-cao_/tuy-chinh')({
   component: BaoCaoTuyChinhPage,
 });
 

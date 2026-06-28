@@ -21,7 +21,7 @@ import { PageHeader, Pill } from '~/components/ui';
 import { fmtDate, fmtDateTime } from '~/lib/format';
 import { CONFIDENTIALITY_LABEL, URGENCY_LABEL } from '~/lib/incoming';
 
-export const Route = createFileRoute('/cong-van-den/vao-so')({
+export const Route = createFileRoute('/cong-van-den_/vao-so')({
   component: VaoSoPage,
 });
 

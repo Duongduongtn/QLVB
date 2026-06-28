@@ -21,7 +21,7 @@ import { useAuth } from '~/stores/auth';
 import { PageHeader } from '~/components/ui';
 import { UnitPill, type UnitLite } from '~/components/sign-ui';
 
-export const Route = createFileRoute('/cong-van-di/soan')({
+export const Route = createFileRoute('/cong-van-di_/soan')({
   component: SoanCongVanPage,
 });
 
