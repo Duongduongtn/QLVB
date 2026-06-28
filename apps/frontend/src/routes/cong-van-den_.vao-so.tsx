@@ -18,6 +18,7 @@ import {
 
 import { api, type ApiErrorEnvelope } from '~/lib/api';
 import { PageHeader, Pill } from '~/components/ui';
+import { WizardGuide } from '~/components/WizardGuide';
 import { fmtDate, fmtDateTime } from '~/lib/format';
 import { CONFIDENTIALITY_LABEL, URGENCY_LABEL } from '~/lib/incoming';
 
@@ -386,6 +387,18 @@ function VaoSoPage() {
           {err}
         </div>
       )}
+
+      <WizardGuide
+        storageKey="guide-vao-so"
+        title="Hướng dẫn vào sổ công văn đến (cho người mới)"
+        intro="Quy trình gồm 4 bước. Bạn chỉ cần tải đúng file PDF, hệ thống tự đọc thông tin giúp bạn."
+        steps={[
+          { label: 'Tải file PDF', detail: 'Chọn file PDF của công văn nhận được (tối đa 50MB).' },
+          { label: 'Kiểm tra & OCR', detail: 'Hệ thống tự đọc nội dung (OCR) và kiểm tra chữ ký số — chờ vài giây. Nếu công văn đã có trong sổ, sẽ hiện cảnh báo trùng.' },
+          { label: 'Thông tin công văn', detail: 'Kiểm tra và sửa nếu cần: cơ quan gửi, số ký hiệu, ngày văn bản, trích yếu, mức độ khẩn/mật.' },
+          { label: 'Hoàn tất vào sổ', detail: 'Hệ thống cấp số đến (sổ chung 2 đơn vị) và lưu vào sổ.' },
+        ]}
+      />
 
       <div className="flex flex-col lg:flex-row" style={{ gap: 24, alignItems: 'flex-start' }}>
         {/* Step rail */}

@@ -19,6 +19,7 @@ import {
 import { api, type ApiErrorEnvelope } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
 import { PageHeader } from '~/components/ui';
+import { WizardGuide } from '~/components/WizardGuide';
 import { UnitPill, type UnitLite } from '~/components/sign-ui';
 
 export const Route = createFileRoute('/cong-van-di_/soan')({
@@ -407,6 +408,21 @@ function SoanCongVanPage() {
         }
       />
 
+      <WizardGuide
+        storageKey="guide-soan-cv-di"
+        title="Hướng dẫn soạn công văn đi (cho người mới)"
+        intro="Quy trình phát hành gồm 7 bước. Nếu bước 2 chưa có 'Loại văn bản' để chọn, hãy vào Cấu hình tạo sổ/loại văn bản trước."
+        steps={[
+          { label: 'Tải file gốc', detail: 'Chọn file Word (.docx/.doc) hoặc PDF của công văn. File Word được tự chuyển sang PDF.' },
+          { label: 'Thông tin công văn', detail: 'Nhập trích yếu (tóm tắt nội dung, bắt đầu bằng "V/v…"), chọn loại văn bản của đơn vị phát hành, ngày phát hành và nơi nhận.' },
+          { label: 'Đơn vị & hồ sơ ký', detail: 'Chọn hồ sơ ký (mộc + chữ ký) đúng đơn vị — tránh nhầm mộc.' },
+          { label: 'Vị trí mộc / chữ ký', detail: 'Bấm "Tự dò vị trí" để hệ thống đặt mộc + chữ ký, rồi xem bản xem trước.' },
+          { label: 'Giáp lai & ký nháy', detail: 'Chọn nếu công văn nhiều trang cần đóng giáp lai hoặc ký nháy từng trang.' },
+          { label: 'Xác nhận & cấp số', detail: 'Để hệ thống tự cấp số kế tiếp, hoặc nhập số có sẵn → phát hành.' },
+          { label: 'Tải PDF ký số', detail: 'Tải PDF chưa ký, ký bằng USB Token (vSign), rồi tải bản đã ký lên để hoàn tất.' },
+        ]}
+      />
+
       <div className="flex flex-col lg:flex-row" style={{ gap: 24, alignItems: 'flex-start' }}>
         {/* Step rail */}
         <div className="card" style={{ padding: 16, width: '100%', maxWidth: 280, flexShrink: 0 }}>
@@ -631,6 +647,9 @@ function Step2(props: {
           <label className="field-label" htmlFor="cv_subject">
             Trích yếu
           </label>
+          <p className="cell-meta" style={{ marginBottom: 6 }}>
+            Tóm tắt ngắn nội dung công văn, bắt đầu bằng “V/v…”. VD: V/v đề nghị cấp kinh phí tổ chức lớp đào tạo nghề.
+          </p>
           <textarea
             id="cv_subject"
             rows={2}
@@ -644,6 +663,9 @@ function Step2(props: {
           <label className="field-label" htmlFor="cv_type">
             Loại văn bản (sổ đi)
           </label>
+          <p className="cell-meta" style={{ marginBottom: 6 }}>
+            Chọn sổ/loại văn bản của đơn vị phát hành. Chưa có lựa chọn? Vào Cấu hình → Loại văn bản để tạo.
+          </p>
           <select
             id="cv_type"
             className="text-input"
