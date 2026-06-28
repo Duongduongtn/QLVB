@@ -193,10 +193,10 @@ def auto_detect_positions(
     db: Session = Depends(get_db),
     actor: User = Depends(current_user),
 ) -> dict[str, object]:
-    """D2 — tự dò vị trí mộc/chữ ký, lưu vào nháp. Trả method đã áp dụng."""
+    """D2 — tự dò vị trí mộc/chữ ký, lưu vào nháp. Trả method + positions để FE seed editor."""
     ip, ua = _ctx(request)
-    _, method = out_service.auto_detect_positions(db, doc_id, actor_id=actor.id, ip=ip, ua=ua)
-    return {"method": method}
+    doc, method = out_service.auto_detect_positions(db, doc_id, actor_id=actor.id, ip=ip, ua=ua)
+    return {"method": method, "positions": doc.stamp_positions or []}
 
 
 @router.post("/{doc_id}/save-template", status_code=204)
@@ -210,6 +210,24 @@ def save_stamp_template(
     ip, ua = _ctx(request)
     out_service.save_stamp_template(db, doc_id, actor_id=actor.id, ip=ip, ua=ua)
     return Response(status_code=204)
+
+
+@router.get("/{doc_id}/original.pdf")
+def original_pdf_outgoing(
+    doc_id: int, db: Session = Depends(get_db), _: User = Depends(current_user)
+) -> Response:
+    """D2 — PDF gốc (chưa chèn mộc/chữ ký, KHÔNG watermark) làm nền canvas kéo-thả vị trí.
+    Khác /download (bản tải có watermark + audit): đây chỉ là nền dựng editor lúc soạn.
+    CHỈ cho nháp: sau khi cấp số original_file_id là bản _CHUA_KY_SO → không để lách H2."""
+    doc = out_service.get_outgoing(db, doc_id)
+    if doc.status != "draft":
+        raise Conflict("Chỉ xem nền gốc khi công văn còn nháp")
+    data, _name = out_service.read_original(db, doc)
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={"Cache-Control": "no-store", "Content-Disposition": "inline; filename=goc.pdf"},
+    )
 
 
 @router.post("/{doc_id}/preview")

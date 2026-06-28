@@ -368,7 +368,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [OUT.MAP-01] Là người soạn CV, tôi muốn web tự dò vị trí mộc/chữ ký để chèn đúng chỗ mà không phải kéo thả mỗi lần.
 - **Ưu tiên**: **Must** — cả 4 cách.
-- **Trạng thái**: ⚠️ Partial (27/06/2026) — `services/stamp_autodetect` áp **A→C**: **A placeholder** `{{KY_TEN}}/{{DONG_DAU}}/{{NGAY}}` (PyMuPDF search, toạ độ %, chọn cụm cuối — test đo được), **B regex** cụm chức danh (GIÁM ĐỐC/Người ký…, có biến thể không dấu), **C template** lưu/áp theo loại VB (cột `document_types.stamp_template`, migration 0013). Endpoint `POST /{id}/auto-detect` + `POST /{id}/save-template`; FE bước preview có nút "Tự dò vị trí" + "Lưu template" + hiện cách đã áp. **Defer:** D kéo-thả thủ công (editor canvas) — hiện fallback = đặt mặc định góc dưới phải; xoá hẳn placeholder text (ảnh mộc/chữ ký phủ lên).
+- **Trạng thái**: ✅ Done (28/06/2026) — `services/stamp_autodetect` áp **A→C**: **A placeholder** `{{KY_TEN}}/{{DONG_DAU}}/{{NGAY}}` (PyMuPDF search, toạ độ %, chọn cụm cuối — test đo được), **B regex** cụm chức danh (GIÁM ĐỐC/Người ký…, có biến thể không dấu), **C template** lưu/áp theo loại VB (cột `document_types.stamp_template`, migration 0013). **D kéo-thả editor (defer cuối) ✅**: component `StampEditor.tsx` (react-pdf render trang gốc + overlay box mộc/chữ ký kéo-thả + resize theo toạ độ %, Pointer Events, fit cả trang, page nav, responsive); endpoint `GET /{id}/original.pdf` (nền gốc chưa chèn, **chỉ draft** để không lách watermark H2) + `POST /{id}/auto-detect` trả kèm `positions` seed editor. Wizard Step 4: vào bước → tải nền + seed auto-detect (gợi ý ban đầu), user kéo tinh chỉnh, "Áp dụng & xem kết quả" → PATCH `stamp_positions` → render bản thật khớp vị trí; "Đặt lại mặc định" + "Lưu template". **Toạ độ % FE khớp engine `pdf_stamp` (gốc trên-trái) — chứng minh bằng centroid rasterize x=0.700/y=0.760 đúng tâm box.** Verify thị giác Playwright 3 viewport (mobile/tablet/desktop) OK. Còn lại cosmetic: redact hẳn chữ placeholder dưới ảnh (ảnh đục phủ lên là đủ).
 - **Steps to Complete** (áp dụng tự động theo thứ tự ưu tiên A → D):
   1. **A. Placeholder trong text**: áp dụng cho **CẢ Word VÀ PDF có text layer**. Web extract text → tìm `{{KY_TEN}}`, `{{DONG_DAU}}`, `{{NGAY}}` → thay bằng ảnh tương ứng → xoá placeholder. Áp ngay, không hỏi. Implement: Word dùng `python-docx` thay placeholder trước khi convert sang PDF; PDF có text dùng `PyMuPDF` redact + insert ảnh.
   2. **B. Regex nhận diện cụm chuẩn**: tìm `Ký tên, đóng dấu`, `Người ký`, `Thủ trưởng đơn vị`, chức danh (`GIÁM ĐỐC`…) → đặt chữ ký phía trên chức danh + mộc đè 1/3 lên chữ ký. Hiện preview cho user duyệt.
@@ -991,7 +991,7 @@ Review qua 5 điểm và bổ sung/sửa các phần sau:
 | SIG.BG | C3 | Tách nền tự động khi upload | C | Must | ✅ Done |
 | SIG.PRO | C4 | Hồ sơ ký (chống nhầm mộc) | C | Must | ✅ Done |
 | OUT.PUB | D1 | Luồng phát hành CV đi (cốt lõi) | D | Must | ⚠️ Partial |
-| OUT.MAP | D2 | Auto map vị trí mộc/chữ ký (4 cách) | D | Must | ⚠️ Partial |
+| OUT.MAP | D2 | Auto map vị trí mộc/chữ ký (4 cách) | D | Must | ✅ Done |
 | OUT.GLA | D3 | Đóng giáp lai (3 lựa chọn) | D | Must | ⚠️ Partial |
 | OUT.INI | D4 | Ký nháy mỗi trang | D | Must | ⚠️ Partial |
 | OUT.LNK | D5 | Liên kết CV đi với CV đến | D | Must | ✅ Done |

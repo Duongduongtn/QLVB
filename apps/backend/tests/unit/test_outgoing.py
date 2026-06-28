@@ -288,3 +288,23 @@ def test_cancel_published_allowed_for_manager() -> None:
     doc.status = "published"
     out_svc.cancel(_DocDB(doc), 99, "Thu hồi", actor_id=1, actor_role="manager", ip=None, ua=None)  # type: ignore[arg-type]
     assert doc.status == "cancelled"
+
+
+# ── D2 router wiring: endpoint PDF gốc + auto-detect (kéo-thả) ───────
+def test_router_has_original_pdf_route() -> None:
+    """D2 editor cần nền PDF gốc (chưa chèn) qua GET /{doc_id}/original.pdf."""
+    from app.routers.outgoing import router
+
+    paths = {getattr(r, "path", None): getattr(r, "methods", set()) for r in router.routes}
+    assert "/{doc_id}/original.pdf" in paths
+    assert "GET" in paths["/{doc_id}/original.pdf"]
+
+
+def test_router_auto_detect_returns_positions() -> None:
+    """auto-detect phải trả kèm positions để FE seed editor kéo-thả (không chỉ method)."""
+    import inspect
+
+    from app.routers import outgoing as out_router
+
+    src = inspect.getsource(out_router.auto_detect_positions)
+    assert "positions" in src and "stamp_positions" in src

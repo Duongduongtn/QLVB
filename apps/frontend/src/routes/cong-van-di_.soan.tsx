@@ -21,6 +21,7 @@ import { useAuth } from '~/stores/auth';
 import { PageHeader } from '~/components/ui';
 import { WizardGuide } from '~/components/WizardGuide';
 import { UnitPill, type UnitLite } from '~/components/sign-ui';
+import { StampEditor, type StampPos } from '~/components/StampEditor';
 
 export const Route = createFileRoute('/cong-van-di_/soan')({
   component: SoanCongVanPage,
@@ -126,6 +127,12 @@ function SoanCongVanPage() {
   const [detectMethod, setDetectMethod] = useState<string | null>(null);
   const [templateSaved, setTemplateSaved] = useState(false);
 
+  // D2 editor kéo-thả: PDF gốc làm nền + toạ độ % mộc/chữ ký + ảnh box.
+  const [stampPositions, setStampPositions] = useState<StampPos[]>([]);
+  const [originalUrl, setOriginalUrl] = useState<string | null>(null);
+  const [numPages, setNumPages] = useState(1);
+  const [editorMode, setEditorMode] = useState<'edit' | 'rendered'>('edit');
+
   const { data: unitsData } = useQuery({
     queryKey: ['units'],
     enabled: !!me,
@@ -177,12 +184,27 @@ function SoanCongVanPage() {
     return () => URL.revokeObjectURL(previewUrl);
   }, [previewUrl]);
 
+  useEffect(() => {
+    if (!originalUrl) return;
+    return () => URL.revokeObjectURL(originalUrl);
+  }, [originalUrl]);
+
   const docType = outTypes.find((t) => t.id === docTypeId);
   const unitId = docType?.unit_id ?? null;
   const unit = units.find((u) => u.id === unitId);
   const unitProfiles = profiles.filter((p) => p.unit_id === unitId && p.is_active);
   const cat = unitCategory(unit);
   const visibleRecipients = recipients.filter((o) => !cat || o.category === 'common' || o.category === cat);
+
+  // Ảnh mộc/chữ ký của hồ sơ ký đang chọn → hiện trong box kéo-thả (cookie tự gửi same-origin).
+  const selProfile = unitProfiles.find((p) => p.id === profileId);
+  const stampImages = useMemo(
+    () => ({
+      seal: selProfile ? `/api/seals/${selProfile.seal_id}/image` : undefined,
+      signature: selProfile ? `/api/signatures/${selProfile.signature_id}/image` : undefined,
+    }),
+    [selProfile?.seal_id, selProfile?.signature_id], // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   function sealingOption() {
     return { giap_lai: giapLai, ky_nhay: kyNhay };
@@ -242,13 +264,26 @@ function SoanCongVanPage() {
     return draftId;
   }
 
-  async function doPreview() {
-    if (busyRef.current) return;
+  // Lưu toạ độ % đã kéo lên nháp (PATCH) — server render đúng vị trí. Bỏ qua khi rỗng để
+  // KHÔNG vô tình xoá positions (OutgoingUpdate.stamp_positions=null sẽ wipe).
+  async function persistPositions(id: number) {
+    if (stampPositions.length === 0) return;
+    const { error } = await api.PATCH('/api/outgoing/{doc_id}', {
+      params: { path: { doc_id: id } },
+      body: { stamp_positions: stampPositions },
+    });
+    if (error) throw new Error(errMsg(error, 'Lưu vị trí mộc/chữ ký thất bại'));
+  }
+
+  // Render bản đóng mộc thật từ máy chủ (đã lưu vị trí trước đó). Trả true nếu thành công.
+  async function doPreview(): Promise<boolean> {
+    if (busyRef.current) return false;
     busyRef.current = true;
     setErr(null);
     setBusy(true);
     try {
       const id = await ensureDraft();
+      await persistPositions(id);
       const res = await fetch(`/api/outgoing/${id}/preview`, { method: 'POST', credentials: 'include' });
       if (!res.ok) {
         const b = (await res.json().catch(() => null)) as ApiErrorEnvelope | null;
@@ -259,6 +294,53 @@ function SoanCongVanPage() {
         if (prev) URL.revokeObjectURL(prev);
         return URL.createObjectURL(blob);
       });
+      return true;
+    } catch (e) {
+      setErr((e as Error).message);
+      return false;
+    } finally {
+      setBusy(false);
+      busyRef.current = false;
+    }
+  }
+
+  // Tải PDF gốc (chưa chèn) làm nền canvas editor.
+  async function loadOriginal(id: number) {
+    const res = await fetch(`/api/outgoing/${id}/original.pdf`, { credentials: 'include' });
+    if (!res.ok) {
+      const b = (await res.json().catch(() => null)) as ApiErrorEnvelope | null;
+      throw new Error(b?.error?.message ?? 'Không tải được file gốc');
+    }
+    const blob = await res.blob();
+    setOriginalUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(blob);
+    });
+  }
+
+  // D2 — gọi auto-detect (A placeholder → C template → B regex → mặc định), seed editor.
+  async function seedAutoDetect(id: number) {
+    const res = await fetch(`/api/outgoing/${id}/auto-detect`, { method: 'POST', credentials: 'include' });
+    if (!res.ok) {
+      const b = (await res.json().catch(() => null)) as ApiErrorEnvelope | null;
+      throw new Error(b?.error?.message ?? 'Không dò được vị trí');
+    }
+    const body = (await res.json()) as { method: string; positions: StampPos[] };
+    setDetectMethod(body.method);
+    setStampPositions(body.positions ?? []);
+  }
+
+  // Vào bước 4: tải nền gốc + lần đầu seed vị trí bằng auto-detect (giữ vị trí user đã kéo).
+  async function enterPositionStep() {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setErr(null);
+    setBusy(true);
+    setEditorMode('edit');
+    try {
+      const id = await ensureDraft();
+      await loadOriginal(id);
+      if (stampPositions.length === 0) await seedAutoDetect(id);
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -267,42 +349,64 @@ function SoanCongVanPage() {
     }
   }
 
-  // D2 — tự dò vị trí mộc/chữ ký rồi xem lại preview.
-  async function doAutoDetect() {
+  // Nút "Tự dò vị trí" trong editor — chạy lại auto-detect, ghi đè vị trí hiện tại.
+  async function onAutoDetect() {
     if (busyRef.current) return;
+    busyRef.current = true;
     setErr(null);
     setTemplateSaved(false);
     setBusy(true);
     try {
       const id = await ensureDraft();
-      const res = await fetch(`/api/outgoing/${id}/auto-detect`, { method: 'POST', credentials: 'include' });
-      if (!res.ok) {
-        const b = (await res.json().catch(() => null)) as ApiErrorEnvelope | null;
-        throw new Error(b?.error?.message ?? 'Không dò được vị trí');
-      }
-      const body = (await res.json()) as { method: string };
-      setDetectMethod(body.method);
+      await seedAutoDetect(id);
     } catch (e) {
       setErr((e as Error).message);
+    } finally {
       setBusy(false);
-      return;
+      busyRef.current = false;
     }
-    setBusy(false);
-    await doPreview();
+  }
+
+  // Đặt lại mặc định: chữ ký + mộc góc dưới-phải trang cuối (khớp _default_positions BE).
+  function resetDefault() {
+    const last = numPages || 1;
+    setStampPositions([
+      { kind: 'signature', page: last, x_pct: 0.58, y_pct: 0.74, w_pct: 0.24, h_pct: 0.1 },
+      { kind: 'seal', page: last, x_pct: 0.62, y_pct: 0.68, w_pct: 0.16, h_pct: 0.16 },
+    ]);
+    setDetectMethod('default');
+    setTemplateSaved(false);
+  }
+
+  // Áp dụng vị trí đã kéo → render bản thật từ máy chủ để đối chiếu.
+  async function applyAndPreview() {
+    const ok = await doPreview();
+    if (ok) setEditorMode('rendered');
   }
 
   async function doSaveTemplate() {
-    if (draftId === null) {
+    if (busyRef.current) return;
+    if (stampPositions.length === 0) {
       setErr('Hãy dò/đặt vị trí trước khi lưu template');
       return;
     }
+    busyRef.current = true;
     setErr(null);
-    const res = await fetch(`/api/outgoing/${draftId}/save-template`, { method: 'POST', credentials: 'include' });
-    if (!res.ok) {
-      const b = (await res.json().catch(() => null)) as ApiErrorEnvelope | null;
-      setErr(b?.error?.message ?? 'Lưu template thất bại');
-    } else {
+    setBusy(true);
+    try {
+      const id = await ensureDraft();
+      await persistPositions(id);
+      const res = await fetch(`/api/outgoing/${id}/save-template`, { method: 'POST', credentials: 'include' });
+      if (!res.ok) {
+        const b = (await res.json().catch(() => null)) as ApiErrorEnvelope | null;
+        throw new Error(b?.error?.message ?? 'Lưu template thất bại');
+      }
       setTemplateSaved(true);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+      busyRef.current = false;
     }
   }
 
@@ -377,7 +481,24 @@ function SoanCongVanPage() {
     setErr(null);
     if (step === 3) {
       setStep(4);
-      void doPreview(); // sang bước vị trí → render preview
+      void enterPositionStep(); // sang bước vị trí → nền gốc + seed auto-detect
+      return;
+    }
+    if (step === 4) {
+      // Lưu vị trí đã kéo trước khi sang giáp lai/ký nháy (issue + render đọc từ đây).
+      if (busyRef.current) return;
+      busyRef.current = true;
+      setBusy(true);
+      try {
+        const id = await ensureDraft();
+        await persistPositions(id);
+        setStep(5);
+      } catch (e) {
+        setErr((e as Error).message);
+      } finally {
+        setBusy(false);
+        busyRef.current = false;
+      }
       return;
     }
     if (step === 6) {
@@ -508,13 +629,22 @@ function SoanCongVanPage() {
 
           {step === 4 && (
             <StepPreview
+              mode={editorMode}
+              originalUrl={originalUrl}
+              positions={stampPositions}
+              onPositionsChange={setStampPositions}
+              images={stampImages}
+              onNumPages={setNumPages}
               previewUrl={previewUrl}
               busy={busy}
-              onReload={doPreview}
-              onAutoDetect={doAutoDetect}
-              onSaveTemplate={doSaveTemplate}
               method={detectMethod}
               templateSaved={templateSaved}
+              onAutoDetect={onAutoDetect}
+              onResetDefault={resetDefault}
+              onApply={applyAndPreview}
+              onBackToEdit={() => setEditorMode('edit')}
+              onSaveTemplate={doSaveTemplate}
+              onReloadPreview={doPreview}
             />
           )}
 
@@ -840,45 +970,102 @@ const DETECT_LABEL: Record<string, string> = {
 };
 
 function StepPreview({
+  mode,
+  originalUrl,
+  positions,
+  onPositionsChange,
+  images,
+  onNumPages,
   previewUrl,
   busy,
-  onReload,
-  onAutoDetect,
-  onSaveTemplate,
   method,
   templateSaved,
+  onAutoDetect,
+  onResetDefault,
+  onApply,
+  onBackToEdit,
+  onSaveTemplate,
+  onReloadPreview,
 }: {
+  mode: 'edit' | 'rendered';
+  originalUrl: string | null;
+  positions: StampPos[];
+  onPositionsChange: (next: StampPos[]) => void;
+  images: { seal?: string; signature?: string };
+  onNumPages: (n: number) => void;
   previewUrl: string | null;
   busy: boolean;
-  onReload: () => void;
-  onAutoDetect: () => void;
-  onSaveTemplate: () => void;
   method: string | null;
   templateSaved: boolean;
+  onAutoDetect: () => void;
+  onResetDefault: () => void;
+  onApply: () => void;
+  onBackToEdit: () => void;
+  onSaveTemplate: () => void;
+  onReloadPreview: () => void;
 }) {
+  if (mode === 'rendered') {
+    return (
+      <div>
+        <h2 className="section-title" style={{ marginBottom: 8 }}>
+          Bản đóng mộc thật (máy chủ)
+        </h2>
+        <p style={{ fontSize: '0.85rem', color: 'var(--ink-muted)', marginBottom: 12 }}>
+          Đây là bản render thật từ máy chủ — đúng vị trí bạn đã kéo. Chưa ưng thì quay lại chỉnh.
+        </p>
+        <div className="flex items-center flex-wrap" style={{ gap: 8, marginBottom: 12 }}>
+          <button type="button" className="btn-secondary" onClick={onBackToEdit} disabled={busy}>
+            <ArrowLeft size={14} /> Chỉnh lại vị trí
+          </button>
+          <button type="button" className="btn-secondary" onClick={onSaveTemplate} disabled={busy}>
+            Lưu vị trí làm template
+          </button>
+          {templateSaved && (
+            <span className="cell-meta" style={{ color: 'var(--success)' }}>Đã lưu template ✓</span>
+          )}
+        </div>
+        <PreviewFrame previewUrl={previewUrl} busy={busy} onReload={onReloadPreview} />
+      </div>
+    );
+  }
+
   return (
     <div>
       <h2 className="section-title" style={{ marginBottom: 8 }}>
         Vị trí mộc &amp; chữ ký
       </h2>
       <p style={{ fontSize: '0.85rem', color: 'var(--ink-muted)', marginBottom: 12 }}>
-        Bấm “Tự dò vị trí” để hệ thống đặt mộc + chữ ký đúng chỗ (placeholder → template → cụm chức danh → mặc định góc dưới phải).
+        Kéo-thả ảnh mộc &amp; chữ ký lên đúng chỗ trên trang. Có thể “Tự dò vị trí” để hệ thống
+        gợi ý (placeholder → template → cụm chức danh → mặc định), rồi tinh chỉnh lại.
       </p>
       <div className="flex items-center flex-wrap" style={{ gap: 8, marginBottom: 12 }}>
-        <button type="button" className="btn-primary" onClick={onAutoDetect} disabled={busy}>
+        <button type="button" className="btn-secondary" onClick={onAutoDetect} disabled={busy}>
           {busy ? 'Đang dò…' : 'Tự dò vị trí'}
         </button>
-        <button type="button" className="btn-secondary" onClick={onSaveTemplate} disabled={busy}>
-          Lưu vị trí làm template
+        <button type="button" className="btn-secondary" onClick={onResetDefault} disabled={busy}>
+          Đặt lại mặc định
         </button>
-        {templateSaved && <span className="cell-meta" style={{ color: 'var(--success)' }}>Đã lưu template ✓</span>}
+        <button type="button" className="btn-primary" onClick={onApply} disabled={busy || positions.length === 0}>
+          {busy ? 'Đang xử lý…' : 'Áp dụng & xem kết quả'}
+        </button>
       </div>
       {method && (
-        <div className="card flex items-center" style={{ padding: '8px 14px', gap: 8, marginBottom: 12, background: 'var(--kinpaku-pale)' }}>
-          <span style={{ fontSize: '0.82rem', color: 'var(--ink)' }}>Đã đặt vị trí {DETECT_LABEL[method] ?? method}.</span>
+        <div
+          className="card flex items-center"
+          style={{ padding: '8px 14px', gap: 8, marginBottom: 12, background: 'var(--kinpaku-pale)' }}
+        >
+          <span style={{ fontSize: '0.82rem', color: 'var(--ink)' }}>
+            Gợi ý ban đầu: {DETECT_LABEL[method] ?? method}.
+          </span>
         </div>
       )}
-      <PreviewFrame previewUrl={previewUrl} busy={busy} onReload={onReload} />
+      <StampEditor
+        fileUrl={originalUrl}
+        positions={positions}
+        onChange={onPositionsChange}
+        images={images}
+        onNumPages={onNumPages}
+      />
     </div>
   );
 }
