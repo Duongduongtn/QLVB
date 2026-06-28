@@ -30,7 +30,9 @@ from app.schemas.outgoing import (
     OutgoingUpdate,
     RecipientOut,
 )
+from app.services import audit as audit_service
 from app.services import outgoing as out_service
+from app.services import watermark as wm_service
 from app.workers.convert import docx_to_pdf
 
 router = APIRouter()
@@ -269,14 +271,31 @@ def download_outgoing(
     doc_id: int,
     request: Request,
     signed: bool = Query(default=False),
+    raw: bool = Query(default=False),
+    reason: str | None = Query(default=None),
     db: Session = Depends(get_db),
     actor: User = Depends(current_user),
 ) -> Response:
+    """Tải CV đi. H2: tự chèn watermark cá nhân (trừ CV đã ký số). Quản lý có thể tải bản
+    gốc không watermark (`raw=1` + lý do — ghi audit)."""
     doc = out_service.get_outgoing(db, doc_id)
     ip, ua = _ctx(request)
     data, filename = out_service.read_file_for_download(
         db, doc, signed=signed, actor_id=actor.id, ip=ip, ua=ua
     )
+    if wm_service.should_serve_raw(raw, actor.role):
+        if not (reason and reason.strip()):
+            raise ValidationFailed("Cần nêu lý do khi tải bản gốc không watermark")
+        audit_service.log_action(
+            db, action="outgoing_download_raw", user_id=actor.id,
+            object_type="outgoing_document", object_id=doc.id, ip=ip, user_agent=ua,
+            detail={"reason": reason.strip()[:500], "signed": signed},
+        )
+        db.commit()
+    else:
+        data, _marked = wm_service.apply_download_watermark(
+            data, username=actor.username, ip=ip
+        )
     # Sanitize chống header injection: ascii fallback + filename* RFC5987 đã encode.
     ascii_name = "".join(c for c in filename if c.isascii() and c not in '"\\\r\n') or "cong-van.pdf"
     disposition = f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename)}"

@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     # LibreOffice để convert Word→PDF (worker image có sẵn 'soffice' trên PATH; local
     # Windows trỏ full path qua biến môi trường LIBREOFFICE_BIN nếu cần).
     libreoffice_bin: str = "soffice"
+    # Font Unicode (hỗ trợ tiếng Việt) cho watermark cá nhân khi tải PDF (H2). Mặc định
+    # None → dùng DejaVuSans.ttf bundle trong app/data/fonts (xem services/watermark.py).
+    watermark_font_path: str | None = None
     # Trust list NEAC verify chữ ký số PAdES (E1.5) — cron tuần tải về cache local.
     # Để trống → bỏ qua cập nhật (mọi chữ ký coi là 'chứng thư lạ', badge vàng — an toàn).
     neac_trust_list_url: str | None = None

@@ -439,6 +439,13 @@ function DetailDrawer({ id, units, onClose }: { id: number; units: UnitLite[]; o
     window.open(`/api/outgoing/${id}/download${signed ? '?signed=true' : ''}`, '_blank');
   }
 
+  function downloadRaw() {
+    // H2 — Quản lý tải bản gốc KHÔNG watermark (in chính thức/lưu trữ); BE ghi audit lý do.
+    const reason = window.prompt('Lý do tải bản gốc không watermark (in chính thức, lưu trữ…):');
+    if (!reason || !reason.trim()) return;
+    window.open(`/api/outgoing/${id}/download?raw=1&reason=${encodeURIComponent(reason.trim())}`, '_blank');
+  }
+
   async function refresh() {
     await queryClient.invalidateQueries({ queryKey: ['outgoing'] });
   }
@@ -511,6 +518,11 @@ function DetailDrawer({ id, units, onClose }: { id: number; units: UnitLite[]; o
       {d.original_file_id !== null && (
         <button className="btn-secondary" style={{ height: 32 }} type="button" onClick={() => download(false)}>
           <Download size={13} /> Tải bản {d.status === 'draft' ? 'gốc' : 'chưa ký'}
+        </button>
+      )}
+      {d.original_file_id !== null && me?.role === 'manager' && (
+        <button className="btn-ghost" style={{ height: 32 }} type="button" title="Tải bản gốc không watermark (ghi audit lý do)" onClick={downloadRaw}>
+          <Download size={13} /> Bản gốc (không WM)
         </button>
       )}
       {d.signed_file_id !== null && (

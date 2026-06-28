@@ -34,10 +34,12 @@ from app.schemas.incoming import (
 )
 from app.schemas.outgoing import CancelRequest, OutgoingListItem
 from app.schemas.tasks import AssignRequest, TaskOut
+from app.services import audit as audit_service
 from app.services import incoming as inc_service
 from app.services import incoming_attachments as att_service
 from app.services import outgoing as out_service
 from app.services import tasks as task_service
+from app.services import watermark as wm_service
 from app.workers.ocr import extract_text, ocr_attachment
 from app.workers.sign_verify import verify_pades
 
@@ -287,17 +289,37 @@ def cancel_incoming(
 def download_incoming(
     doc_id: int,
     request: Request,
+    raw: bool = Query(default=False),
+    reason: str | None = Query(default=None),
     db: Session = Depends(get_db),
     actor: User = Depends(current_user),
 ) -> Response:
+    """Tải/xem CV đến. H2: tự chèn watermark cá nhân (trừ CV đã ký số). Quản lý có thể tải
+    bản gốc không watermark (`raw=1` + lý do — ghi audit)."""
     doc = _visible(inc_service.get_incoming(db, doc_id), actor)
     data, name = inc_service.read_file(db, doc)
     ip, ua = _ctx(request)
     inc_service.log_download(db, doc, actor_id=actor.id, ip=ip, ua=ua)
+    if wm_service.should_serve_raw(raw, actor.role):
+        if not (reason and reason.strip()):
+            raise ValidationFailed("Cần nêu lý do khi tải bản gốc không watermark")
+        audit_service.log_action(
+            db, action="incoming_download_raw", user_id=actor.id,
+            object_type="incoming_document", object_id=doc.id, ip=ip, user_agent=ua,
+            detail={"reason": reason.strip()[:500]},
+        )
+        db.commit()
+    else:
+        data, _marked = wm_service.apply_download_watermark(
+            data, username=actor.username, ip=ip
+        )
     return Response(
         content=data,
         media_type="application/pdf",
-        headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(name)}"},
+        headers={
+            "Cache-Control": "no-store",  # tài liệu mật + watermark cá nhân → không cache
+            "Content-Disposition": f"inline; filename*=UTF-8''{quote(name)}",
+        },
     )
 
 
@@ -366,10 +388,18 @@ async def download_attachment(
     data, name, mime = await run_in_threadpool(att_service.read_attachment, db, att)
     ip, ua = _ctx(request)
     inc_service.log_download(db, doc, actor_id=actor.id, ip=ip, ua=ua)
+    # H2 — phụ lục PDF cũng watermark cá nhân (Word/Excel/ảnh giữ nguyên; CV đã ký số bỏ qua).
+    if mime == "application/pdf":
+        data, _marked = await run_in_threadpool(
+            wm_service.apply_download_watermark, data, username=actor.username, ip=ip
+        )
     return Response(
         content=data,
         media_type=mime,
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"},
+        headers={
+            "Cache-Control": "no-store",
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}",
+        },
     )
 
 

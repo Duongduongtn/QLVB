@@ -330,6 +330,13 @@ function CongVanDenPage() {
     onError: (e: Error) => setActErr(e.message),
   });
 
+  function downloadRaw(docId: number) {
+    // H2 — Quản lý tải bản gốc KHÔNG watermark; BE ghi audit lý do.
+    const reason = window.prompt('Lý do tải bản gốc không watermark (in chính thức, lưu trữ…):');
+    if (!reason || !reason.trim()) return;
+    window.open(`/api/incoming/${docId}/file?raw=1&reason=${encodeURIComponent(reason.trim())}`, '_blank');
+  }
+
   async function cancelDoc(row: IncRow) {
     const reason = window.prompt('Lý do huỷ vào sổ? (giữ số đến, không tái dùng)');
     if (reason === null) return;
@@ -515,6 +522,11 @@ function CongVanDenPage() {
               <button className="btn-secondary" style={{ height: 32 }} type="button" onClick={() => window.open(`/api/incoming/${selected.id}/file`, '_blank')}>
                 <Download size={13} /> Tải PDF
               </button>
+              {me.role === 'manager' && (
+                <button className="btn-ghost" style={{ height: 32 }} type="button" title="Tải bản gốc không watermark (ghi audit lý do)" onClick={() => downloadRaw(selected.id)}>
+                  <Download size={13} /> Bản gốc (không WM)
+                </button>
+              )}
               {me.role === 'manager' && (
                 <button className="btn-secondary" style={{ height: 32 }} type="button" disabled={toggleManagerOnly.isPending} onClick={() => toggleManagerOnly.mutate(selected)}>
                   {selected.manager_only ? 'Bỏ ẩn' : 'Chỉ Quản lý xem'}

@@ -17,6 +17,54 @@ def pdf_page_count(pdf_bytes: bytes) -> int:
         return int(doc.page_count)
 
 
+def pdf_has_signature(pdf_bytes: bytes) -> bool:
+    """PDF có chữ ký số nhúng không (PAdES). Dùng để KHÔNG watermark CV đã ký (H2) —
+    watermark sẽ phá hỏng chữ ký của bản tải. `get_sigflags()` trả -1 khi không có."""
+    import fitz
+
+    try:
+        with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
+            return int(doc.get_sigflags()) > 0
+    except Exception:
+        # File hỏng/không phải PDF → coi như không có chữ ký (vẫn để tầng trên xử lý).
+        from app.core.logging import logger
+
+        logger.warning("pdf.sigflags_failed", exc_info=True)
+        return False
+
+
+def watermark_pdf(
+    pdf_bytes: bytes,
+    text: str,
+    *,
+    font_path: str,
+    fontsize: int = 14,
+    opacity: float = 0.1,
+    angle: int = 45,
+) -> bytes:
+    """H2 — chèn watermark chữ chéo ở GIỮA mỗi trang, ON-THE-FLY (không sửa file gốc).
+
+    Dùng `TextWriter` (text layer riêng, mờ `opacity`, xoay `angle°` quanh tâm trang) với
+    font Unicode hỗ trợ tiếng Việt có dấu. Trả bytes PDF mới. KHÔNG đụng nội dung trang →
+    OCR nội dung gốc không đổi (watermark là lớp mờ phủ trên)."""
+    import fitz
+
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    try:
+        font = fitz.Font(fontfile=font_path)
+        tlen = font.text_length(text, fontsize=fontsize)
+        for page in doc:
+            rect = page.rect
+            pivot = fitz.Point(rect.width / 2, rect.height / 2)
+            tw = fitz.TextWriter(rect, opacity=opacity, color=(0.45, 0.45, 0.45))
+            # Đặt baseline sao cho chữ căn giữa theo chiều ngang quanh tâm, rồi xoay quanh tâm.
+            tw.append(fitz.Point(pivot.x - tlen / 2, pivot.y), text, font=font, fontsize=fontsize)
+            tw.write_text(page, morph=(pivot, fitz.Matrix(angle)))
+        return bytes(doc.tobytes())
+    finally:
+        doc.close()
+
+
 def stamp_images(
     pdf_bytes: bytes, placements: list[dict[str, Any]], images: dict[str, bytes]
 ) -> bytes:
