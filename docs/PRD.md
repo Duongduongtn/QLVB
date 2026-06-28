@@ -722,7 +722,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [CTC.SND-01] Là người dùng, tôi muốn quản lý danh bạ các cơ quan thường gửi công văn đến Thành Đạt, để khi vào sổ CV đến chọn nhanh và tra cứu được lịch sử.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⚠️ Partial (27/06/2026) — CRUD cơ quan gửi (is_sender) xong, dùng chung entity organizations. **Defer cùng E1:** autocomplete khi vào sổ, thống kê số CV/lần cuối/khẩn TB (cần incoming_documents), fuzzy-match tên + merge + auto-tạo khi vào sổ, pg_trgm GIN index.
+- **Trạng thái**: ⚠️ Partial (28/06/2026) — CRUD cơ quan gửi (is_sender) xong, dùng chung entity organizations. **Autocomplete khi vào sổ ✅ (28/06):** `SenderCombobox` trong wizard `cong-van-den.vao-so.tsx` thay `<select>` tĩnh — gõ để tìm (debounce 250ms, query `/api/organizations?role=sender&q=`), dropdown chọn, nút "Bỏ chọn", giữ gợi ý OCR. **Defer còn lại:** thống kê số CV/lần cuối/khẩn TB (cần aggregate incoming), fuzzy-match tên + merge + auto-tạo từ OCR khi vào sổ (POST organizations chưa set is_sender qua body), pg_trgm GIN index.
 - **Steps to Complete**:
   1. Vào "Danh bạ → Cơ quan gửi".
   2. Xem danh sách + search + sort theo "Số CV đã gửi".

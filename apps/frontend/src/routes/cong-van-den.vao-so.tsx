@@ -477,12 +477,13 @@ function VaoSoPage() {
               <p className="cell-meta" style={{ marginBottom: 16 }}>Đã tự điền từ OCR — kiểm tra và chỉnh lại nếu cần.</p>
               <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
                 <div style={{ gridColumn: '1 / -1' }}>
-                  <label className="field-label">Cơ quan gửi</label>
-                  <select className="text-input" value={doc.sender_org_id ?? ''} onChange={(e) => setField('sender_org_id', e.target.value ? Number(e.target.value) : null)}>
-                    <option value="">— Chọn cơ quan gửi —</option>
-                    {orgs.map((o) => <option key={o.id} value={o.id}>{o.short_name ?? o.full_name}</option>)}
-                  </select>
-                  {senderHint && <div className="cell-meta" style={{ marginTop: 4 }}>OCR gợi ý: {senderHint}</div>}
+                  <label className="field-label" id="sender-label">Cơ quan gửi</label>
+                  <SenderCombobox
+                    value={doc.sender_org_id}
+                    onChange={(id) => setField('sender_org_id', id)}
+                    orgs={orgs}
+                    hint={senderHint}
+                  />
                 </div>
                 <div>
                   <label className="field-label">Số ký hiệu</label>
@@ -554,5 +555,94 @@ function VaoSoPage() {
         </div>
       </div>
     </>
+  );
+}
+
+/** M2 — chọn cơ quan gửi bằng autocomplete (gõ để tìm trong danh bạ is_sender). */
+function SenderCombobox({
+  value,
+  onChange,
+  orgs,
+  hint,
+}: {
+  value: number | null;
+  onChange: (id: number | null) => void;
+  orgs: OrgLite[];
+  hint: string | null;
+}) {
+  const [text, setText] = useState('');
+  const [open, setOpen] = useState(false);
+  const [debounced, setDebounced] = useState('');
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(text.trim()), 250);
+    return () => clearTimeout(t);
+  }, [text]);
+
+  const search = useQuery({
+    queryKey: ['org-search', 'sender', debounced],
+    enabled: open,
+    queryFn: async () => {
+      const res = await api.GET('/api/organizations', {
+        params: { query: { role: 'sender', q: debounced || undefined, size: 12 } },
+      });
+      return (res.data?.items ?? []) as OrgLite[];
+    },
+  });
+  const results = search.data ?? [];
+  const selected = orgs.find((o) => o.id === value) ?? null;
+  const label = selected ? (selected.short_name ?? selected.full_name) : '';
+
+  return (
+    <div className="relative">
+      <div className="flex items-center" style={{ gap: 6 }}>
+        <input
+          className="text-input"
+          role="combobox"
+          aria-expanded={open}
+          aria-labelledby="sender-label"
+          placeholder="Gõ tên cơ quan gửi để tìm…"
+          value={open ? text : label}
+          onFocus={() => { setOpen(true); setText(''); }}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Escape') { setOpen(false); (e.target as HTMLInputElement).blur(); } }}
+        />
+        {value !== null && (
+          <button type="button" className="btn-ghost" style={{ height: 32, flexShrink: 0 }} aria-label="Bỏ chọn cơ quan" onClick={() => onChange(null)}>
+            Bỏ chọn
+          </button>
+        )}
+      </div>
+      {open && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 35 }} aria-hidden="true" onClick={() => setOpen(false)} />
+          <div role="listbox" className="card" style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, maxHeight: 260, overflowY: 'auto', zIndex: 36, padding: 6, boxShadow: '0 10px 30px oklch(18% 0.02 95 / 0.16)' }}>
+            {search.isFetching && results.length === 0 ? (
+              <div className="cell-meta" style={{ padding: '8px 10px' }}>Đang tìm…</div>
+            ) : results.length === 0 ? (
+              <div className="cell-meta" style={{ padding: '8px 10px' }}>Không có cơ quan khớp. Thêm tại trang Danh bạ.</div>
+            ) : (
+              results.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  role="option"
+                  aria-selected={o.id === value}
+                  className="nav-item w-full"
+                  style={{ borderLeft: 'none', textAlign: 'left' }}
+                  onClick={() => { onChange(o.id); setOpen(false); setText(''); }}
+                >
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ display: 'block', color: 'var(--ink)', fontSize: '0.85rem' }}>{o.short_name ?? o.full_name}</span>
+                    {o.short_name && <span className="cell-meta" style={{ display: 'block' }}>{o.full_name}</span>}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        </>
+      )}
+      {hint && <div className="cell-meta" style={{ marginTop: 4 }}>OCR gợi ý: {hint}</div>}
+    </div>
   );
 }
