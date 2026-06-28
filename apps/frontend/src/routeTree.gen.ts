@@ -22,6 +22,7 @@ import { Route as CongVanDiRouteImport } from './routes/cong-van-di'
 import { Route as CongVanDenRouteImport } from './routes/cong-van-den'
 import { Route as ChuKyRouteImport } from './routes/chu-ky'
 import { Route as CauHinhRouteImport } from './routes/cau-hinh'
+import { Route as BaoCaoRouteImport } from './routes/bao-cao'
 import { Route as AuditLogRouteImport } from './routes/audit-log'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as CongVanDiSoanRouteImport } from './routes/cong-van-di.soan'
@@ -92,6 +93,11 @@ const CauHinhRoute = CauHinhRouteImport.update({
   path: '/cau-hinh',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BaoCaoRoute = BaoCaoRouteImport.update({
+  id: '/bao-cao',
+  path: '/bao-cao',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuditLogRoute = AuditLogRouteImport.update({
   id: '/audit-log',
   path: '/audit-log',
@@ -116,6 +122,7 @@ const CongVanDenVaoSoRoute = CongVanDenVaoSoRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/audit-log': typeof AuditLogRoute
+  '/bao-cao': typeof BaoCaoRoute
   '/cau-hinh': typeof CauHinhRoute
   '/chu-ky': typeof ChuKyRoute
   '/cong-van-den': typeof CongVanDenRouteWithChildren
@@ -135,6 +142,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/audit-log': typeof AuditLogRoute
+  '/bao-cao': typeof BaoCaoRoute
   '/cau-hinh': typeof CauHinhRoute
   '/chu-ky': typeof ChuKyRoute
   '/cong-van-den': typeof CongVanDenRouteWithChildren
@@ -155,6 +163,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/audit-log': typeof AuditLogRoute
+  '/bao-cao': typeof BaoCaoRoute
   '/cau-hinh': typeof CauHinhRoute
   '/chu-ky': typeof ChuKyRoute
   '/cong-van-den': typeof CongVanDenRouteWithChildren
@@ -176,6 +185,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/audit-log'
+    | '/bao-cao'
     | '/cau-hinh'
     | '/chu-ky'
     | '/cong-van-den'
@@ -195,6 +205,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/audit-log'
+    | '/bao-cao'
     | '/cau-hinh'
     | '/chu-ky'
     | '/cong-van-den'
@@ -214,6 +225,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/audit-log'
+    | '/bao-cao'
     | '/cau-hinh'
     | '/chu-ky'
     | '/cong-van-den'
@@ -234,6 +246,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuditLogRoute: typeof AuditLogRoute
+  BaoCaoRoute: typeof BaoCaoRoute
   CauHinhRoute: typeof CauHinhRoute
   ChuKyRoute: typeof ChuKyRoute
   CongVanDenRoute: typeof CongVanDenRouteWithChildren
@@ -342,6 +355,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CauHinhRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/bao-cao': {
+      id: '/bao-cao'
+      path: '/bao-cao'
+      fullPath: '/bao-cao'
+      preLoaderRoute: typeof BaoCaoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/audit-log': {
       id: '/audit-log'
       path: '/audit-log'
@@ -400,6 +420,7 @@ const CongVanDiRouteWithChildren = CongVanDiRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuditLogRoute: AuditLogRoute,
+  BaoCaoRoute: BaoCaoRoute,
   CauHinhRoute: CauHinhRoute,
   ChuKyRoute: ChuKyRoute,
   CongVanDenRoute: CongVanDenRouteWithChildren,

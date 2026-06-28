@@ -16,6 +16,7 @@ import {
   LogOut,
   Menu,
   MonitorSmartphone,
+  BarChart3,
   ScrollText,
   Search,
   Send,
@@ -94,6 +95,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Hệ thống',
     items: [
+      { label: 'Báo cáo', to: '/bao-cao', icon: BarChart3, managerOnly: true },
       { label: 'Cấu hình', to: '/cau-hinh', icon: Settings, managerOnly: true },
       { label: 'Người dùng', to: '/nguoi-dung', icon: Users, managerOnly: true },
       { label: 'Audit log', to: '/audit-log', icon: ScrollText, managerOnly: true },

@@ -616,7 +616,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [RPT.BOK-01] Là Quản lý, tôi muốn xuất sổ ra Excel đúng template Phụ lục III NĐ 30/2020, để in lưu trữ + nộp cơ quan lưu trữ.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ✅ Done (28/06/2026) — `services/report.build_register_xlsx(year, book)` 3 sổ (di_gdnn/di_dvdl/den) đúng cột NĐ30 (sổ đi: STT/số-ký-hiệu/ngày/trích yếu/người ký/nơi nhận/số bản/ghi chú; sổ đến: **Số đến THẬT**/ngày đến/số-ký-hiệu/ngày VB/cơ quan gửi/trích yếu/đơn vị xử lý/ghi chú), openpyxl import trễ, header tiếng Việt có dấu + style/freeze. Lọc năm + chỉ CV đã cấp số; CV huỷ vẫn liệt kê kèm "Đã huỷ" (NĐ30: số không tái dùng). Người ký join hồ sơ ký→chữ ký; nơi nhận/cơ quan gửi batch (hết N+1). **Bảo mật: `_excel_safe` chống formula injection** (field tự do `=+-@\t\r` → prepend `'` — bất biến export TDD §10.2). router `/api/reports/register.xlsx` + `/stats` **require_manager**. FE `/bao-cao` (KPI + biểu đồ 12 tháng thật + modal chọn năm/loại sổ → tải Excel) + nav "Báo cáo" managerOnly → **đóng nốt khoảng trống nav so ui-demo**. 12 unit (excel_safe/header/stats) + 4 integration test. 2 review FIX BLOCKER injection + "Số đến"=số-thật + N+1 + wb.active None-safety. **Defer**: cột "Số bản" + "Đơn vị/người nhận xử lý" để trống điền tay (chưa join ProcessingTask). [Kèm dashboard G1-lite KPI+chart — G1 đầy đủ là Should/GD2.]
 - **Done khi**: chọn năm + loại sổ (Sổ đi GDNN / Sổ đi DVDL / Sổ đến chung) → tải Excel có đầy đủ cột chuẩn NĐ 30 (Số TT, Số/ký hiệu, Ngày, Trích yếu, Người ký, Đơn vị/người nhận, Số bản, Ghi chú).
 - **Edge cases**: Excel mở được trên Office 2010+; có header tiếng Việt có dấu đầy đủ.
 

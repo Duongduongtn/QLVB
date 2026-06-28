@@ -129,7 +129,7 @@ exclude = ["alembic/versions/", "tests/"]
 module = [
     "fitz.*", "paddleocr.*", "rembg.*", "cv2.*",
     "pyhanko.*", "pyhanko_certvalidator.*", "asn1crypto.*",
-    "httpx.*", "pywebpush.*", "boto3.*", "celery.*",
+    "httpx.*", "pywebpush.*", "boto3.*", "celery.*", "openpyxl.*",
 ]
 ignore_missing_imports = true
 
