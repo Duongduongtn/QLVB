@@ -63,6 +63,11 @@ const TASK_PILL: Record<string, { label: string; variant: 'info' | 'warning' | '
   done: { label: 'Hoàn thành', variant: 'success' },
 };
 
+function TaskBadge({ status }: { status?: string | null }) {
+  const tp = status ? TASK_PILL[status] : undefined;
+  return tp ? <Pill variant={tp.variant}>{tp.label}</Pill> : null;
+}
+
 const PAGE_SIZE = 20;
 
 const STATUS_PILL: Record<IncStatus, { label: string; cls: string; dot: boolean }> = {
@@ -484,9 +489,7 @@ function CongVanDenPage() {
                       {it.manager_only && <EyeOff size={14} style={{ color: 'var(--warning)', flexShrink: 0 }} aria-label="Chỉ Quản lý xem" />}
                       <span className="subject">{it.subject ?? <span className="cell-meta">(chưa có trích yếu)</span>}</span>
                       {it.signature_status === 'valid' && <ShieldCheck size={14} style={{ color: 'var(--success)', flexShrink: 0 }} aria-label="Đã ký số hợp lệ" />}
-                      {it.task_status && TASK_PILL[it.task_status] && (
-                        <Pill variant={TASK_PILL[it.task_status].variant}>{TASK_PILL[it.task_status].label}</Pill>
-                      )}
+                      <TaskBadge status={it.task_status} />
                     </div>
                   </td>
                   <td><span className="cell-meta">{orgName(it.sender_org_id)}</span></td>
