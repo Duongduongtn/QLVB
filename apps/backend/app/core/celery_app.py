@@ -68,4 +68,8 @@ celery.conf.beat_schedule = {
         "task": "app.workers.r2_sync.notify_due_tasks",
         "schedule": 24 * 60 * 60,  # mỗi ngày — nhắc việc sắp/đã quá hạn (E3)
     },
+    "purge-exports-daily": {
+        "task": "app.workers.zip_export.purge_exports",
+        "schedule": 24 * 60 * 60,  # mỗi ngày — dọn ZIP export cũ >24h (G4, chứa CV giải mã)
+    },
 }

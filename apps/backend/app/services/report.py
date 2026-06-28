@@ -162,29 +162,17 @@ def _incoming_rows(db: Session, year: int) -> list[dict[str, Any]]:
     return rows
 
 
-def build_register_xlsx(db: Session, *, year: int, book: str) -> bytes:
-    """Sinh Excel sổ đăng ký NĐ 30/2020. Trả bytes .xlsx."""
-    if book not in BOOKS:
-        raise ValidationFailed("Loại sổ không hợp lệ")
+_SHEET_NAME = {"di_gdnn": "So di GDNN", "di_dvdl": "So di DVDL", "den": "So den"}
 
-    from io import BytesIO
 
-    from openpyxl import Workbook
+def _fill_register_sheet(ws: Any, *, book: str, rows: list[dict[str, Any]], year: int) -> None:
+    """Đổ 1 sheet sổ đăng ký NĐ 30/2020 (tiêu đề + header + dữ liệu + freeze) vào `ws`.
+
+    Tách riêng để dùng chung cho file 1 sổ (G2) lẫn `index.xlsx` 3 sổ (G4 export ZIP)."""
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.utils import get_column_letter
 
     cols = _COLS_DEN if book == "den" else _COLS_DI
-    if book == "den":
-        rows = _incoming_rows(db, year)
-    else:
-        rows = _outgoing_rows(db, "GDNN" if book == "di_gdnn" else "DVDL", year)
-
-    wb = Workbook()
-    ws = wb.active
-    assert ws is not None  # Workbook() mới luôn có sheet active
-    ws.title = "So dang ky"
-
-    # Tiêu đề sổ + năm (merge toàn bộ cột).
     ncol = len(cols)
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=ncol)
     title_cell = ws.cell(row=1, column=1, value=f"{_BOOK_TITLE[book]} — NĂM {year}")
@@ -216,6 +204,46 @@ def build_register_xlsx(db: Session, *, year: int, book: str) -> bytes:
             )
 
     ws.freeze_panes = ws.cell(row=header_row + 1, column=1)
+
+
+def _register_rows(db: Session, book: str, year: int) -> list[dict[str, Any]]:
+    if book == "den":
+        return _incoming_rows(db, year)
+    return _outgoing_rows(db, "GDNN" if book == "di_gdnn" else "DVDL", year)
+
+
+def build_register_xlsx(db: Session, *, year: int, book: str) -> bytes:
+    """Sinh Excel sổ đăng ký NĐ 30/2020 (1 sổ). Trả bytes .xlsx."""
+    if book not in BOOKS:
+        raise ValidationFailed("Loại sổ không hợp lệ")
+
+    from io import BytesIO
+
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    assert ws is not None  # Workbook() mới luôn có sheet active
+    ws.title = "So dang ky"
+    _fill_register_sheet(ws, book=book, rows=_register_rows(db, book, year), year=year)
+
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def build_register_workbook_bytes(db: Session, *, year: int) -> bytes:
+    """G4 — `index.xlsx` gộp 3 sổ NĐ 30 (đi GDNN / đi DVDL / đến) thành 3 sheet."""
+    from io import BytesIO
+
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    for i, book in enumerate(BOOKS):
+        ws = wb.active if i == 0 else wb.create_sheet()
+        assert ws is not None
+        ws.title = _SHEET_NAME[book]
+        _fill_register_sheet(ws, book=book, rows=_register_rows(db, book, year), year=year)
 
     buf = BytesIO()
     wb.save(buf)
