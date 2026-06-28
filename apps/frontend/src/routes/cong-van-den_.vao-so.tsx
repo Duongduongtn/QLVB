@@ -174,6 +174,7 @@ function VaoSoPage() {
   const [ocrDone, setOcrDone] = useState(false);
   const [result, setResult] = useState<{ number: string | null } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const touchedRef = useRef<Set<string>>(new Set()); // field user đã tự sửa → auto-fill KHÔNG đè
 
   const orgsQuery = useQuery({
     queryKey: ['organizations', 'sender'],
@@ -219,6 +220,7 @@ function VaoSoPage() {
       setSigInfo(null);
       setFileName(f.name);
       setOcrDone(false);
+      touchedRef.current = new Set();
       setStep(2);
     } catch (e2) {
       setErr((e2 as Error).message);
@@ -236,10 +238,10 @@ function VaoSoPage() {
       if (!alive || !res.ok) return false;
       const body = (await res.json()) as { status: string; doc?: Doc; duplicates?: Dup[]; sender_hint?: string | null };
       if (body.status === 'done') {
-        if (body.doc) setDoc(body.doc);
         setDups(body.duplicates ?? []);
         setSenderHint(body.sender_hint ?? null);
         setOcrDone(true);
+        void applyAutofill();
         return true;
       }
       if (body.status === 'error') {
@@ -256,6 +258,7 @@ function VaoSoPage() {
       alive = false;
       clearInterval(iv);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, docId, taskId, ocrDone]);
 
   // Bước 2: poll verify chữ ký số (PAdES) song song OCR — E1.5.
@@ -269,23 +272,12 @@ function VaoSoPage() {
       if (body.status === 'done') {
         setSigStatus(body.signature_status ?? 'none');
         setSigInfo(body.signature_info ?? null);
-        // Auto-fill cơ quan/ngày từ chứng thư — chỉ điền field FE còn trống (không đè user).
-        if (body.doc) {
-          const filled = body.doc;
-          setDoc((d) => {
-            if (!d) return filled;
-            return {
-              ...d,
-              sender_org_id: d.sender_org_id ?? filled.sender_org_id,
-              sender_org_name: d.sender_org_name ?? filled.sender_org_name,
-              document_date: d.document_date ?? filled.document_date,
-            };
-          });
-        }
+        void applyAutofill(); // GET doc mới nhất → đổ tên cơ quan (từ chữ ký số) vào field chưa sửa
         return true;
       }
       if (body.status === 'error') {
         setSigStatus('error');
+        void applyAutofill();
         return true;
       }
       return false;
@@ -298,10 +290,35 @@ function VaoSoPage() {
       alive = false;
       clearInterval(iv);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, docId, sigTaskId, sigStatus]);
 
   function setField<K extends keyof Doc>(k: K, v: Doc[K]) {
+    touchedRef.current.add(String(k));
     setDoc((d) => (d ? { ...d, [k]: v } : d));
+  }
+
+  // GET doc mới nhất từ server → đổ giá trị auto-fill (OCR + chữ ký) vào các field user CHƯA sửa.
+  // Dùng 1 GET chuẩn sau mỗi poll: 2 endpoint poll trả snapshot ở thời điểm khác nhau (OCR có thể
+  // chạy trước khi chữ ký ghi tên cơ quan) → tin trực tiếp body.doc sẽ đè nhầm. GET phản ánh DB cuối.
+  async function applyAutofill() {
+    if (!docId) return;
+    const res = await fetch(`/api/incoming/${docId}`, { credentials: 'include' });
+    if (!res.ok) return;
+    const fresh = (await res.json()) as Doc;
+    const t = touchedRef.current;
+    setDoc((d) => {
+      if (!d) return fresh;
+      const next = { ...d };
+      if (!t.has('reference_number')) next.reference_number = fresh.reference_number;
+      if (!t.has('document_date')) next.document_date = fresh.document_date;
+      if (!t.has('subject')) next.subject = fresh.subject;
+      if (!t.has('sender')) {
+        next.sender_org_id = fresh.sender_org_id;
+        next.sender_org_name = fresh.sender_org_name;
+      }
+      return next;
+    });
   }
 
   async function saveAndRegister() {
@@ -505,9 +522,10 @@ function VaoSoPage() {
                   <SenderCombobox
                     orgId={doc.sender_org_id}
                     orgName={doc.sender_org_name}
-                    onChange={(id, name) =>
-                      setDoc((d) => (d ? { ...d, sender_org_id: id, sender_org_name: name } : d))
-                    }
+                    onChange={(id, name) => {
+                      touchedRef.current.add('sender');
+                      setDoc((d) => (d ? { ...d, sender_org_id: id, sender_org_name: name } : d));
+                    }}
                     orgs={orgs}
                     hint={senderHint}
                   />

@@ -44,10 +44,14 @@ def parse_autofill(text: str) -> dict[str, str | None]:
         if 1 <= d <= 31 and 1 <= mo <= 12:
             doc_date = f"{y:04d}-{mo:02d}-{d:02d}"
 
-    # Gợi ý cơ quan gửi: dòng IN HOA dài nhất trong 12 dòng đầu (thường là tên cơ quan ban hành).
+    # Gợi ý cơ quan gửi: dòng IN HOA dài nhất trong 12 dòng đầu (thường là tên cơ quan ban hành),
+    # BỎ QUA quốc hiệu / tiêu ngữ (xuất hiện ở đầu mọi công văn, không phải cơ quan gửi).
     sender_hint = None
     best = 0
     for line in (ln.strip() for ln in text.splitlines()[:12]):
+        up = line.upper()
+        if any(kw in up for kw in ("CỘNG HÒA", "CỘNG HOÀ", "ĐỘC LẬP", "HẠNH PHÚC")):
+            continue
         letters = [c for c in line if c.isalpha()]
         if len(letters) >= 6 and sum(c.isupper() for c in letters) / len(letters) > 0.7 and len(line) > best:
             sender_hint = line

@@ -33,6 +33,13 @@ def test_parse_subject_vv_line() -> None:
     assert parse_autofill(_SAMPLE)["subject"] == "hướng dẫn tuyển sinh năm học 2026"
 
 
+def test_sender_hint_skips_quoc_hieu() -> None:
+    # Quốc hiệu là dòng IN HOA dài nhất nhưng KHÔNG phải cơ quan gửi → phải bỏ qua.
+    text = "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM\nĐỘC LẬP - TỰ DO - HẠNH PHÚC\nỦY BAN NHÂN DÂN TỈNH ĐỒNG NAI\nSố: 99/UBND"
+    hint = parse_autofill(text)["sender_hint"]
+    assert hint == "ỦY BAN NHÂN DÂN TỈNH ĐỒNG NAI"
+
+
 def test_parse_empty_text() -> None:
     out = parse_autofill("nội dung thường không có số hay ngày")
     assert out["reference_number"] is None
