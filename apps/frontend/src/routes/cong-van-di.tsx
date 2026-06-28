@@ -5,6 +5,7 @@ import { Ban, ChevronLeft, ChevronRight, Download, FileCheck2, FileSearch, Searc
 
 import { api, type ApiErrorEnvelope } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
+import { useUnitView } from '~/stores/unitView';
 import { fmtDate, fmtDateTime } from '~/lib/format';
 import { UnitPill, type UnitLite } from '~/components/sign-ui';
 import {
@@ -96,15 +97,21 @@ function CongVanDiPage() {
   useEffect(() => {
     if (urlQ !== undefined) setQ(urlQ);
   }, [urlQ]);
-  const [unitFilter, setUnitFilter] = useState<number | 'all'>('all');
+  // CFG.VEW (B3a) — đơn vị lọc lấy từ store dùng chung với UnitViewSwitcher ở header
+  // (đổi ở header ⇄ đổi trong trang là MỘT giá trị). Nhân viên bị ép về 1 đơn vị ở header.
+  const unitFilter = useUnitView((s) => s.view);
+  const setUnitView = useUnitView((s) => s.setView);
   const [statusFilter, setStatusFilter] = useState<OutStatus | 'all'>('all');
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [checked, setChecked] = useState<Set<number>>(new Set());
 
+  // Đổi đơn vị (header hoặc filter trong trang) → về trang 1 để không kẹt ở trang rỗng.
+  useEffect(() => { setPage(1); }, [unitFilter]);
+
   function resetFilters() {
     setQ('');
-    setUnitFilter('all');
+    setUnitView('all');
     setStatusFilter('all');
     setPage(1);
   }
@@ -222,10 +229,7 @@ function CongVanDiPage() {
             <FilterMenu
               label="Đơn vị:"
               value={unitFilter === 'all' ? 'all' : String(unitFilter)}
-              onChange={(v) => {
-                setUnitFilter(v === 'all' ? 'all' : Number(v));
-                setPage(1);
-              }}
+              onChange={(v) => setUnitView(v === 'all' ? 'all' : Number(v))}
               options={[
                 { value: 'all', label: 'Tất cả' },
                 ...units.map((u) => ({ value: String(u.id), label: u.short_name ?? u.code })),

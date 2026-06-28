@@ -247,7 +247,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [CFG.VEW-01] Là người dùng, tôi muốn chuyển nhanh giữa view *Tất cả / GDNN / DVDL* qua dropdown góc trên, để chỉ thấy CV của đơn vị quan tâm.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⚠️ Partial _(hạ tầng xong: store Zustand persist `unitView` + dropdown header, "Tất cả" chỉ Quản lý, nhân viên ép về 1 đơn vị. CÒN: wire `useUnitView` vào các list (CV đi/đến/danh bạ/sổ — chưa tồn tại) + **BẮT BUỘC enforce role server-side** khi build list (client-state KHÔNG là ranh giới bảo mật — staff sửa localStorage 'all' → IDOR nếu BE không chặn))_
+- **Trạng thái**: ✅ Done (28/06/2026) — store Zustand persist `unitView` + `UnitViewSeg` header ("Tất cả" chỉ Quản lý, nhân viên ép về 1 đơn vị). **Wire vào sổ CV đi (28/06):** `cong-van-di.tsx` đọc `useUnitView().view` cho filter + query (header ⇄ FilterMenu trong trang = MỘT giá trị, đồng bộ); đổi đơn vị → về trang 1. **Server enforce role/đơn vị = N/A THEO THIẾT KẾ**: 2 đơn vị **dùng chung dữ liệu**, user **KHÔNG gắn đơn vị**, CV đi không có cờ "chỉ-QL-xem" → không có dữ liệu xuyên-đơn-vị cần chặn (khác `manager_only` của CV đến — cái đó ĐÃ enforce server `_visible`). unitView chỉ là tiện ích lọc client, không phải ranh giới bảo mật (đúng như note Nhóm D backend: "IDOR xuyên đơn vị = theo thiết kế"). CV đến dùng chung 2 đơn vị nên switch không áp (đến không có unit_id).
 - **Done khi**: click chuyển → mọi list (CV đi, danh bạ, sổ) tự lọc theo đơn vị đã chọn trong < 0.5 giây. View "Tất cả" chỉ Quản lý thấy được.
 
 #### [CFG.BRD] B3b. Branding header (tên app + logo)
