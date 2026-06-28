@@ -35,16 +35,26 @@ def list_organizations(
     page: int = Query(default=1, ge=1),
     size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
-    _: User = Depends(current_user),
+    actor: User = Depends(current_user),
 ) -> OrganizationListResponse:
     if role not in _ROLES:
         raise ValidationFailed("Vai phải là 'recipient' hoặc 'sender'")
     items, total = org_service.list_organizations(
         db, role=role, category=category, q=q, page=page, size=size
     )
-    return OrganizationListResponse(
-        items=[OrganizationOut.model_validate(o) for o in items], total=total
+    stats = org_service.org_doc_stats(
+        db,
+        role=role,
+        org_ids=[o.id for o in items],
+        include_manager_only=actor.role == "manager",
     )
+    out: list[OrganizationOut] = []
+    for o in items:
+        item = OrganizationOut.model_validate(o)
+        if (s := stats.get(o.id)) is not None:
+            item.doc_count, item.last_activity = s
+        out.append(item)
+    return OrganizationListResponse(items=out, total=total)
 
 
 @router.post("", response_model=OrganizationOut, status_code=201)

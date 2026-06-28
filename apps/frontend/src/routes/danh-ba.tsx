@@ -8,6 +8,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, Plus, Search, Trash2 } from 'lu
 
 import { api, type ApiErrorEnvelope } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
+import { fmtDate, fmtInt } from '~/lib/format';
 import { FilterMenu, InfoRow, PageHeader, Pill, RowActions } from '~/components/ui';
 import { Drawer } from '~/components/Drawer';
 
@@ -31,6 +32,8 @@ interface OrgRow {
   is_sender: boolean;
   category: Category;
   created_at: string;
+  doc_count: number;
+  last_activity: string | null;
 }
 
 const PAGE_SIZE = 20;
@@ -252,10 +255,18 @@ function DanhBaPage() {
                     <CategoryPill category={o.category} />
                   </td>
                   <td style={{ textAlign: 'center' }}>
-                    <span className="cell-meta dash">—</span>
+                    {o.doc_count > 0 ? (
+                      <span className="cell-mono num">{fmtInt(o.doc_count)}</span>
+                    ) : (
+                      <span className="cell-meta dash">—</span>
+                    )}
                   </td>
                   <td>
-                    <span className="cell-meta dash">—</span>
+                    {o.last_activity ? (
+                      <span className="cell-meta">{fmtDate(o.last_activity)}</span>
+                    ) : (
+                      <span className="cell-meta dash">—</span>
+                    )}
                   </td>
                   <td style={{ paddingRight: 24 }}>
                     <RowActions

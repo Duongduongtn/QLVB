@@ -7,7 +7,7 @@ danh sách. `category` chỉ ý nghĩa với nơi nhận (Chung/Riêng GDNN/Riê
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -111,6 +111,9 @@ class OrganizationOut(BaseModel):
     is_sender: bool
     category: str
     created_at: datetime
+    # M2 thống kê (set ở router theo tab): số CV liên quan + ngày hoạt động gần nhất.
+    doc_count: int = 0
+    last_activity: date | None = None
 
 
 class OrganizationListResponse(BaseModel):

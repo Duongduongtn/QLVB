@@ -12,14 +12,20 @@ khi vào sổ CV đến (M2) — làm cùng E1.
 
 from __future__ import annotations
 
+from datetime import date, timedelta, timezone
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.errors import Conflict, NotFound
+from app.models.incoming_document import IncomingDocument
 from app.models.organization import Organization
+from app.models.outgoing_document import OutgoingDocument, OutgoingRecipient
 from app.schemas.organization import OrganizationCreate, OrganizationUpdate
 from app.services.audit import log_action
+
+_VN_TZ = timezone(timedelta(hours=7))  # Asia/Saigon — quy "ngày hoạt động" về giờ VN
 
 
 def list_organizations(
@@ -53,6 +59,58 @@ def list_organizations(
         .limit(size)
     )
     return list(db.scalars(stmt).all()), total
+
+
+def org_doc_stats(
+    db: Session, *, role: str, org_ids: list[int], include_manager_only: bool = True
+) -> dict[int, tuple[int, date | None]]:
+    """Thống kê số CV + ngày hoạt động gần nhất theo từng cơ quan (batch, tránh N+1).
+
+    recipient → số CV ĐI đã gửi tới + ngày phát hành gần nhất (issue_date).
+    sender → số CV ĐẾN nhận từ + ngày tiếp nhận gần nhất (created_at, quy giờ VN).
+    Chỉ tính CV đã phát hành (đi)/đã vào sổ (đến) — loại nháp + huỷ (giữ số) + chưa xoá.
+    Trả {org_id: (count, last_date)}.
+    `include_manager_only=False` (Nhân viên) → KHÔNG đếm CV đến "Chỉ Quản lý xem" (không
+    để lộ tồn tại CV mật qua con số tổng)."""
+    if not org_ids:
+        return {}
+    if role == "recipient":
+        sent_rows = db.execute(
+            select(
+                OutgoingRecipient.organization_id,
+                func.count(func.distinct(OutgoingDocument.id)),
+                func.max(OutgoingDocument.issue_date),
+            )
+            .join(OutgoingDocument, OutgoingDocument.id == OutgoingRecipient.outgoing_id)
+            .where(
+                OutgoingRecipient.organization_id.in_(org_ids),
+                OutgoingDocument.deleted_at.is_(None),
+                OutgoingDocument.status == "published",  # đã phát hành (loại nháp/cấp-số-dở/huỷ)
+            )
+            .group_by(OutgoingRecipient.organization_id)
+        ).all()
+        return {int(oid): (int(c), d) for oid, c, d in sent_rows}
+
+    recv_conds: list[ColumnElement[bool]] = [
+        IncomingDocument.sender_org_id.in_(org_ids),
+        IncomingDocument.deleted_at.is_(None),
+        IncomingDocument.status == "registered",  # đã vào sổ (loại nháp + huỷ giữ số)
+    ]
+    if not include_manager_only:
+        recv_conds.append(IncomingDocument.manager_only.is_(False))
+    recv_rows = db.execute(
+        select(
+            IncomingDocument.sender_org_id,
+            func.count(),
+            func.max(IncomingDocument.created_at),
+        )
+        .where(*recv_conds)
+        .group_by(IncomingDocument.sender_org_id)
+    ).all()
+    return {
+        int(oid): (int(c), dt.astimezone(_VN_TZ).date() if dt is not None else None)
+        for oid, c, dt in recv_rows
+    }
 
 
 def get_organization(db: Session, org_id: int) -> Organization:
