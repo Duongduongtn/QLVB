@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertCircle,
   AlertTriangle,
@@ -65,6 +65,13 @@ interface SigInfo {
   checked_at: string;
   signatures: SigDetail[];
   warning: string | null;
+}
+// E1 batch — 1 mục trong hàng đợi file đã upload (mỗi file = 1 nháp + 2 task OCR/PAdES).
+interface QItem {
+  docId: number;
+  taskId: string;
+  sigTaskId: string;
+  fileName: string;
 }
 interface Doc {
   id: number;
@@ -162,19 +169,47 @@ function VaoSoPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const [docId, setDocId] = useState<number | null>(null);
-  const [taskId, setTaskId] = useState<string | null>(null);
-  const [sigTaskId, setSigTaskId] = useState<string | null>(null);
+  // E1 batch — hàng đợi nhiều file; duyệt/cấp số TỪNG cái theo `cursor`.
+  const [queue, setQueue] = useState<QItem[]>([]);
+  const [cursor, setCursor] = useState(0);
+  const [registered, setRegistered] = useState<{ fileName: string; number: string | null }[]>([]);
+  const current = queue[cursor] ?? null;
+  const docId = current?.docId ?? null;
+  const taskId = current?.taskId ?? null;
+  const sigTaskId = current?.sigTaskId ?? null;
+  const fileName = current?.fileName ?? '';
+
   const [sigStatus, setSigStatus] = useState<string | null>(null); // null=đang kiểm; none/valid/invalid/error
   const [sigInfo, setSigInfo] = useState<SigInfo | null>(null);
-  const [fileName, setFileName] = useState<string>('');
   const [doc, setDoc] = useState<Doc | null>(null);
   const [dups, setDups] = useState<Dup[]>([]);
   const [senderHint, setSenderHint] = useState<string | null>(null);
   const [ocrDone, setOcrDone] = useState(false);
-  const [result, setResult] = useState<{ number: string | null } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const touchedRef = useRef<Set<string>>(new Set()); // field user đã tự sửa → auto-fill KHÔNG đè
+
+  // Chuyển sang file kế trong hàng đợi → reset trạng thái xử lý + nạp lại nháp tương ứng.
+  useEffect(() => {
+    if (!current) return;
+    let alive = true;
+    setErr(null);
+    setOcrDone(false);
+    setSigStatus(null);
+    setSigInfo(null);
+    setDups([]);
+    setSenderHint(null);
+    touchedRef.current = new Set();
+    setDoc(null);
+    fetch(`/api/incoming/${current.docId}`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (alive && d) setDoc(d as Doc);
+      });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.docId]);
 
   const orgsQuery = useQuery({
     queryKey: ['organizations', 'sender'],
@@ -196,37 +231,42 @@ function VaoSoPage() {
   });
   const incTypes = typesQuery.data ?? [];
 
-  async function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
+  async function onPickFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
     e.target.value = '';
-    if (!f) return;
-    if (f.type !== 'application/pdf') {
+    if (files.length === 0) return;
+    if (files.some((f) => f.type !== 'application/pdf')) {
       setErr('Chỉ nhận file PDF');
       return;
     }
     setErr(null);
     setBusy(true);
     try {
-      const form = new FormData();
-      form.append('file', f);
-      const res = await fetch('/api/incoming/upload', { method: 'POST', body: form, credentials: 'include' });
-      if (!res.ok) throw new Error(await errBody(res, 'Tải file lên thất bại'));
-      const body = (await res.json()) as { doc: Doc; ocr_task_id: string; sig_task_id: string };
-      setDocId(body.doc.id);
-      setDoc(body.doc);
-      setTaskId(body.ocr_task_id);
-      setSigTaskId(body.sig_task_id);
-      setSigStatus(null);
-      setSigInfo(null);
-      setFileName(f.name);
-      setOcrDone(false);
-      touchedRef.current = new Set();
+      // Upload TUẦN TỰ từng file → mỗi file 1 nháp + enqueue OCR/PAdES; gom vào hàng đợi.
+      const items: QItem[] = [];
+      for (const f of files) {
+        const form = new FormData();
+        form.append('file', f);
+        const res = await fetch('/api/incoming/upload', { method: 'POST', body: form, credentials: 'include' });
+        if (!res.ok) throw new Error(await errBody(res, `Tải “${f.name}” thất bại`));
+        const body = (await res.json()) as { doc: Doc; ocr_task_id: string; sig_task_id: string };
+        items.push({ docId: body.doc.id, taskId: body.ocr_task_id, sigTaskId: body.sig_task_id, fileName: f.name });
+      }
+      setRegistered([]);
+      setQueue(items);
+      setCursor(0);
       setStep(2);
     } catch (e2) {
       setErr((e2 as Error).message);
     } finally {
       setBusy(false);
     }
+  }
+
+  // E1 batch — xong 1 file → sang file kế; hết hàng đợi → bước tổng kết.
+  function advanceOrFinish() {
+    if (cursor + 1 < queue.length) setCursor((c) => c + 1);
+    else setStep(3);
   }
 
   // Bước 2: poll OCR cho tới khi xong.
@@ -375,8 +415,8 @@ function VaoSoPage() {
         });
         if (reg.ok) {
           const body = (await reg.json()) as { number: string | null };
-          setResult({ number: body.number });
-          setStep(3);
+          setRegistered((r) => [...r, { fileName, number: body.number }]);
+          advanceOrFinish();
           return;
         }
         if (reg.status === 409 && attempt === 0) {
@@ -456,7 +496,7 @@ function VaoSoPage() {
           {step === 1 && (
             <div>
               <h2 className="section-title" style={{ marginBottom: 16 }}>Tải file PDF công văn đến</h2>
-              <input ref={fileRef} type="file" accept="application/pdf" className="hidden" onChange={onPickFile} />
+              <input ref={fileRef} type="file" accept="application/pdf" multiple className="hidden" onChange={onPickFiles} />
               <button
                 type="button"
                 className="flex flex-col items-center justify-center"
@@ -465,8 +505,8 @@ function VaoSoPage() {
                 style={{ width: '100%', border: '1.5px dashed var(--rule-strong)', borderRadius: 8, padding: '48px 24px', gap: 12, background: 'var(--paper-deep)', cursor: 'pointer' }}
               >
                 <UploadCloud size={40} strokeWidth={1.25} style={{ color: 'var(--kinpaku-deep)' }} />
-                <div style={{ fontWeight: 500, color: 'var(--ink)' }}>{busy ? 'Đang tải lên…' : 'Bấm để chọn file PDF'}</div>
-                <div className="cell-meta">Chỉ nhận PDF — tối đa 50MB</div>
+                <div style={{ fontWeight: 500, color: 'var(--ink)' }}>{busy ? 'Đang tải lên…' : 'Bấm để chọn một hoặc nhiều file PDF'}</div>
+                <div className="cell-meta">Chọn nhiều file để vào sổ hàng loạt — mỗi file tối đa 50MB</div>
               </button>
             </div>
           )}
@@ -477,6 +517,9 @@ function VaoSoPage() {
               <div className="flex items-center" style={{ gap: 10, marginBottom: 16, padding: 12, border: '1px solid var(--rule)', borderRadius: 6 }}>
                 <FileText size={16} style={{ color: 'var(--ink-muted)' }} />
                 <span style={{ flex: 1, fontSize: '0.85rem', color: 'var(--ink)' }}>{fileName}</span>
+                {queue.length > 1 && (
+                  <span className="cell-meta" style={{ flexShrink: 0 }}>File {cursor + 1}/{queue.length}</span>
+                )}
                 <Pill variant="success" dot>Đã tải</Pill>
               </div>
 
@@ -573,8 +616,21 @@ function VaoSoPage() {
               <span className="flex items-center justify-center" style={{ width: 56, height: 56, borderRadius: 999, background: 'var(--success-soft)' }}>
                 <Check size={28} style={{ color: 'var(--success)' }} />
               </span>
-              <h2 className="section-title">Đã vào sổ công văn đến</h2>
-              <div className="cell-mono" style={{ fontSize: '0.95rem' }}>Số đến: <span className="num">{result?.number ?? '—'}</span></div>
+              <h2 className="section-title">
+                {registered.length > 1 ? `Đã vào sổ ${registered.length} công văn đến` : 'Đã vào sổ công văn đến'}
+              </h2>
+              {registered.length <= 1 ? (
+                <div className="cell-mono" style={{ fontSize: '0.95rem' }}>Số đến: <span className="num">{registered[0]?.number ?? '—'}</span></div>
+              ) : (
+                <div className="flex flex-col" style={{ gap: 6, width: '100%', maxWidth: 420, textAlign: 'left' }}>
+                  {registered.map((r, i) => (
+                    <div key={i} className="flex items-center justify-between" style={{ gap: 10, padding: '8px 12px', border: '1px solid var(--rule)', borderRadius: 6 }}>
+                      <span className="cell-meta" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.fileName}</span>
+                      <span className="cell-mono num" style={{ flexShrink: 0 }}>{r.number ?? '—'}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
               <p className="cell-meta" style={{ maxWidth: 380 }}>File PDF gốc đã lưu mã hoá. Có thể phân công xử lý ở bước sau.</p>
               <div className="flex items-center" style={{ gap: 8, marginTop: 8 }}>
                 <button className="btn-primary" type="button" onClick={() => navigate({ to: '/cong-van-den' })}>Về sổ CV đến</button>
@@ -584,13 +640,22 @@ function VaoSoPage() {
 
           {step === 2 && (
             <div className="flex items-center justify-between" style={{ marginTop: 28, paddingTop: 20, borderTop: '1px solid var(--rule)' }}>
-              <button className="btn-secondary" type="button" disabled={busy} onClick={() => setStep(1)}>
-                <ArrowLeft size={14} /> Chọn file khác
+              <button className="btn-secondary" type="button" disabled={busy} onClick={() => { setQueue([]); setCursor(0); setStep(1); }}>
+                <ArrowLeft size={14} /> Chọn lại từ đầu
               </button>
-              <span className="cell-meta">Bước {step} / {STEPS.length}</span>
-              <button className="btn-primary" type="button" disabled={busy || !ocrDone} onClick={saveAndRegister}>
-                {busy ? 'Đang lưu…' : !ocrDone ? 'Đang đọc tự động…' : 'Lưu & cấp số đến'} <ArrowRight size={14} />
-              </button>
+              <span className="cell-meta">
+                {queue.length > 1 ? `File ${cursor + 1}/${queue.length}` : `Bước ${step} / ${STEPS.length}`}
+              </span>
+              <div className="flex items-center" style={{ gap: 8 }}>
+                {queue.length > 1 && (
+                  <button className="btn-secondary" type="button" disabled={busy} onClick={advanceOrFinish} title="Bỏ qua file này, để lại bản nháp">
+                    Bỏ qua file này
+                  </button>
+                )}
+                <button className="btn-primary" type="button" disabled={busy || !ocrDone} onClick={saveAndRegister}>
+                  {busy ? 'Đang lưu…' : !ocrDone ? 'Đang đọc tự động…' : queue.length > 1 && cursor + 1 < queue.length ? 'Lưu & file kế' : 'Lưu & cấp số đến'} <ArrowRight size={14} />
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -636,6 +701,39 @@ function SenderCombobox({
     },
   });
   const results = search.data ?? [];
+
+  const queryClient = useQueryClient();
+  // M2 — gợi ý cơ quan tên GẦN GIỐNG (fuzzy) để chọn đúng cơ quan đã có, tránh tạo trùng.
+  const similar = useQuery({
+    queryKey: ['org-similar', 'sender', debounced],
+    enabled: open && debounced.length >= 2,
+    queryFn: async () => {
+      const { data } = await api.GET('/api/organizations/similar', {
+        params: { query: { role: 'sender', name: debounced, limit: 5 } },
+      });
+      return (data ?? []) as { id: number; full_name: string; short_name: string | null; similarity: number; doc_count: number }[];
+    },
+  });
+  const resultIds = new Set(results.map((o) => o.id));
+  const fuzzy = (similar.data ?? []).filter((o) => !resultIds.has(o.id)); // không lặp kết quả tìm thường
+
+  // M2 — auto-tạo cơ quan vào danh bạ ngay khi vào sổ (cơ quan chưa có trong danh bạ).
+  const createMut = useMutation({
+    mutationFn: async (name: string) => {
+      const { data, error } = await api.POST('/api/organizations', {
+        body: { full_name: name, role: 'sender' },
+      });
+      if (error || !data) throw new Error('Tạo cơ quan thất bại');
+      return data as OrgLite;
+    },
+    onSuccess: async (o) => {
+      await queryClient.invalidateQueries({ queryKey: ['organizations'] });
+      onChange(o.id, o.short_name ?? o.full_name);
+      setOpen(false);
+      setText('');
+    },
+  });
+
   const selected = orgs.find((o) => o.id === orgId) ?? null;
   // Nhãn hiển thị: ưu tiên org khớp danh bạ, sau đó tên free-text.
   const label = selected ? (selected.short_name ?? selected.full_name) : (orgName ?? '');
@@ -685,6 +783,42 @@ function SenderCombobox({
                   <span className="cell-meta" style={{ display: 'block' }}>Tên tự do — cơ quan chưa có trong danh bạ</span>
                 </span>
               </button>
+            )}
+            {typed && (
+              <button
+                type="button"
+                className="nav-item w-full"
+                style={{ borderLeft: 'none', textAlign: 'left' }}
+                disabled={createMut.isPending}
+                onClick={() => createMut.mutate(typed)}
+              >
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: 'block', color: 'var(--kinpaku-deep)', fontSize: '0.85rem' }}>
+                    {createMut.isPending ? 'Đang thêm…' : `➕ Thêm “${typed}” vào danh bạ`}
+                  </span>
+                  <span className="cell-meta" style={{ display: 'block' }}>Lưu cơ quan gửi mới để lần sau chọn nhanh</span>
+                </span>
+              </button>
+            )}
+            {/* Gợi ý gần giống (fuzzy) — tránh tạo trùng cơ quan đã có với tên hơi khác. */}
+            {fuzzy.length > 0 && (
+              <>
+                <div className="cell-meta" style={{ padding: '6px 10px 2px' }}>Có thể bạn muốn:</div>
+                {fuzzy.map((o) => (
+                  <button
+                    key={`sim-${o.id}`}
+                    type="button"
+                    className="nav-item w-full"
+                    style={{ borderLeft: 'none', textAlign: 'left' }}
+                    onClick={() => { onChange(o.id, o.short_name ?? o.full_name); setOpen(false); setText(''); }}
+                  >
+                    <span style={{ minWidth: 0 }}>
+                      <span style={{ display: 'block', color: 'var(--ink)', fontSize: '0.85rem' }}>{o.short_name ?? o.full_name}</span>
+                      <span className="cell-meta" style={{ display: 'block' }}>giống {Math.round(o.similarity * 100)}% · {o.doc_count} CV</span>
+                    </span>
+                  </button>
+                ))}
+              </>
             )}
             {search.isFetching && results.length === 0 ? (
               <div className="cell-meta" style={{ padding: '8px 10px' }}>Đang tìm…</div>

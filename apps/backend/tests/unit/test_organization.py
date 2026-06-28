@@ -214,3 +214,20 @@ def test_delete_is_soft() -> None:
     assert org.deleted_at is not None  # soft delete, KHÔNG xoá khỏi DB
     assert db.committed is True
     assert "org_delete" in [getattr(a, "action", None) for a in db.added]
+
+
+# ── M2 fuzzy/merge/avg_urgency (phần thuần + wiring) ────────────────
+def test_urgency_label_maps_avg_to_nearest() -> None:
+    assert org_svc._urgency_label(0.0) == "normal"
+    assert org_svc._urgency_label(2.67) == "express"  # round 3
+    assert org_svc._urgency_label(1.4) == "urgent"  # round 1
+    assert org_svc._urgency_label(9.0) == "express_timed"  # kẹp 4
+    assert org_svc._urgency_label(-1.0) == "normal"  # kẹp 0
+
+
+def test_router_has_similar_and_merge_routes() -> None:
+    from app.routers.organizations import router
+
+    paths = {getattr(r, "path", None): getattr(r, "methods", set()) for r in router.routes}
+    assert "/similar" in paths and "GET" in paths["/similar"]
+    assert "/merge" in paths and "POST" in paths["/merge"]

@@ -9,6 +9,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, Plus, Search, Trash2 } from 'lu
 import { api, type ApiErrorEnvelope } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
 import { fmtDate, fmtInt } from '~/lib/format';
+import { URGENCY_LABEL } from '~/lib/incoming';
 import { FilterMenu, InfoRow, PageHeader, Pill, RowActions } from '~/components/ui';
 import { Drawer } from '~/components/Drawer';
 
@@ -34,6 +35,15 @@ interface OrgRow {
   created_at: string;
   doc_count: number;
   last_activity: string | null;
+  avg_urgency: string | null;
+}
+
+interface SimilarOrg {
+  id: number;
+  full_name: string;
+  short_name: string | null;
+  similarity: number;
+  doc_count: number;
 }
 
 const PAGE_SIZE = 20;
@@ -62,6 +72,7 @@ function DanhBaPage() {
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<OrgRow | null>(null);
   const [creating, setCreating] = useState(false);
+  const [mergeSource, setMergeSource] = useState<OrgRow | null>(null);
 
   // Debounce ô tìm → không bắn request mỗi ký tự gõ.
   useEffect(() => {
@@ -204,7 +215,7 @@ function DanhBaPage() {
                 <th style={{ paddingLeft: 24 }}>Tên cơ quan</th>
                 <th style={{ width: 120 }}>Viết tắt</th>
                 <th style={{ width: 160 }}>Địa chỉ</th>
-                <th style={{ width: 130 }}>Phân loại</th>
+                <th style={{ width: 130 }}>{role === 'sender' ? 'Mức khẩn TB' : 'Phân loại'}</th>
                 <th className="center" style={{ width: 110 }}>
                   Số CV
                 </th>
@@ -252,7 +263,15 @@ function DanhBaPage() {
                     <span className="cell-meta">{o.address ?? '—'}</span>
                   </td>
                   <td>
-                    <CategoryPill category={o.category} />
+                    {role === 'sender' ? (
+                      o.avg_urgency ? (
+                        <span className="cell-meta">{URGENCY_LABEL[o.avg_urgency] ?? o.avg_urgency}</span>
+                      ) : (
+                        <span className="cell-meta dash">—</span>
+                      )
+                    ) : (
+                      <CategoryPill category={o.category} />
+                    )}
                   </td>
                   <td style={{ textAlign: 'center' }}>
                     {o.doc_count > 0 ? (
@@ -272,6 +291,7 @@ function DanhBaPage() {
                     <RowActions
                       items={[
                         { label: 'Sửa', onClick: () => setSelected(o) },
+                        { label: 'Gộp vào cơ quan khác', onClick: () => setMergeSource(o) },
                         { label: 'Xoá', danger: true, onClick: () => confirmDelete(o) },
                       ]}
                     />
@@ -324,9 +344,168 @@ function DanhBaPage() {
         </div>
       </div>
 
-      {creating && <OrgDrawer role={role} onClose={() => setCreating(false)} />}
+      {creating && (
+        <OrgDrawer
+          role={role}
+          onClose={() => setCreating(false)}
+          onPickExisting={(o) => {
+            // Gợi ý trùng → lọc danh sách về cơ quan đó để xem/dùng thay vì tạo mới.
+            setCreating(false);
+            setQ(o.full_name);
+            setDebouncedQ(o.full_name);
+            setPage(1);
+          }}
+        />
+      )}
       {selected && <OrgDrawer role={role} org={selected} onClose={() => setSelected(null)} />}
+      {mergeSource && (
+        <MergeModal
+          source={mergeSource}
+          role={role}
+          onClose={() => setMergeSource(null)}
+          onDone={() => {
+            setMergeSource(null);
+            void queryClient.invalidateQueries({ queryKey: ['organizations'] });
+          }}
+        />
+      )}
     </>
+  );
+}
+
+/** M2 — gộp 2 cơ quan trùng: chọn cơ quan ĐÍCH (giữ lại) → chuyển hết CV của nguồn sang
+ *  rồi xoá nguồn. Tìm đích bằng fuzzy (/similar) + tìm thường (q). */
+function MergeModal({
+  source,
+  role,
+  onClose,
+  onDone,
+}: {
+  source: OrgRow;
+  role: Role;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [q, setQ] = useState(source.full_name);
+  const [debounced, setDebounced] = useState(source.full_name);
+  const [target, setTarget] = useState<SimilarOrg | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(q.trim()), 300);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  // Ưu tiên gợi ý fuzzy tên gần giống; cho gõ tự do để tìm đích bất kỳ.
+  const results = useQuery({
+    queryKey: ['org-similar', role, debounced, source.id],
+    enabled: debounced.length > 0,
+    queryFn: async () => {
+      const { data } = await api.GET('/api/organizations/similar', {
+        params: { query: { role, name: debounced, exclude_id: source.id, limit: 10 } },
+      });
+      return (data ?? []) as SimilarOrg[];
+    },
+  });
+
+  const merge = useMutation({
+    mutationFn: async () => {
+      if (!target) return;
+      const { error } = await api.POST('/api/organizations/merge', {
+        body: { source_id: source.id, target_id: target.id },
+      });
+      if (error) throw new Error(errMsg(error, 'Gộp cơ quan thất bại'));
+    },
+    onSuccess: onDone,
+    onError: (e: Error) => setErr(e.message),
+  });
+
+  return (
+    <Drawer
+      open
+      onClose={onClose}
+      eyebrow="Gộp cơ quan trùng"
+      title={`Gộp “${source.full_name}”`}
+      width={480}
+      actions={
+        <>
+          <button type="button" className="btn-secondary" onClick={onClose}>
+            Huỷ
+          </button>
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={!target || merge.isPending}
+            onClick={() => {
+              if (
+                target &&
+                window.confirm(
+                  `Chuyển toàn bộ công văn của “${source.full_name}” sang “${target.full_name}” rồi xoá “${source.full_name}”? Không thể hoàn tác.`,
+                )
+              ) {
+                merge.mutate();
+              }
+            }}
+          >
+            {merge.isPending ? 'Đang gộp…' : 'Gộp & xoá nguồn'}
+          </button>
+        </>
+      }
+    >
+      {err && (
+        <div role="alert" style={{ padding: '8px 12px', borderRadius: 6, background: 'var(--danger-soft)', color: 'var(--danger)', fontSize: '0.85rem', marginBottom: 12 }}>
+          {err}
+        </div>
+      )}
+      <p className="cell-meta" style={{ marginBottom: 12 }}>
+        Chọn cơ quan <strong>giữ lại</strong> (đích). Mọi công văn đang trỏ tới “{source.full_name}” sẽ chuyển sang cơ quan đích, sau đó nguồn bị ẩn.
+      </p>
+      <div className="relative" style={{ marginBottom: 12 }}>
+        <Search size={16} className="absolute" style={{ left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-faint)' }} />
+        <input
+          className="search-input"
+          style={{ width: '100%' }}
+          value={q}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setTarget(null);
+          }}
+          placeholder="Tìm cơ quan đích…"
+        />
+      </div>
+      <div className="flex flex-col" style={{ gap: 6, maxHeight: 320, overflowY: 'auto' }}>
+        {results.isFetching && <span className="cell-meta">Đang tìm…</span>}
+        {!results.isFetching && (results.data ?? []).length === 0 && (
+          <span className="cell-meta">Không tìm thấy cơ quan đích phù hợp.</span>
+        )}
+        {(results.data ?? []).map((o) => {
+          const active = target?.id === o.id;
+          return (
+            <button
+              key={o.id}
+              type="button"
+              onClick={() => setTarget(o)}
+              className="flex items-center justify-between"
+              style={{
+                gap: 8,
+                padding: '10px 12px',
+                borderRadius: 6,
+                textAlign: 'left',
+                border: `1px solid ${active ? 'var(--kinpaku)' : 'var(--rule)'}`,
+                background: active ? 'var(--paper-deep)' : 'var(--paper-raised)',
+                cursor: 'pointer',
+              }}
+            >
+              <span style={{ minWidth: 0 }}>
+                <span style={{ display: 'block', color: 'var(--ink)', fontSize: '0.85rem', fontWeight: 500 }}>{o.full_name}</span>
+                <span className="cell-meta">{o.short_name ? `${o.short_name} · ` : ''}{fmtInt(o.doc_count)} CV · giống {Math.round(o.similarity * 100)}%</span>
+              </span>
+              {active && <span className="pill pill-success">Đích</span>}
+            </button>
+          );
+        })}
+      </div>
+    </Drawer>
   );
 }
 
@@ -344,7 +523,17 @@ type OrgValues = z.infer<typeof orgSchema>;
 
 const errorTextStyle = { marginTop: 4, fontSize: '0.75rem', color: 'var(--danger)' } as const;
 
-function OrgDrawer({ role, org, onClose }: { role: Role; org?: OrgRow; onClose: () => void }) {
+function OrgDrawer({
+  role,
+  org,
+  onClose,
+  onPickExisting,
+}: {
+  role: Role;
+  org?: OrgRow;
+  onClose: () => void;
+  onPickExisting?: (o: SimilarOrg) => void;
+}) {
   const queryClient = useQueryClient();
   const [serverError, setServerError] = useState<string | null>(null);
   const isEdit = !!org;
@@ -352,6 +541,7 @@ function OrgDrawer({ role, org, onClose }: { role: Role; org?: OrgRow; onClose: 
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<OrgValues>({
     resolver: zodResolver(orgSchema),
@@ -366,6 +556,25 @@ function OrgDrawer({ role, org, onClose }: { role: Role; org?: OrgRow; onClose: 
       note: org?.note ?? '',
     },
   });
+
+  // M2 — gợi ý cơ quan tên gần giống khi ĐANG TẠO MỚI (tránh trùng). Bỏ qua khi sửa.
+  const nameVal = watch('full_name');
+  const [dq, setDq] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDq((nameVal ?? '').trim()), 350);
+    return () => clearTimeout(t);
+  }, [nameVal]);
+  const similar = useQuery({
+    queryKey: ['org-similar', role, dq],
+    enabled: !isEdit && dq.length >= 2,
+    queryFn: async () => {
+      const { data } = await api.GET('/api/organizations/similar', {
+        params: { query: { role, name: dq, limit: 4 } },
+      });
+      return (data ?? []) as SimilarOrg[];
+    },
+  });
+  const suggestions = !isEdit ? (similar.data ?? []) : [];
 
   async function onSubmit(values: OrgValues) {
     setServerError(null);
@@ -472,11 +681,24 @@ function OrgDrawer({ role, org, onClose }: { role: Role; org?: OrgRow; onClose: 
             <CategoryPill category={org!.category} />
           </InfoRow>
           <InfoRow label="Số CV liên quan">
-            <span className="cell-meta dash">—</span>
+            {org!.doc_count > 0 ? (
+              <span className="cell-mono num">{fmtInt(org!.doc_count)}</span>
+            ) : (
+              <span className="cell-meta dash">—</span>
+            )}
           </InfoRow>
           <InfoRow label="Lần cuối">
-            <span className="cell-meta dash">—</span>
+            {org!.last_activity ? (
+              <span className="cell-meta">{fmtDate(org!.last_activity)}</span>
+            ) : (
+              <span className="cell-meta dash">—</span>
+            )}
           </InfoRow>
+          {role === 'sender' && org!.avg_urgency && (
+            <InfoRow label="Mức khẩn TB">
+              <span className="cell-meta">{URGENCY_LABEL[org!.avg_urgency] ?? org!.avg_urgency}</span>
+            </InfoRow>
+          )}
         </div>
       )}
       <form id="org-form" onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col" style={{ gap: 16 }}>
@@ -486,6 +708,32 @@ function OrgDrawer({ role, org, onClose }: { role: Role; org?: OrgRow; onClose: 
           </label>
           <input id="o_name" className="text-input" placeholder="Tên cơ quan…" {...register('full_name')} />
           {errors.full_name && <p style={errorTextStyle}>{errors.full_name.message}</p>}
+          {suggestions.length > 0 && (
+            <div
+              style={{ marginTop: 8, padding: '8px 12px', borderRadius: 6, background: 'var(--warning-soft)', border: '1px solid var(--warning)' }}
+            >
+              <div style={{ fontSize: '0.8rem', color: 'var(--ink)', marginBottom: 4 }}>
+                Có thể đã tồn tại cơ quan tương tự — kiểm tra tránh tạo trùng:
+              </div>
+              <div className="flex flex-col" style={{ gap: 4 }}>
+                {suggestions.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className="flex items-center justify-between"
+                    style={{ gap: 8, padding: '4px 6px', borderRadius: 4, textAlign: 'left', background: 'transparent', cursor: 'pointer' }}
+                    onClick={() => onPickExisting?.(s)}
+                  >
+                    <span style={{ color: 'var(--ink)', fontSize: '0.82rem', minWidth: 0 }}>
+                      {s.full_name}
+                      <span className="cell-meta"> · {fmtInt(s.doc_count)} CV · giống {Math.round(s.similarity * 100)}%</span>
+                    </span>
+                    <span className="cell-meta" style={{ flexShrink: 0, color: 'var(--kinpaku-deep)' }}>Dùng cơ quan này →</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div

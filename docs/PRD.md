@@ -447,7 +447,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [INC.REG-01] Là Nhân viên/Quản lý, tôi muốn vào sổ công văn đến bằng cách upload file PDF, web tự đọc metadata + check trùng, để CV được lưu tập trung và không nhập trùng.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⚠️ Partial (27/06/2026) — **BE+FE wizard 4 bước XONG**: upload PDF (mã hoá phong bì) → OCR worker (PyMuPDF text-layer / PaddleOCR `vie` scan, bản tạm `in_tmp` xoá ngay sau OCR + beat purge) → auto-fill số ký hiệu/ngày VB/gợi ý cơ quan → dedup 3 lớp (E1.6) → cấp **số đến sổ chung** (nextval atomic, theo năm tiếp nhận) → manager_only ẩn NV (404 server-side). Cancel giữ số. Audit gồm download. **Defer:** verify chữ ký số (E1.5 — đang `unchecked`), upload batch nhiều file, phụ lục (E4).
+- **Trạng thái**: ✅ Done (28/06/2026) — **BE+FE wizard XONG**: upload PDF (mã hoá phong bì) → OCR worker (PyMuPDF text-layer / PaddleOCR `vie` scan, bản tạm `in_tmp` xoá ngay sau OCR + beat purge) → auto-fill số ký hiệu/ngày VB/gợi ý cơ quan → dedup 3 lớp (E1.6) → cấp **số đến sổ chung** (nextval atomic, theo năm tiếp nhận) → manager_only ẩn NV (404 server-side). Cancel giữ số. Audit gồm download. **Upload batch nhiều file ✅ (28/06):** chọn nhiều PDF → mỗi file 1 nháp + OCR/PAdES song song → **hàng đợi duyệt/cấp số TỪNG cái** (tiến độ X/N, bỏ qua được, bước cuối tổng kết các số đến). Phụ lục E4 ✅. Verify chữ ký số bản upload theo dõi ở **E1.5** (chờ seed cert NEAC — OPS).
 - **Steps to Complete**:
   1. Vào "Công văn đến → Vào sổ mới".
   2. Upload file PDF (drag drop, hỗ trợ upload nhiều file batch).
@@ -722,7 +722,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [CTC.SND-01] Là người dùng, tôi muốn quản lý danh bạ các cơ quan thường gửi công văn đến Thành Đạt, để khi vào sổ CV đến chọn nhanh và tra cứu được lịch sử.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⚠️ Partial (28/06/2026) — CRUD cơ quan gửi (is_sender) xong, dùng chung entity organizations. **Autocomplete khi vào sổ ✅ (28/06):** `SenderCombobox` trong wizard `cong-van-den.vao-so.tsx` thay `<select>` tĩnh — gõ để tìm (debounce 250ms, query `/api/organizations?role=sender&q=`), dropdown chọn, nút "Bỏ chọn", giữ gợi ý OCR. **Thống kê số CV + lần cuối ✅ (28/06):** `org_doc_stats` batch (recipient→số CV đi published gửi tới + ngày phát hành gần nhất; sender→số CV đến registered nhận từ + ngày tiếp nhận giờ VN; **loại nháp+huỷ giữ số**), enrich `OrganizationOut.doc_count`/`last_activity`, cột "Số CV"+"Lần cuối" ở danh-ba. **Bảo mật:** received_count lọc `manager_only` cho Nhân viên (không lộ tồn tại CV mật qua con số tổng — integration test khoá). **Defer còn lại:** mức độ khẩn TB, fuzzy-match tên + merge + auto-tạo từ OCR khi vào sổ, pg_trgm GIN index.
+- **Trạng thái**: ✅ Done (28/06/2026) — CRUD cơ quan gửi (is_sender), dùng chung entity organizations + autocomplete `SenderCombobox` khi vào sổ + thống kê số CV/lần cuối (`org_doc_stats` batch, **received_count lọc `manager_only` cho Nhân viên** — không lộ CV mật). **Hoàn tất defer (28/06):** **mức khẩn TB** (`sender_avg_urgency` AVG ordinal → nhãn, cột danh bạ tab cơ quan gửi, lọc manager_only); **fuzzy-match** `find_similar` (pg_trgm `%` trên `f_unaccent(full_name)` + GIN index migration 0020, tự fold lowercase → bắt "Bộ Tài chính"~"Bộ Tài Chính") qua `GET /api/organizations/similar` — gợi ý "có thể trùng" khi tạo danh bạ + khi vào sổ; **gộp cơ quan** `POST /api/organizations/merge` (`merge_organizations`: chuyển `sender_org_id` + `outgoing_recipients` source→target có dedup PK kép → soft-delete source → audit) với MergeModal chọn đích; **auto-tạo cơ quan từ tên đang gõ** khi vào sổ (nút "➕ Thêm vào danh bạ" trong SenderCombobox). 6 integration test (CI) + unit `_urgency_label` + router wiring. `doc_count` ở `/similar` cũng lọc manager_only theo vai (self-review fix).
 - **Steps to Complete**:
   1. Vào "Danh bạ → Cơ quan gửi".
   2. Xem danh sách + search + sort theo "Số CV đã gửi".
@@ -1003,14 +1003,14 @@ Review qua 5 điểm và bổ sung/sửa các phần sau:
 
 | ID | Mã | Tên story | Nhóm | Ưu tiên | Trạng thái |
 |---|---|---|---|---|---|
-| INC.REG | E1 | Vào sổ CV đến (luồng chính) | E | Must | ⚠️ Partial |
+| INC.REG | E1 | Vào sổ CV đến (luồng chính) | E | Must | ✅ Done |
 | INC.VER | E1.5 | Verify chữ ký số PAdES | E | Must | ⚠️ Partial |
 | INC.DUP | E1.6 | Check trùng 3 lớp | E | Must | ✅ Done |
 | INC.ASG | E2 | Phân công xử lý | E | Must | ✅ Done |
 | INC.TRK | E3 | Theo dõi xử lý | E | Must | ⚠️ Partial |
 | INC.ATT | E4 | Phụ lục đính kèm | E | Must | ✅ Done |
 | INC.LST | E5 | Danh sách + Sổ CV đến | E | Must | ⚠️ Partial |
-| CTC.SND | M2 | Danh bạ Cơ quan gửi (CV đến) | M | Must | ⚠️ Partial |
+| CTC.SND | M2 | Danh bạ Cơ quan gửi (CV đến) | M | Must | ✅ Done |
 | SRC.FTS | F1 | Tìm kiếm full-text | F | Must | ✅ Done |
 | SRC.TAG | F2 | Tag tự do | F | Must | ✅ Done |
 | SEC.WMK | H2 | Watermark cá nhân khi tải PDF | H | Must | ✅ Done |
@@ -1031,8 +1031,8 @@ Review qua 5 điểm và bổ sung/sửa các phần sau:
 | Giai đoạn | Tổng | 📝 Draft | ⏳ Todo | 🔄 In Progress | ⚠️ Partial | ✅ Done |
 |---|---|---|---|---|---|---|
 | GĐ 1 | 19 | 0 | 0 | 0 | 0 | 19 |
-| GĐ 2 | 11 | 0 | 0 | 0 | 5 | 6 |
+| GĐ 2 | 11 | 0 | 0 | 0 | 3 | 8 |
 | GĐ 3 | 6 | 0 | 0 | 0 | 0 | 6 |
-| **Tổng** | **36** | **0** | **0** | **0** | **5** | **31** |
+| **Tổng** | **36** | **0** | **0** | **0** | **3** | **33** |
 
-> Cập nhật 28/06/2026. **5 story ⚠️ Partial CÓ CHỦ ĐÍCH** (defer còn lại chủ yếu OPS/optional): E1 (vào sổ — defer nhỏ), E1.5 (verify PAdES — chờ seed cert NEAC thật, OPS), E3 (theo dõi xử lý), E5 (sổ CV đến — filter trạng thái/đơn vị phụ thuộc E2), M2 (cơ quan gửi — fuzzy-match/merge/auto-tạo từ OCR + pg_trgm GIN). Không còn story ⏳ Todo.
+> Cập nhật 28/06/2026. **3 story ⚠️ Partial CÓ CHỦ ĐÍCH** (defer còn lại OPS/optional): E1.5 (verify PAdES — chờ seed cert NEAC thật, OPS), E3 (theo dõi xử lý — thiếu `completed_at` để tính tỉ lệ đúng hạn), E5 (sổ CV đến — filter trạng thái/đơn vị xử lý + lịch sử phân công). Không còn story ⏳ Todo. E1 + M2 đã hoàn tất triệt để 28/06.

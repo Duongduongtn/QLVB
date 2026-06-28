@@ -111,11 +111,30 @@ class OrganizationOut(BaseModel):
     is_sender: bool
     category: str
     created_at: datetime
-    # M2 thống kê (set ở router theo tab): số CV liên quan + ngày hoạt động gần nhất.
+    # M2 thống kê (set ở router theo tab): số CV liên quan + ngày hoạt động gần nhất +
+    # mức khẩn trung bình (chỉ tab cơ quan gửi).
     doc_count: int = 0
     last_activity: date | None = None
+    avg_urgency: str | None = None
 
 
 class OrganizationListResponse(BaseModel):
     items: list[OrganizationOut]
     total: int
+
+
+class OrganizationSimilar(BaseModel):
+    """M2 — ứng viên trùng (fuzzy pg_trgm) để gợi ý / gộp."""
+
+    id: int
+    full_name: str
+    short_name: str | None
+    similarity: float
+    doc_count: int = 0
+
+
+class MergeRequest(BaseModel):
+    """M2 — gộp cơ quan `source` vào `target` (chuyển hết CV rồi xoá source)."""
+
+    source_id: int
+    target_id: int

@@ -14,11 +14,11 @@ from __future__ import annotations
 
 from datetime import date, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import case, delete, func, select, text, update
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
-from app.core.errors import Conflict, NotFound
+from app.core.errors import Conflict, NotFound, ValidationFailed
 from app.models.incoming_document import IncomingDocument
 from app.models.organization import Organization
 from app.models.outgoing_document import OutgoingDocument, OutgoingRecipient
@@ -26,6 +26,16 @@ from app.schemas.organization import OrganizationCreate, OrganizationUpdate
 from app.services.audit import log_action
 
 _VN_TZ = timezone(timedelta(hours=7))  # Asia/Saigon — quy "ngày hoạt động" về giờ VN
+_SIMILAR_THRESHOLD = 0.3  # pg_trgm similarity tối thiểu để GỢI Ý trùng (nới để bắt biến thể)
+
+# Thứ tự mức khẩn (M2 — "mức khẩn trung bình"): ordinal hoá để tính AVG rồi quy lại nhãn.
+_URGENCY_ORDER = {"normal": 0, "urgent": 1, "very_urgent": 2, "express": 3, "express_timed": 4}
+_URGENCY_BY_ORD = {v: k for k, v in _URGENCY_ORDER.items()}
+
+
+def _urgency_label(avg: float) -> str:
+    """Quy AVG ordinal mức khẩn về nhãn gần nhất (kẹp 0..4)."""
+    return _URGENCY_BY_ORD[max(0, min(4, round(avg)))]
 
 
 def list_organizations(
@@ -111,6 +121,130 @@ def org_doc_stats(
         int(oid): (int(c), dt.astimezone(_VN_TZ).date() if dt is not None else None)
         for oid, c, dt in recv_rows
     }
+
+
+def sender_avg_urgency(
+    db: Session, *, org_ids: list[int], include_manager_only: bool = True
+) -> dict[int, str]:
+    """M2 — mức khẩn TRUNG BÌNH của CV đến từ mỗi cơ quan gửi (đã vào sổ, chưa xoá).
+
+    Ordinal hoá urgency → AVG → quy về nhãn gần nhất. Nhân viên (`include_manager_only=
+    False`) KHÔNG tính CV "Chỉ Quản lý xem" (đồng bộ với org_doc_stats — không lộ CV mật).
+    Trả {org_id: nhãn urgency}."""
+    if not org_ids:
+        return {}
+    ord_col = case(
+        (IncomingDocument.urgency == "urgent", 1),
+        (IncomingDocument.urgency == "very_urgent", 2),
+        (IncomingDocument.urgency == "express", 3),
+        (IncomingDocument.urgency == "express_timed", 4),
+        else_=0,
+    )
+    conds: list[ColumnElement[bool]] = [
+        IncomingDocument.sender_org_id.in_(org_ids),
+        IncomingDocument.deleted_at.is_(None),
+        IncomingDocument.status == "registered",
+    ]
+    if not include_manager_only:
+        conds.append(IncomingDocument.manager_only.is_(False))
+    rows = db.execute(
+        select(IncomingDocument.sender_org_id, func.avg(ord_col))
+        .where(*conds)
+        .group_by(IncomingDocument.sender_org_id)
+    ).all()
+    return {int(oid): _urgency_label(float(avg)) for oid, avg in rows if avg is not None}
+
+
+def find_similar(
+    db: Session,
+    *,
+    role: str,
+    name: str,
+    exclude_id: int | None = None,
+    limit: int = 5,
+) -> list[tuple[Organization, float]]:
+    """M2 — tìm cơ quan TÊN GẦN GIỐNG (pg_trgm) để gợi ý "có phải cơ quan X?" + gộp trùng.
+
+    Dùng operator `%` (similarity ≥ ngưỡng GUC) trên `f_unaccent(full_name)` → khớp biến thể
+    hoa/thường + dấu ("Bộ Tài chính" ~ "Bộ Tài Chính"). pg_trgm tự fold lowercase. Trả
+    [(org, similarity)] sắp xếp giảm dần. Yêu cầu Postgres (pg_trgm) — chạy trên CI/prod."""
+    name = (name or "").strip()
+    if not name:
+        return []
+    role_col = Organization.is_recipient if role == "recipient" else Organization.is_sender
+    sim = func.similarity(func.f_unaccent(Organization.full_name), func.f_unaccent(name)).label("sim")
+    # Ngưỡng theo GUC để operator % dùng GIN index (giá trị từ hằng nội bộ, không phải input).
+    db.execute(text(f"SET LOCAL pg_trgm.similarity_threshold = {_SIMILAR_THRESHOLD}"))
+    conds: list[ColumnElement[bool]] = [
+        Organization.deleted_at.is_(None),
+        role_col.is_(True),
+        func.f_unaccent(Organization.full_name).op("%")(func.f_unaccent(name)),
+    ]
+    if exclude_id is not None:
+        conds.append(Organization.id != exclude_id)
+    rows = db.execute(
+        select(Organization, sim).where(*conds).order_by(sim.desc()).limit(limit)
+    ).all()
+    return [(org, float(s)) for org, s in rows]
+
+
+def merge_organizations(
+    db: Session, *, source_id: int, target_id: int, actor_id: int, ip: str | None, ua: str | None
+) -> Organization:
+    """M2 — GỘP cơ quan: chuyển HẾT CV của `source` sang `target` rồi soft-delete `source`.
+
+    - CV đến: `incoming_documents.sender_org_id` source → target.
+    - Nơi nhận CV đi (M2M `outgoing_recipients`, PK kép): xoá row source TRÙNG cặp
+      (outgoing_id, target) trước → tránh đụng PK → rồi đổi phần còn lại source → target.
+    - Gộp vai: target nhận thêm cờ is_recipient/is_sender của source.
+    - source soft-delete (giữ row cho audit/CV cũ tham chiếu lịch sử)."""
+    if source_id == target_id:
+        raise ValidationFailed("Không thể gộp một cơ quan vào chính nó")
+    src = get_organization(db, source_id)  # raise nếu không có / đã xoá
+    dst = get_organization(db, target_id)
+
+    opts = {"synchronize_session": False}
+    db.execute(
+        update(IncomingDocument)
+        .where(IncomingDocument.sender_org_id == source_id)
+        .values(sender_org_id=target_id)
+        .execution_options(**opts)
+    )
+    # Xoá row nơi nhận của source mà CV đó ĐÃ có target (chống đụng PK khi đổi id).
+    already = select(OutgoingRecipient.outgoing_id).where(
+        OutgoingRecipient.organization_id == target_id
+    )
+    db.execute(
+        delete(OutgoingRecipient)
+        .where(
+            OutgoingRecipient.organization_id == source_id,
+            OutgoingRecipient.outgoing_id.in_(already),
+        )
+        .execution_options(**opts)
+    )
+    db.execute(
+        update(OutgoingRecipient)
+        .where(OutgoingRecipient.organization_id == source_id)
+        .values(organization_id=target_id)
+        .execution_options(**opts)
+    )
+
+    dst.is_recipient = dst.is_recipient or src.is_recipient
+    dst.is_sender = dst.is_sender or src.is_sender
+    src.deleted_at = func.now()
+    log_action(
+        db,
+        action="org_merge",
+        user_id=actor_id,
+        object_type="organization",
+        object_id=target_id,
+        ip=ip,
+        user_agent=ua,
+        detail={"source_id": source_id, "target_id": target_id, "source_name": src.full_name},
+    )
+    db.commit()
+    db.refresh(dst)
+    return dst
 
 
 def get_organization(db: Session, org_id: int) -> Organization:
