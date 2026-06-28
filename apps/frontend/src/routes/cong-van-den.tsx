@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ban, ChevronLeft, ChevronRight, Download, EyeOff, FileArchive, Inbox, Paperclip, Plus, Search, ShieldCheck, Trash2, UploadCloud, UserPlus } from 'lucide-react';
@@ -30,6 +30,10 @@ interface TaskLite {
 
 export const Route = createFileRoute('/cong-van-den')({
   component: CongVanDenPage,
+  // F1 — deep-link từ tìm kiếm toàn cục: /cong-van-den?q=...
+  validateSearch: (s: Record<string, unknown>): { q?: string } => ({
+    q: typeof s.q === 'string' ? s.q : undefined,
+  }),
 });
 
 type IncStatus = 'draft' | 'registered' | 'cancelled';
@@ -182,7 +186,15 @@ function CongVanDenPage() {
   const me = useAuth((s) => s.user);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [q, setQ] = useState('');
+  const { q: urlQ } = Route.useSearch();
+  const [q, setQ] = useState(urlQ ?? '');
+  // Đồng bộ ô tìm khi deep-link đổi ?q= mà KHÔNG remount (đang ở sổ rồi chọn kết quả khác).
+  useEffect(() => {
+    if (urlQ !== undefined) {
+      setQ(urlQ);
+      setPage(1);
+    }
+  }, [urlQ]);
   const [urgency, setUrgency] = useState('all');
   const [confid, setConfid] = useState('all');
   const [sender, setSender] = useState('all');

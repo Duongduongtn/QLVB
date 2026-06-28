@@ -25,7 +25,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, SoftDeleteMixin, TimestampMixin
@@ -92,6 +92,9 @@ class IncomingDocument(Base, TimestampMixin, SoftDeleteMixin):
 
     signature_status: Mapped[str] = mapped_column(String(10), nullable=False, default="unchecked")
     signature_info: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+
+    # F1 full-text — do trigger DB cập nhật (BEFORE INS/UPD); manager_only loại ocr_text.
+    search_vector: Mapped[Any | None] = mapped_column(TSVECTOR)
 
     status: Mapped[str] = mapped_column(String(12), nullable=False, default="draft")
     duplicate_note: Mapped[str | None] = mapped_column(Text)  # lý do "vẫn lưu" khi trùng

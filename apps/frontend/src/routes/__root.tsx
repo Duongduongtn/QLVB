@@ -212,23 +212,8 @@ function AppShell({
           {/* Switch view đơn vị (B3a) */}
           <UnitViewSeg role={user.role} />
 
-          {/* Search (Ctrl+K) — UI sẵn, nối trang tìm kiếm sau */}
-          <div className="relative hidden sm:block">
-            <Search
-              className="absolute"
-              size={16}
-              style={{ left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-faint)' }}
-            />
-            <input
-              id="global-search"
-              className="search-input"
-              type="search"
-              placeholder="Tìm công văn… (Ctrl+K)"
-            />
-            <span className="kbd absolute" style={{ right: 8, top: '50%', transform: 'translateY(-50%)' }}>
-              ⌘K
-            </span>
-          </div>
+          {/* Search toàn cục (Ctrl+K) — F1 full-text CV đi/đến */}
+          <GlobalSearch />
 
           {/* Notification bell */}
           <NotificationBell />
@@ -430,6 +415,151 @@ function Sidebar({
         );
       })}
     </nav>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* GlobalSearch — F1 full-text CV đi/đến, dropdown kết quả + deep-link  */
+/* ------------------------------------------------------------------ */
+interface SearchItem {
+  id: number;
+  source: 'in' | 'out';
+  number: string | null;
+  subject: string | null;
+  status: string;
+  doc_date: string | null;
+  created_at: string;
+}
+
+/** Bỏ dấu tiếng Việt để so khớp highlight không phân biệt dấu (gõ "viet nam" tô "Việt Nam"). */
+function deaccent(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(new RegExp('[\\u0300-\\u036f]', 'g'), '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D');
+}
+
+/** Tô đậm phần khớp (so khớp không dấu phía client — chỉ để gợi mắt, không phải bảo mật). */
+function highlight(text: string, term: string): React.ReactNode {
+  const t = term.trim();
+  if (!t) return text;
+  // indexOf trên chuỗi đã bỏ dấu (giữ NGUYÊN độ dài ký tự để slice trên text gốc đúng vị trí).
+  const idx = deaccent(text).toLowerCase().indexOf(deaccent(t).toLowerCase());
+  if (idx < 0) return text;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark style={{ background: 'var(--warning-soft)', color: 'inherit', borderRadius: 2, padding: '0 1px' }}>
+        {text.slice(idx, idx + t.length)}
+      </mark>
+      {text.slice(idx + t.length)}
+    </>
+  );
+}
+
+function GlobalSearch() {
+  const navigate = useNavigate();
+  const [q, setQ] = useState('');
+  const [debounced, setDebounced] = useState('');
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(q), 250);
+    return () => clearTimeout(id);
+  }, [q]);
+
+  const { data, isFetching } = useQuery({
+    queryKey: ['global-search', debounced],
+    enabled: debounced.trim().length >= 2,
+    queryFn: async () => {
+      const res = await api.GET('/api/search', { params: { query: { q: debounced, size: 8 } } });
+      return (res.data ?? { items: [], total: 0 }) as { items: SearchItem[]; total: number };
+    },
+    staleTime: 10_000,
+  });
+  const items = useMemo(() => data?.items ?? [], [data]);
+  const showPanel = open && debounced.trim().length >= 2;
+
+  function go(it: SearchItem) {
+    setOpen(false);
+    setQ('');
+    const term = it.number ?? it.subject ?? '';
+    navigate({ to: it.source === 'out' ? '/cong-van-di' : '/cong-van-den', search: { q: term } });
+  }
+
+  return (
+    <div className="relative hidden sm:block">
+      <Search
+        className="absolute"
+        size={16}
+        style={{ left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-faint)' }}
+      />
+      <input
+        id="global-search"
+        className="search-input"
+        type="search"
+        placeholder="Tìm công văn… (Ctrl+K)"
+        value={q}
+        autoComplete="off"
+        role="combobox"
+        aria-expanded={showPanel}
+        aria-controls="global-search-results"
+        onChange={(e) => {
+          setQ(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            setOpen(false);
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+      />
+      <span className="kbd absolute" style={{ right: 8, top: '50%', transform: 'translateY(-50%)' }}>
+        ⌘K
+      </span>
+      {showPanel && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 35 }} aria-hidden="true" onClick={() => setOpen(false)} />
+          <div
+            id="global-search-results"
+            role="listbox"
+            className="card"
+            style={{ position: 'absolute', top: 42, right: 0, width: 440, maxHeight: 440, overflowY: 'auto', zIndex: 36, padding: 6, boxShadow: '0 10px 30px oklch(18% 0.02 95 / 0.16)' }}
+          >
+            {isFetching && items.length === 0 ? (
+              <div className="cell-meta" style={{ padding: '10px 12px' }}>Đang tìm…</div>
+            ) : items.length === 0 ? (
+              <div className="cell-meta" style={{ padding: '10px 12px' }}>Không có kết quả cho “{debounced}”.</div>
+            ) : (
+              items.map((it) => (
+                <button
+                  key={`${it.source}-${it.id}`}
+                  type="button"
+                  role="option"
+                  aria-selected={false}
+                  className="nav-item w-full"
+                  style={{ borderLeft: 'none', alignItems: 'flex-start', gap: 10 }}
+                  onClick={() => go(it)}
+                >
+                  <span className={`pill ${it.source === 'out' ? 'pill-published' : 'pill-draft'}`} style={{ flexShrink: 0 }}>
+                    {it.source === 'out' ? 'Đi' : 'Đến'}
+                  </span>
+                  <span style={{ minWidth: 0, textAlign: 'left' }}>
+                    <span className="cell-mono num" style={{ fontSize: '0.78rem' }}>{it.number ?? '(chưa số)'}</span>
+                    <span style={{ display: 'block', fontSize: '0.82rem', color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {highlight(it.subject ?? '(chưa có trích yếu)', debounced)}
+                    </span>
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

@@ -5,8 +5,8 @@ published (đã upload file đã ký số) | cancelled. `stamp_positions` JSONB 
 mộc/chữ ký đã chèn (QĐ #2 — % để page resize không lệch). `sealing_option` JSONB lưu
 giáp lai (D3) + ký nháy (D4).
 
-Defer (story sau): `in_reply_to` (D5 — cần incoming_documents); `search_vector` TSVECTOR
-(F1 full-text).
+`in_reply_to_incoming_id` (D5 — phản hồi CV đến). `search_vector` TSVECTOR (F1 full-text,
+trigger DB cập nhật).
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, SoftDeleteMixin, TimestampMixin
@@ -79,6 +79,8 @@ class OutgoingDocument(Base, TimestampMixin, SoftDeleteMixin):
     )
     cancel_reason: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
+    # F1 full-text — do trigger DB cập nhật (BEFORE INS/UPD).
+    search_vector: Mapped[Any | None] = mapped_column(TSVECTOR)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )

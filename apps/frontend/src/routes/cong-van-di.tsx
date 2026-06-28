@@ -20,6 +20,10 @@ import { Drawer } from '~/components/Drawer';
 
 export const Route = createFileRoute('/cong-van-di')({
   component: CongVanDiPage,
+  // F1 — cho phép deep-link từ tìm kiếm toàn cục: /cong-van-di?q=...
+  validateSearch: (s: Record<string, unknown>): { q?: string } => ({
+    q: typeof s.q === 'string' ? s.q : undefined,
+  }),
 });
 
 type OutStatus = 'draft' | 'numbered' | 'published' | 'cancelled';
@@ -84,8 +88,13 @@ function NumberCell({ number }: { number: string | null }) {
 function CongVanDiPage() {
   const me = useAuth((s) => s.user);
   const navigate = useNavigate();
-  const [q, setQ] = useState('');
-  const [debouncedQ, setDebouncedQ] = useState('');
+  const { q: urlQ } = Route.useSearch();
+  const [q, setQ] = useState(urlQ ?? '');
+  const [debouncedQ, setDebouncedQ] = useState(urlQ ?? '');
+  // Đồng bộ ô tìm khi deep-link đổi ?q= mà KHÔNG remount.
+  useEffect(() => {
+    if (urlQ !== undefined) setQ(urlQ);
+  }, [urlQ]);
   const [unitFilter, setUnitFilter] = useState<number | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<OutStatus | 'all'>('all');
   const [page, setPage] = useState(1);
