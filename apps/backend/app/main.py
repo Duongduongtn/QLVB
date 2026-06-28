@@ -32,6 +32,7 @@ from app.routers import (
     search,
     signatures,
     signing_profiles,
+    tags,
     tasks,
     trash,
     units,
@@ -98,3 +99,4 @@ app.include_router(notifications.router, prefix="/api/notifications", tags=["not
 app.include_router(trash.router, prefix="/api/trash", tags=["trash"])
 app.include_router(audit.router, prefix="/api/audit-logs", tags=["audit"])
 app.include_router(search.router, prefix="/api/search", tags=["search"])
+app.include_router(tags.router, prefix="/api/tags", tags=["tags"])

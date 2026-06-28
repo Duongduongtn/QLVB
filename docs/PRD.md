@@ -588,7 +588,8 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [SRC.TAG-01] Là người dùng, tôi muốn gắn tag tự do cho CV (`#thi-tay-nghe`, `#kiem-toan-2026`…), để nhóm CV cùng chủ đề và tìm nhanh.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ✅ Done (28/06/2026) — model `tags` (name UNIQUE chuẩn hoá) + `document_tags` (polymorphic incoming/outgoing, PK ghép) + migration 0016. `services/tags`: `normalize_tag` (lowercase+bỏ dấu+gạch ngang → gộp `#Thi Tay Nghề`≡`thi-tay-nghe`), `get_or_create_tag` (**SAVEPOINT `begin_nested` chống đua, không rollback cả tx**), `set_tags` (replace + dedup + max 30 + **ON CONFLICT DO NOTHING** chống đua 2 PUT + audit), `suggest`/`list_all_with_counts`/`docs_by_tag` — **TẤT CẢ tôn trọng `manager_only`** (NV không đếm/gợi ý/lọc/thấy tag của CV đến chỉ-Quản-lý-xem; router `_ensure_visible` chặn GET/PUT → 404). router `/api/tags` (list+counts/suggest/documents/get+put theo object). FE: `routes/tag.tsx` (đám mây tag + bảng tỉ trọng + click xem CV — bám TagPage demo), `components/TagEditor.tsx` (chips + autocomplete, chuẩn hoá client) gắn drawer CV đi + CV đến. 10 unit (normalize) + 6 integration test (set/dedup/replace/suggest-ẩn-manager_only/counts-role-aware/race-không-mất-tag). 2 subagent review (FIX BLOCKER rollback-toàn-tx → SAVEPOINT + kẽ hở suggest lộ tag manager_only + ON CONFLICT). **Defer nhẹ**: dọn orphan `document_tags` khi hard-delete CV (Thùng rác) — hiện join doc nên orphan tự ẩn.
+- **Đồng thời căn lại sidebar nav khớp ui-demo** (user phản hồi prod lệch demo): thêm nhóm **"Tra cứu" (Tìm kiếm `/tim-kiem` + Tag `/tag`)**, đổi thứ tự "Công việc" (Việc của tôi→CV đi→CV đến, icon Home) đúng `ui-demo/src/nav.tsx`; thêm trang `/tim-kiem` (full-text dùng `/api/search`, bám TimKiemPage demo). Đối chiếu Playwright: sidebar + 2 trang khớp demo.
 - **Done khi**:
   - Mỗi CV có thể có nhiều tag.
   - Auto-suggest khi gõ (lấy từ tag đã có).

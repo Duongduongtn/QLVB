@@ -9,6 +9,7 @@ import { fmtDate, fmtDateTime, fmtInt, fmtNum } from '~/lib/format';
 import { EmptyState, FilterMenu, InfoRow, PageHeader, Pill } from '~/components/ui';
 import { Drawer } from '~/components/Drawer';
 import { Modal } from '~/components/Modal';
+import { TagEditor } from '~/components/TagEditor';
 import { CONFIDENTIALITY_LABEL, URGENCY_LABEL } from '~/lib/incoming';
 
 interface UnitLite2 {
@@ -555,6 +556,7 @@ function CongVanDenPage() {
               <InfoRow label="Vào sổ lúc">{fmtDateTime(selected.created_at)}</InfoRow>
             </div>
             <AttachmentsCard docId={selected.id} />
+            <TagEditor objectType="incoming" objectId={selected.id} />
             {tasks.length > 0 && (
               <div className="card" style={{ padding: 16, marginBottom: 16 }}>
                 <div className="eyebrow" style={{ marginBottom: 8 }}>Phân công xử lý</div>

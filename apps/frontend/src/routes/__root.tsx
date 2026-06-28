@@ -9,8 +9,8 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ChevronDown,
-  ClipboardList,
   Contact,
+  Home,
   Inbox,
   KeyRound,
   LogOut,
@@ -21,6 +21,7 @@ import {
   Send,
   Settings,
   Stamp,
+  Tag,
   Trash2,
   Users,
   X,
@@ -61,9 +62,16 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Công việc',
     items: [
+      { label: 'Việc của tôi', to: '/viec-cua-toi', icon: Home },
       { label: 'Công văn đi', to: '/cong-van-di', icon: Send },
       { label: 'Công văn đến', to: '/cong-van-den', icon: Inbox },
-      { label: 'Việc của tôi', to: '/viec-cua-toi', icon: ClipboardList },
+    ],
+  },
+  {
+    title: 'Tra cứu',
+    items: [
+      { label: 'Tìm kiếm', to: '/tim-kiem', icon: Search },
+      { label: 'Tag', to: '/tag', icon: Tag },
     ],
   },
   {

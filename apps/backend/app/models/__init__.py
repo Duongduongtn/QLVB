@@ -17,6 +17,7 @@ from app.models.processing_task import ProcessingTask
 from app.models.seal import Seal
 from app.models.signature import Signature
 from app.models.signing_profile import SigningProfile
+from app.models.tag import DocumentTag, Tag
 from app.models.unit import Unit
 from app.models.user import User
 
@@ -24,6 +25,7 @@ __all__ = [
     "AppSettings",
     "AuditLog",
     "Base",
+    "DocumentTag",
     "DocumentType",
     "File",
     "IncomingAttachment",
@@ -37,6 +39,7 @@ __all__ = [
     "Seal",
     "Signature",
     "SigningProfile",
+    "Tag",
     "Unit",
     "User",
 ]

@@ -17,6 +17,7 @@ import {
   TypeTag,
 } from '~/components/ui';
 import { Drawer } from '~/components/Drawer';
+import { TagEditor } from '~/components/TagEditor';
 
 export const Route = createFileRoute('/cong-van-di')({
   component: CongVanDiPage,
@@ -678,6 +679,8 @@ function DetailDrawer({ id, units, onClose }: { id: number; units: UnitLite[]; o
               </div>
             )}
           </SectionCard>
+
+          <TagEditor objectType="outgoing" objectId={id} />
         </>
       )}
     </Drawer>

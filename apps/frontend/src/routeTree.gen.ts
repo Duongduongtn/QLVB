@@ -10,7 +10,9 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ViecCuaToiRouteImport } from './routes/viec-cua-toi'
+import { Route as TimKiemRouteImport } from './routes/tim-kiem'
 import { Route as ThungRacRouteImport } from './routes/thung-rac'
+import { Route as TagRouteImport } from './routes/tag'
 import { Route as NguoiDungRouteImport } from './routes/nguoi-dung'
 import { Route as MocRouteImport } from './routes/moc'
 import { Route as LoginRouteImport } from './routes/login'
@@ -30,9 +32,19 @@ const ViecCuaToiRoute = ViecCuaToiRouteImport.update({
   path: '/viec-cua-toi',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TimKiemRoute = TimKiemRouteImport.update({
+  id: '/tim-kiem',
+  path: '/tim-kiem',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ThungRacRoute = ThungRacRouteImport.update({
   id: '/thung-rac',
   path: '/thung-rac',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TagRoute = TagRouteImport.update({
+  id: '/tag',
+  path: '/tag',
   getParentRoute: () => rootRouteImport,
 } as any)
 const NguoiDungRoute = NguoiDungRouteImport.update({
@@ -113,7 +125,9 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/moc': typeof MocRoute
   '/nguoi-dung': typeof NguoiDungRoute
+  '/tag': typeof TagRoute
   '/thung-rac': typeof ThungRacRoute
+  '/tim-kiem': typeof TimKiemRoute
   '/viec-cua-toi': typeof ViecCuaToiRoute
   '/cong-van-den/vao-so': typeof CongVanDenVaoSoRoute
   '/cong-van-di/soan': typeof CongVanDiSoanRoute
@@ -130,7 +144,9 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/moc': typeof MocRoute
   '/nguoi-dung': typeof NguoiDungRoute
+  '/tag': typeof TagRoute
   '/thung-rac': typeof ThungRacRoute
+  '/tim-kiem': typeof TimKiemRoute
   '/viec-cua-toi': typeof ViecCuaToiRoute
   '/cong-van-den/vao-so': typeof CongVanDenVaoSoRoute
   '/cong-van-di/soan': typeof CongVanDiSoanRoute
@@ -148,7 +164,9 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/moc': typeof MocRoute
   '/nguoi-dung': typeof NguoiDungRoute
+  '/tag': typeof TagRoute
   '/thung-rac': typeof ThungRacRoute
+  '/tim-kiem': typeof TimKiemRoute
   '/viec-cua-toi': typeof ViecCuaToiRoute
   '/cong-van-den/vao-so': typeof CongVanDenVaoSoRoute
   '/cong-van-di/soan': typeof CongVanDiSoanRoute
@@ -167,7 +185,9 @@ export interface FileRouteTypes {
     | '/login'
     | '/moc'
     | '/nguoi-dung'
+    | '/tag'
     | '/thung-rac'
+    | '/tim-kiem'
     | '/viec-cua-toi'
     | '/cong-van-den/vao-so'
     | '/cong-van-di/soan'
@@ -184,7 +204,9 @@ export interface FileRouteTypes {
     | '/login'
     | '/moc'
     | '/nguoi-dung'
+    | '/tag'
     | '/thung-rac'
+    | '/tim-kiem'
     | '/viec-cua-toi'
     | '/cong-van-den/vao-so'
     | '/cong-van-di/soan'
@@ -201,7 +223,9 @@ export interface FileRouteTypes {
     | '/login'
     | '/moc'
     | '/nguoi-dung'
+    | '/tag'
     | '/thung-rac'
+    | '/tim-kiem'
     | '/viec-cua-toi'
     | '/cong-van-den/vao-so'
     | '/cong-van-di/soan'
@@ -219,7 +243,9 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   MocRoute: typeof MocRoute
   NguoiDungRoute: typeof NguoiDungRoute
+  TagRoute: typeof TagRoute
   ThungRacRoute: typeof ThungRacRoute
+  TimKiemRoute: typeof TimKiemRoute
   ViecCuaToiRoute: typeof ViecCuaToiRoute
 }
 
@@ -232,11 +258,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ViecCuaToiRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tim-kiem': {
+      id: '/tim-kiem'
+      path: '/tim-kiem'
+      fullPath: '/tim-kiem'
+      preLoaderRoute: typeof TimKiemRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/thung-rac': {
       id: '/thung-rac'
       path: '/thung-rac'
       fullPath: '/thung-rac'
       preLoaderRoute: typeof ThungRacRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tag': {
+      id: '/tag'
+      path: '/tag'
+      fullPath: '/tag'
+      preLoaderRoute: typeof TagRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/nguoi-dung': {
@@ -369,7 +409,9 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   MocRoute: MocRoute,
   NguoiDungRoute: NguoiDungRoute,
+  TagRoute: TagRoute,
   ThungRacRoute: ThungRacRoute,
+  TimKiemRoute: TimKiemRoute,
   ViecCuaToiRoute: ViecCuaToiRoute,
 }
 export const routeTree = rootRouteImport
