@@ -405,12 +405,11 @@ function VaoSoPage() {
       <WizardGuide
         storageKey="guide-vao-so"
         title="Hướng dẫn vào sổ công văn đến (cho người mới)"
-        intro="Quy trình gồm 4 bước. Bạn chỉ cần tải đúng file PDF, hệ thống tự đọc thông tin giúp bạn."
+        intro="Chỉ 3 bước. Bạn tải file PDF, hệ thống tự đọc và điền sẵn thông tin — bạn chỉ xem lại rồi vào sổ."
         steps={[
           { label: 'Tải file PDF', detail: 'Chọn file PDF của công văn nhận được (tối đa 50MB).' },
-          { label: 'Kiểm tra & OCR', detail: 'Hệ thống tự đọc nội dung (OCR) và kiểm tra chữ ký số — chờ vài giây. Nếu công văn đã có trong sổ, sẽ hiện cảnh báo trùng.' },
-          { label: 'Thông tin công văn', detail: 'Kiểm tra và sửa nếu cần: cơ quan gửi, số ký hiệu, ngày văn bản, trích yếu, mức độ khẩn/mật.' },
-          { label: 'Hoàn tất vào sổ', detail: 'Hệ thống cấp số đến (sổ chung 2 đơn vị) và lưu vào sổ.' },
+          { label: 'Kiểm tra & vào sổ', detail: 'Hệ thống tự đọc OCR + chữ ký số và TỰ ĐIỀN số ký hiệu, ngày, cơ quan gửi, trích yếu (cơ quan chưa có trong danh bạ vẫn điền được). Bạn xem lại, bổ sung nếu cần rồi bấm “Lưu & cấp số đến”. Nếu trùng sổ sẽ có cảnh báo.' },
+          { label: 'Hoàn tất', detail: 'Hệ thống cấp số đến (sổ chung 2 đơn vị) và lưu vào sổ.' },
         ]}
       />
 
