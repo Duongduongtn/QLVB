@@ -27,6 +27,7 @@ import { Route as AuditLogRouteImport } from './routes/audit-log'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as CongVanDiSoanRouteImport } from './routes/cong-van-di.soan'
 import { Route as CongVanDenVaoSoRouteImport } from './routes/cong-van-den.vao-so'
+import { Route as BaoCaoTuyChinhRouteImport } from './routes/bao-cao.tuy-chinh'
 
 const ViecCuaToiRoute = ViecCuaToiRouteImport.update({
   id: '/viec-cua-toi',
@@ -118,11 +119,16 @@ const CongVanDenVaoSoRoute = CongVanDenVaoSoRouteImport.update({
   path: '/vao-so',
   getParentRoute: () => CongVanDenRoute,
 } as any)
+const BaoCaoTuyChinhRoute = BaoCaoTuyChinhRouteImport.update({
+  id: '/tuy-chinh',
+  path: '/tuy-chinh',
+  getParentRoute: () => BaoCaoRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/audit-log': typeof AuditLogRoute
-  '/bao-cao': typeof BaoCaoRoute
+  '/bao-cao': typeof BaoCaoRouteWithChildren
   '/cau-hinh': typeof CauHinhRoute
   '/chu-ky': typeof ChuKyRoute
   '/cong-van-den': typeof CongVanDenRouteWithChildren
@@ -136,13 +142,14 @@ export interface FileRoutesByFullPath {
   '/thung-rac': typeof ThungRacRoute
   '/tim-kiem': typeof TimKiemRoute
   '/viec-cua-toi': typeof ViecCuaToiRoute
+  '/bao-cao/tuy-chinh': typeof BaoCaoTuyChinhRoute
   '/cong-van-den/vao-so': typeof CongVanDenVaoSoRoute
   '/cong-van-di/soan': typeof CongVanDiSoanRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/audit-log': typeof AuditLogRoute
-  '/bao-cao': typeof BaoCaoRoute
+  '/bao-cao': typeof BaoCaoRouteWithChildren
   '/cau-hinh': typeof CauHinhRoute
   '/chu-ky': typeof ChuKyRoute
   '/cong-van-den': typeof CongVanDenRouteWithChildren
@@ -156,6 +163,7 @@ export interface FileRoutesByTo {
   '/thung-rac': typeof ThungRacRoute
   '/tim-kiem': typeof TimKiemRoute
   '/viec-cua-toi': typeof ViecCuaToiRoute
+  '/bao-cao/tuy-chinh': typeof BaoCaoTuyChinhRoute
   '/cong-van-den/vao-so': typeof CongVanDenVaoSoRoute
   '/cong-van-di/soan': typeof CongVanDiSoanRoute
 }
@@ -163,7 +171,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/audit-log': typeof AuditLogRoute
-  '/bao-cao': typeof BaoCaoRoute
+  '/bao-cao': typeof BaoCaoRouteWithChildren
   '/cau-hinh': typeof CauHinhRoute
   '/chu-ky': typeof ChuKyRoute
   '/cong-van-den': typeof CongVanDenRouteWithChildren
@@ -177,6 +185,7 @@ export interface FileRoutesById {
   '/thung-rac': typeof ThungRacRoute
   '/tim-kiem': typeof TimKiemRoute
   '/viec-cua-toi': typeof ViecCuaToiRoute
+  '/bao-cao/tuy-chinh': typeof BaoCaoTuyChinhRoute
   '/cong-van-den/vao-so': typeof CongVanDenVaoSoRoute
   '/cong-van-di/soan': typeof CongVanDiSoanRoute
 }
@@ -199,6 +208,7 @@ export interface FileRouteTypes {
     | '/thung-rac'
     | '/tim-kiem'
     | '/viec-cua-toi'
+    | '/bao-cao/tuy-chinh'
     | '/cong-van-den/vao-so'
     | '/cong-van-di/soan'
   fileRoutesByTo: FileRoutesByTo
@@ -219,6 +229,7 @@ export interface FileRouteTypes {
     | '/thung-rac'
     | '/tim-kiem'
     | '/viec-cua-toi'
+    | '/bao-cao/tuy-chinh'
     | '/cong-van-den/vao-so'
     | '/cong-van-di/soan'
   id:
@@ -239,6 +250,7 @@ export interface FileRouteTypes {
     | '/thung-rac'
     | '/tim-kiem'
     | '/viec-cua-toi'
+    | '/bao-cao/tuy-chinh'
     | '/cong-van-den/vao-so'
     | '/cong-van-di/soan'
   fileRoutesById: FileRoutesById
@@ -246,7 +258,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuditLogRoute: typeof AuditLogRoute
-  BaoCaoRoute: typeof BaoCaoRoute
+  BaoCaoRoute: typeof BaoCaoRouteWithChildren
   CauHinhRoute: typeof CauHinhRoute
   ChuKyRoute: typeof ChuKyRoute
   CongVanDenRoute: typeof CongVanDenRouteWithChildren
@@ -390,8 +402,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CongVanDenVaoSoRouteImport
       parentRoute: typeof CongVanDenRoute
     }
+    '/bao-cao/tuy-chinh': {
+      id: '/bao-cao/tuy-chinh'
+      path: '/tuy-chinh'
+      fullPath: '/bao-cao/tuy-chinh'
+      preLoaderRoute: typeof BaoCaoTuyChinhRouteImport
+      parentRoute: typeof BaoCaoRoute
+    }
   }
 }
+
+interface BaoCaoRouteChildren {
+  BaoCaoTuyChinhRoute: typeof BaoCaoTuyChinhRoute
+}
+
+const BaoCaoRouteChildren: BaoCaoRouteChildren = {
+  BaoCaoTuyChinhRoute: BaoCaoTuyChinhRoute,
+}
+
+const BaoCaoRouteWithChildren =
+  BaoCaoRoute._addFileChildren(BaoCaoRouteChildren)
 
 interface CongVanDenRouteChildren {
   CongVanDenVaoSoRoute: typeof CongVanDenVaoSoRoute
@@ -420,7 +450,7 @@ const CongVanDiRouteWithChildren = CongVanDiRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuditLogRoute: AuditLogRoute,
-  BaoCaoRoute: BaoCaoRoute,
+  BaoCaoRoute: BaoCaoRouteWithChildren,
   CauHinhRoute: CauHinhRoute,
   ChuKyRoute: ChuKyRoute,
   CongVanDenRoute: CongVanDenRouteWithChildren,

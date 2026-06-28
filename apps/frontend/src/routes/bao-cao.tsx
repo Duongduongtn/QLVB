@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { FileSpreadsheet } from 'lucide-react';
+import { FileSpreadsheet, SlidersHorizontal } from 'lucide-react';
 
 import { api } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
@@ -32,6 +32,7 @@ const BOOKS = [
 
 function BaoCaoPage() {
   const me = useAuth((s) => s.user);
+  const navigate = useNavigate();
   const [year, setYear] = useState(String(YEARS[0]));
   const [modalOpen, setModalOpen] = useState(false);
   const [bookYear, setBookYear] = useState(String(YEARS[0]));
@@ -72,9 +73,14 @@ function BaoCaoPage() {
         title="Báo cáo & Dashboard"
         subhead={`Tổng quan công văn 2 đơn vị năm ${year}`}
         actions={
-          <button className="btn-primary" type="button" onClick={() => { setBookYear(year); setModalOpen(true); }}>
-            <FileSpreadsheet size={14} /> Xuất sổ NĐ 30
-          </button>
+          <>
+            <button className="btn-secondary" type="button" onClick={() => navigate({ to: '/bao-cao/tuy-chinh' })}>
+              <SlidersHorizontal size={14} /> Báo cáo tuỳ chỉnh
+            </button>
+            <button className="btn-primary" type="button" onClick={() => { setBookYear(year); setModalOpen(true); }}>
+              <FileSpreadsheet size={14} /> Xuất sổ NĐ 30
+            </button>
+          </>
         }
         filters={
           <FilterMenu

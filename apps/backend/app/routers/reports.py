@@ -5,7 +5,7 @@ Router mỏng: validate + gọi service. Xuất Excel chạy đồng bộ (≤ v
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Query, Response
@@ -22,6 +22,11 @@ router = APIRouter()
 
 _XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 _BOOK_FILE = {"di_gdnn": "So-di-GDNN", "di_dvdl": "So-di-DVDL", "den": "So-den"}
+
+
+def _vn_today() -> date:
+    """Ngày hiện tại theo giờ VN (UTC+7) — dùng cho 'Ngày xuất' trên báo cáo."""
+    return (datetime.now(UTC) + timedelta(hours=7)).date()
 
 
 @router.get("/stats", response_model=DashboardStats)
@@ -44,6 +49,35 @@ async def register_xlsx(
     """G2 — tải sổ đăng ký NĐ 30/2020 (.xlsx) theo năm + loại sổ."""
     data = await run_in_threadpool(report_service.build_register_xlsx, db, year=year, book=book)
     fname = f"{_BOOK_FILE[book]}-{year}.xlsx"
+    return Response(
+        content=data,
+        media_type=_XLSX_MIME,
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(fname)}"},
+    )
+
+
+@router.get("/custom.xlsx")
+async def custom_report_xlsx(
+    date_from: date = Query(...),
+    date_to: date = Query(...),
+    unit: str = Query("all", pattern="^(all|gdnn|dvdl)$"),
+    doc_type: str = Query("all", max_length=20),
+    group_by: str = Query("month", pattern="^(month|quarter|sender|type)$"),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_manager),
+) -> Response:
+    """G3 — báo cáo thống kê tuỳ chỉnh (.xlsx, 3 sheet) theo bộ lọc."""
+    data = await run_in_threadpool(
+        report_service.build_custom_report_xlsx,
+        db,
+        date_from=date_from,
+        date_to=date_to,
+        unit=unit,
+        doc_type=doc_type,
+        group_by=group_by,
+        today=_vn_today(),
+    )
+    fname = f"Bao-cao-thong-ke-{date_from:%Y%m%d}-{date_to:%Y%m%d}.xlsx"
     return Response(
         content=data,
         media_type=_XLSX_MIME,

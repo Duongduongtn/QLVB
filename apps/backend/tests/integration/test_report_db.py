@@ -84,3 +84,58 @@ def test_incoming_register_arrival_number_is_real(db_session: Session) -> None:
     ws = load_workbook(BytesIO(data)).active
     col1 = [ws.cell(row=r, column=1).value for r in range(4, ws.max_row + 1)]
     assert "0042" in col1  # số đến thật xuất hiện ở cột 1
+
+
+def test_custom_report_gathers_di_and_den(db_session: Session) -> None:
+    """G3 — gộp CV đi + đến trong khoảng ngày, ra Chi tiết đủ 2 hướng."""
+    unit = _gdnn(db_session)
+    dt = _doctype(db_session, unit.id)
+    db_session.add(OutgoingDocument(
+        unit_id=unit.id, doc_type_id=dt.id, number="010/2026/CV", number_int=10,
+        subject="CV đi tháng 3", issue_date=date(2026, 3, 10), status="published",
+    ))
+    db_session.add(IncomingDocument(
+        number="0007", number_int=7, reference_number="55/SNV", subject="CV đến tháng 4",
+        status="registered", created_at=datetime(2026, 4, 5, tzinfo=UTC),
+    ))
+    db_session.flush()
+
+    data = report.build_custom_report_xlsx(
+        db_session, date_from=date(2026, 1, 1), date_to=date(2026, 6, 30),
+        unit="all", doc_type="all", group_by="month", today=date(2026, 6, 28),
+    )
+    from openpyxl import load_workbook
+
+    wb = load_workbook(BytesIO(data))
+    detail = wb["Chi tiết"]
+    subjects = [detail.cell(row=r, column=5).value for r in range(2, detail.max_row + 1)]
+    directions = {detail.cell(row=r, column=1).value for r in range(2, detail.max_row + 1)}
+    assert "CV đi tháng 3" in subjects
+    assert "CV đến tháng 4" in subjects
+    assert directions == {"Đi", "Đến"}
+
+
+def test_custom_report_unit_filter_excludes_other_di(db_session: Session) -> None:
+    """Lọc đơn vị DVDL → không gồm CV đi GDNN; CV đến (chung) vẫn còn."""
+    gdnn = _gdnn(db_session)
+    dt = _doctype(db_session, gdnn.id)
+    db_session.add(OutgoingDocument(
+        unit_id=gdnn.id, doc_type_id=dt.id, number="011/2026/CV", number_int=11,
+        subject="CV đi GDNN riêng", issue_date=date(2026, 2, 1), status="published",
+    ))
+    db_session.add(IncomingDocument(
+        number="0008", number_int=8, subject="CV đến chung", status="registered",
+        created_at=datetime(2026, 2, 2, tzinfo=UTC),
+    ))
+    db_session.flush()
+
+    data = report.build_custom_report_xlsx(
+        db_session, date_from=date(2026, 1, 1), date_to=date(2026, 6, 30),
+        unit="dvdl", doc_type="all", group_by="month", today=date(2026, 6, 28),
+    )
+    from openpyxl import load_workbook
+
+    detail = load_workbook(BytesIO(data))["Chi tiết"]
+    subjects = [detail.cell(row=r, column=5).value for r in range(2, detail.max_row + 1)]
+    assert "CV đi GDNN riêng" not in subjects  # lọc DVDL loại CV đi GDNN
+    assert "CV đến chung" in subjects  # CV đến luôn gồm
