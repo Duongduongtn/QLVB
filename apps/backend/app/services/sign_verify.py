@@ -154,6 +154,18 @@ def _name_of(name: Any) -> str | None:
         return str(name) if name else None
 
 
+def _org_of(name: Any) -> str | None:
+    """Tên cơ quan (Organization O=) trong subject chứng thư — nguồn 'cơ quan phát hành'."""
+    try:
+        native = name.native  # dict: {'organization_name', 'common_name', ...}
+        org = native.get("organization_name") or native.get("organizational_unit_name")
+        if isinstance(org, (list, tuple)):
+            org = org[0] if org else None
+        return str(org).strip() or None if org else None
+    except Exception:
+        return None
+
+
 def _summarize_one(emb: Any, vc: Any) -> dict[str, Any]:
     """1 chữ ký nhúng → dict chuẩn hoá. Lỗi 1 chữ ký KHÔNG kéo sập cả file."""
     from datetime import datetime
@@ -170,6 +182,7 @@ def _summarize_one(emb: Any, vc: Any) -> dict[str, Any]:
         expired = bool(not_after and not_after < datetime.now(UTC))
         return {
             "signer": _name_of(cert.subject) if cert is not None else None,
+            "signer_org": _org_of(cert.subject) if cert is not None else None,
             "ca": _name_of(cert.issuer) if cert is not None else None,
             "signed_at": signed_at.isoformat() if signed_at else None,
             "valid_until": not_after.isoformat() if not_after else None,
@@ -182,6 +195,7 @@ def _summarize_one(emb: Any, vc: Any) -> dict[str, Any]:
         logger.warning("verify 1 chữ ký lỗi: %s", exc)
         return {
             "signer": None,
+            "signer_org": None,
             "ca": None,
             "signed_at": None,
             "valid_until": None,

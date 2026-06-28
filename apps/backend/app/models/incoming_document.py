@@ -80,6 +80,9 @@ class IncomingDocument(Base, TimestampMixin, SoftDeleteMixin):
     reference_number: Mapped[str | None] = mapped_column(String(100))  # số ký hiệu CQ gửi
     document_date: Mapped[date | None] = mapped_column(Date)  # ngày văn bản
     sender_org_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("organizations.id"))
+    # Tên cơ quan gửi free-text — dùng khi cơ quan CHƯA có trong danh bạ (auto-fill từ chữ
+    # ký số / OCR). Khi khớp được danh bạ thì gắn sender_org_id, vẫn giữ tên để hiển thị.
+    sender_org_name: Mapped[str | None] = mapped_column(String(200))
     subject: Mapped[str | None] = mapped_column(Text)  # trích yếu
     urgency: Mapped[str] = mapped_column(String(14), nullable=False, default="normal")
     confidentiality: Mapped[str] = mapped_column(String(16), nullable=False, default="normal")

@@ -23,6 +23,7 @@ from app.core.storage import delete_asset, save_asset, save_encrypted_file
 from app.models.document_type import DocumentType
 from app.models.file import File
 from app.models.incoming_document import IncomingDocument
+from app.models.organization import Organization
 from app.services import numbering
 from app.services.audit import log_action
 
@@ -100,10 +101,39 @@ def create_from_upload(
     return doc, tmp.storage_key, sig_tmp.storage_key
 
 
+def _match_sender_org(db: Session, name: str | None) -> int | None:
+    """Dò cơ quan gửi trong danh bạ theo tên (khớp chính xác, không phân biệt hoa/thường).
+
+    Chỉ khớp tuyệt đối full_name/short_name của org `is_sender` — tránh tự gắn nhầm.
+    """
+    if not name or not name.strip():
+        return None
+    needle = name.strip().lower()
+    base = (Organization.deleted_at.is_(None), Organization.is_sender.is_(True))
+    for col in (Organization.full_name, Organization.short_name):
+        oid = db.scalar(select(Organization.id).where(*base, func.lower(col) == needle))
+        if oid is not None:
+            return oid
+    return None
+
+
+def _autofill_sender(doc: IncomingDocument, db: Session, name: str | None) -> None:
+    """Điền tên cơ quan gửi (free-text) + thử gắn danh bạ. Không đè khi đã có id xác nhận."""
+    if not name or not name.strip():
+        return
+    name = name.strip()[:200]
+    if doc.sender_org_id is not None:
+        return  # đã khớp danh bạ rồi → giữ nguyên
+    doc.sender_org_name = name
+    matched = _match_sender_org(db, name)
+    if matched is not None:
+        doc.sender_org_id = matched
+
+
 def set_ocr_result(
     db: Session, doc_id: int, *, ocr_text: str, auto_fill: dict[str, Any]
 ) -> IncomingDocument:
-    """Lưu text OCR + tự điền số ký hiệu/ngày VB nếu user CHƯA nhập (không đè tay)."""
+    """Lưu text OCR + tự điền tối đa metadata nếu user CHƯA nhập (không đè tay)."""
     doc = _lock(db, doc_id)
     doc.ocr_text = ocr_text or None
     if not doc.reference_number and auto_fill.get("reference_number"):
@@ -111,6 +141,11 @@ def set_ocr_result(
     if not doc.document_date and auto_fill.get("document_date"):
         with suppress(ValueError):
             doc.document_date = date.fromisoformat(str(auto_fill["document_date"]))
+    if not doc.subject and auto_fill.get("subject"):
+        doc.subject = str(auto_fill["subject"])[:500]
+    # Cơ quan gửi: gợi ý OCR (dòng IN HOA) — chữ ký số (nếu có) sẽ ưu tiên đè sau.
+    if not doc.sender_org_name and not doc.sender_org_id and auto_fill.get("sender_hint"):
+        _autofill_sender(doc, db, str(auto_fill["sender_hint"]))
     db.commit()
     db.refresh(doc)
     return doc
@@ -130,6 +165,19 @@ def set_signature_result(
     if status in _SIG_STATUSES:
         doc.signature_status = status
         doc.signature_info = info
+        # Auto-fill từ chứng thư ký số (nguồn 'cơ quan phát hành' chính xác nhất).
+        sigs = (info or {}).get("signatures") or []
+        first = sigs[0] if isinstance(sigs, list) and sigs else {}
+        if isinstance(first, dict):
+            org = first.get("signer_org")
+            if org:
+                _autofill_sender(doc, db, str(org))
+            # Ngày văn bản fallback từ thời điểm ký (khi OCR không bắt được ngày).
+            if not doc.document_date and first.get("signed_at"):
+                with suppress(ValueError):
+                    doc.document_date = datetime.fromisoformat(
+                        str(first["signed_at"])
+                    ).date()
         db.commit()
         db.refresh(doc)
     return doc

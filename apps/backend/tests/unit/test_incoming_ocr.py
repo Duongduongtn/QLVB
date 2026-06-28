@@ -29,10 +29,15 @@ def test_parse_sender_hint_uppercase_line() -> None:
     assert hint is not None and "SỞ GIÁO DỤC" in hint
 
 
+def test_parse_subject_vv_line() -> None:
+    assert parse_autofill(_SAMPLE)["subject"] == "hướng dẫn tuyển sinh năm học 2026"
+
+
 def test_parse_empty_text() -> None:
     out = parse_autofill("nội dung thường không có số hay ngày")
     assert out["reference_number"] is None
     assert out["document_date"] is None
+    assert out["subject"] is None
 
 
 def test_parse_rejects_invalid_date() -> None:

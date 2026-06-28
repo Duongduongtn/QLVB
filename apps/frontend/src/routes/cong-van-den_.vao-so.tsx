@@ -28,9 +28,8 @@ export const Route = createFileRoute('/cong-van-den_/vao-so')({
 
 const STEPS = [
   { id: 1, label: 'Tải file PDF', icon: UploadCloud },
-  { id: 2, label: 'Kiểm tra & OCR', icon: ScanText },
-  { id: 3, label: 'Thông tin công văn', icon: FileText },
-  { id: 4, label: 'Hoàn tất vào sổ', icon: Hash },
+  { id: 2, label: 'Kiểm tra & vào sổ', icon: ScanText },
+  { id: 3, label: 'Hoàn tất', icon: Hash },
 ];
 
 interface OrgLite {
@@ -72,6 +71,7 @@ interface Doc {
   reference_number: string | null;
   document_date: string | null;
   sender_org_id: number | null;
+  sender_org_name: string | null;
   subject: string | null;
   urgency: string;
   confidentiality: string;
@@ -265,10 +265,23 @@ function VaoSoPage() {
     const tick = async () => {
       const res = await fetch(`/api/incoming/${docId}/sig-status?task_id=${encodeURIComponent(sigTaskId)}`, { method: 'POST', credentials: 'include' });
       if (!alive || !res.ok) return false;
-      const body = (await res.json()) as { status: string; signature_status?: string; signature_info?: SigInfo | null };
+      const body = (await res.json()) as { status: string; signature_status?: string; signature_info?: SigInfo | null; doc?: Doc };
       if (body.status === 'done') {
         setSigStatus(body.signature_status ?? 'none');
         setSigInfo(body.signature_info ?? null);
+        // Auto-fill cơ quan/ngày từ chứng thư — chỉ điền field FE còn trống (không đè user).
+        if (body.doc) {
+          const filled = body.doc;
+          setDoc((d) => {
+            if (!d) return filled;
+            return {
+              ...d,
+              sender_org_id: d.sender_org_id ?? filled.sender_org_id,
+              sender_org_name: d.sender_org_name ?? filled.sender_org_name,
+              document_date: d.document_date ?? filled.document_date,
+            };
+          });
+        }
         return true;
       }
       if (body.status === 'error') {
@@ -314,6 +327,7 @@ function VaoSoPage() {
           reference_number: doc.reference_number,
           document_date: doc.document_date,
           sender_org_id: doc.sender_org_id,
+          sender_org_name: doc.sender_org_name,
           subject: doc.subject,
           urgency: doc.urgency,
           confidentiality: doc.confidentiality,
@@ -345,7 +359,7 @@ function VaoSoPage() {
         if (reg.ok) {
           const body = (await reg.json()) as { number: string | null };
           setResult({ number: body.number });
-          setStep(4);
+          setStep(3);
           return;
         }
         if (reg.status === 409 && attempt === 0) {
@@ -481,19 +495,20 @@ function VaoSoPage() {
                   })}
                 </div>
               )}
-            </div>
-          )}
 
-          {step === 3 && doc && (
-            <div>
+              {doc && (
+                <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid var(--rule)' }}>
               <h2 className="section-title" style={{ marginBottom: 4 }}>Thông tin công văn</h2>
-              <p className="cell-meta" style={{ marginBottom: 16 }}>Đã tự điền từ OCR — kiểm tra và chỉnh lại nếu cần.</p>
+              <p className="cell-meta" style={{ marginBottom: 16 }}>Đã tự điền từ OCR + chữ ký số — kiểm tra, bổ sung nếu cần rồi bấm vào sổ.</p>
               <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
                 <div style={{ gridColumn: '1 / -1' }}>
                   <label className="field-label" id="sender-label">Cơ quan gửi</label>
                   <SenderCombobox
-                    value={doc.sender_org_id}
-                    onChange={(id) => setField('sender_org_id', id)}
+                    orgId={doc.sender_org_id}
+                    orgName={doc.sender_org_name}
+                    onChange={(id, name) =>
+                      setDoc((d) => (d ? { ...d, sender_org_id: id, sender_org_name: name } : d))
+                    }
                     orgs={orgs}
                     hint={senderHint}
                   />
@@ -531,10 +546,12 @@ function VaoSoPage() {
                 <input type="checkbox" className="qlcv-check" checked={doc.manager_only} onChange={(e) => setField('manager_only', e.target.checked)} />
                 Chỉ Quản lý xem (ẩn khỏi Nhân viên)
               </label>
+                </div>
+              )}
             </div>
           )}
 
-          {step === 4 && (
+          {step === 3 && (
             <div className="flex flex-col items-center" style={{ textAlign: 'center', padding: '24px 0', gap: 12 }}>
               <span className="flex items-center justify-center" style={{ width: 56, height: 56, borderRadius: 999, background: 'var(--success-soft)' }}>
                 <Check size={28} style={{ color: 'var(--success)' }} />
@@ -548,21 +565,15 @@ function VaoSoPage() {
             </div>
           )}
 
-          {step >= 2 && step < 4 && (
+          {step === 2 && (
             <div className="flex items-center justify-between" style={{ marginTop: 28, paddingTop: 20, borderTop: '1px solid var(--rule)' }}>
-              <button className="btn-secondary" type="button" disabled={step === 1 || busy} onClick={() => setStep((s) => Math.max(1, s - 1))}>
-                <ArrowLeft size={14} /> Quay lại
+              <button className="btn-secondary" type="button" disabled={busy} onClick={() => setStep(1)}>
+                <ArrowLeft size={14} /> Chọn file khác
               </button>
               <span className="cell-meta">Bước {step} / {STEPS.length}</span>
-              {step === 2 ? (
-                <button className="btn-primary" type="button" disabled={!ocrDone} onClick={() => setStep(3)}>
-                  Tiếp tục <ArrowRight size={14} />
-                </button>
-              ) : (
-                <button className="btn-primary" type="button" disabled={busy} onClick={saveAndRegister}>
-                  {busy ? 'Đang lưu…' : 'Lưu & cấp số đến'} <ArrowRight size={14} />
-                </button>
-              )}
+              <button className="btn-primary" type="button" disabled={busy || !ocrDone} onClick={saveAndRegister}>
+                {busy ? 'Đang lưu…' : !ocrDone ? 'Đang đọc tự động…' : 'Lưu & cấp số đến'} <ArrowRight size={14} />
+              </button>
             </div>
           )}
         </div>
@@ -571,15 +582,20 @@ function VaoSoPage() {
   );
 }
 
-/** M2 — chọn cơ quan gửi bằng autocomplete (gõ để tìm trong danh bạ is_sender). */
+/**
+ * M2 — chọn cơ quan gửi: gõ để tìm trong danh bạ (is_sender) HOẶC giữ tên tự do nếu cơ quan
+ * chưa có trong danh bạ (auto-fill từ chữ ký số / OCR). orgId = khớp danh bạ; orgName = tên text.
+ */
 function SenderCombobox({
-  value,
+  orgId,
+  orgName,
   onChange,
   orgs,
   hint,
 }: {
-  value: number | null;
-  onChange: (id: number | null) => void;
+  orgId: number | null;
+  orgName: string | null;
+  onChange: (id: number | null, name: string | null) => void;
   orgs: OrgLite[];
   hint: string | null;
 }) {
@@ -603,8 +619,11 @@ function SenderCombobox({
     },
   });
   const results = search.data ?? [];
-  const selected = orgs.find((o) => o.id === value) ?? null;
-  const label = selected ? (selected.short_name ?? selected.full_name) : '';
+  const selected = orgs.find((o) => o.id === orgId) ?? null;
+  // Nhãn hiển thị: ưu tiên org khớp danh bạ, sau đó tên free-text.
+  const label = selected ? (selected.short_name ?? selected.full_name) : (orgName ?? '');
+  const typed = text.trim();
+  const hasValue = orgId !== null || !!orgName;
 
   return (
     <div className="relative">
@@ -614,36 +633,56 @@ function SenderCombobox({
           role="combobox"
           aria-expanded={open}
           aria-labelledby="sender-label"
-          placeholder="Gõ tên cơ quan gửi để tìm…"
+          placeholder="Gõ tên cơ quan gửi (tìm danh bạ hoặc nhập tự do)…"
           value={open ? text : label}
           onFocus={() => { setOpen(true); setText(''); }}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Escape') { setOpen(false); (e.target as HTMLInputElement).blur(); } }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') { setOpen(false); (e.target as HTMLInputElement).blur(); }
+            if (e.key === 'Enter' && typed) { onChange(null, typed); setOpen(false); setText(''); (e.target as HTMLInputElement).blur(); }
+          }}
         />
-        {value !== null && (
-          <button type="button" className="btn-ghost" style={{ height: 32, flexShrink: 0 }} aria-label="Bỏ chọn cơ quan" onClick={() => onChange(null)}>
+        {hasValue && (
+          <button type="button" className="btn-ghost" style={{ height: 32, flexShrink: 0 }} aria-label="Bỏ chọn cơ quan" onClick={() => onChange(null, null)}>
             Bỏ chọn
           </button>
         )}
       </div>
+      {/* Cơ quan ngoài danh bạ → hiển thị rõ là tên tự do (chưa liên kết danh bạ). */}
+      {!open && orgId === null && orgName && (
+        <div className="cell-meta" style={{ marginTop: 4 }}>Tên tự do (chưa có trong danh bạ).</div>
+      )}
       {open && (
         <>
           <div style={{ position: 'fixed', inset: 0, zIndex: 35 }} aria-hidden="true" onClick={() => setOpen(false)} />
           <div role="listbox" className="card" style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, maxHeight: 260, overflowY: 'auto', zIndex: 36, padding: 6, boxShadow: '0 10px 30px oklch(18% 0.02 95 / 0.16)' }}>
+            {typed && (
+              <button
+                type="button"
+                className="nav-item w-full"
+                style={{ borderLeft: 'none', textAlign: 'left' }}
+                onClick={() => { onChange(null, typed); setOpen(false); setText(''); }}
+              >
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: 'block', color: 'var(--ink)', fontSize: '0.85rem' }}>Dùng “{typed}”</span>
+                  <span className="cell-meta" style={{ display: 'block' }}>Tên tự do — cơ quan chưa có trong danh bạ</span>
+                </span>
+              </button>
+            )}
             {search.isFetching && results.length === 0 ? (
               <div className="cell-meta" style={{ padding: '8px 10px' }}>Đang tìm…</div>
             ) : results.length === 0 ? (
-              <div className="cell-meta" style={{ padding: '8px 10px' }}>Không có cơ quan khớp. Thêm tại trang Danh bạ.</div>
+              <div className="cell-meta" style={{ padding: '8px 10px' }}>Không có cơ quan khớp trong danh bạ — gõ để dùng tên tự do.</div>
             ) : (
               results.map((o) => (
                 <button
                   key={o.id}
                   type="button"
                   role="option"
-                  aria-selected={o.id === value}
+                  aria-selected={o.id === orgId}
                   className="nav-item w-full"
                   style={{ borderLeft: 'none', textAlign: 'left' }}
-                  onClick={() => { onChange(o.id); setOpen(false); setText(''); }}
+                  onClick={() => { onChange(o.id, o.short_name ?? o.full_name); setOpen(false); setText(''); }}
                 >
                   <span style={{ minWidth: 0 }}>
                     <span style={{ display: 'block', color: 'var(--ink)', fontSize: '0.85rem' }}>{o.short_name ?? o.full_name}</span>
@@ -655,7 +694,14 @@ function SenderCombobox({
           </div>
         </>
       )}
-      {hint && <div className="cell-meta" style={{ marginTop: 4 }}>OCR gợi ý: {hint}</div>}
+      {hint && orgId === null && !orgName && (
+        <div className="flex items-center cell-meta" style={{ gap: 6, marginTop: 4 }}>
+          <span>OCR gợi ý: {hint}</span>
+          <button type="button" className="btn-ghost" style={{ height: 24, padding: '0 8px' }} onClick={() => onChange(null, hint)}>
+            Dùng
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -15,6 +15,7 @@ class IncomingUpdate(BaseModel):
     reference_number: Annotated[str | None, Field(max_length=100)] = None
     document_date: date | None = None
     sender_org_id: int | None = None
+    sender_org_name: Annotated[str | None, Field(max_length=200)] = None
     subject: Annotated[str | None, Field(min_length=1)] = None
     urgency: Urgency | None = None
     confidentiality: Confidentiality | None = None
@@ -50,6 +51,7 @@ class IncomingOut(BaseModel):
     reference_number: str | None
     document_date: date | None
     sender_org_id: int | None
+    sender_org_name: str | None
     subject: str | None
     urgency: str
     confidentiality: str
@@ -73,6 +75,7 @@ class IncomingListItem(BaseModel):
     reference_number: str | None
     document_date: date | None
     sender_org_id: int | None
+    sender_org_name: str | None
     subject: str | None
     urgency: str
     confidentiality: str

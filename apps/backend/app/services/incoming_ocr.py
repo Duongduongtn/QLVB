@@ -15,6 +15,8 @@ _RE_REF = re.compile(r"S[ốôọ]\s*:?\s*([0-9]+\s*/\s*[0-9A-Za-zĐĐđ.\-]+)")
 _RE_DATE = re.compile(
     r"ng[àa]y\s+(\d{1,2})\s+th[áa]ng\s+(\d{1,2})\s+n[ăa]m\s+(\d{4})", re.IGNORECASE
 )
+# Trích yếu: cụm "V/v …" (về việc) hoặc dòng "Trích yếu: …" — lấy tới hết dòng.
+_RE_SUBJECT = re.compile(r"(?:V/v|V/v\.|Tr[íi]ch y[ếê]u)\s*:?\s*(.+)", re.IGNORECASE)
 
 
 def extract_text_layer(data: bytes) -> str:
@@ -51,4 +53,15 @@ def parse_autofill(text: str) -> dict[str, str | None]:
             sender_hint = line
             best = len(line)
 
-    return {"reference_number": ref, "document_date": doc_date, "sender_hint": sender_hint}
+    # Trích yếu: dòng "V/v …" / "Trích yếu: …" đầu tiên (cắt 1 dòng, bỏ khoảng trắng thừa).
+    subject = None
+    ms = _RE_SUBJECT.search(text)
+    if ms:
+        subject = re.sub(r"\s+", " ", ms.group(1).strip())[:500] or None
+
+    return {
+        "reference_number": ref,
+        "document_date": doc_date,
+        "sender_hint": sender_hint,
+        "subject": subject,
+    }

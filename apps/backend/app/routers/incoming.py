@@ -112,6 +112,8 @@ def sig_status(
         "status": "done",
         "signature_status": doc.signature_status,
         "signature_info": doc.signature_info,
+        # Trả doc đã cập nhật để FE nhận auto-fill cơ quan/ngày từ chứng thư ký số.
+        "doc": IncomingOut.model_validate(doc).model_dump(mode="json"),
     }
 
 
