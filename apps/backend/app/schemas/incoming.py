@@ -80,6 +80,10 @@ class IncomingListItem(BaseModel):
     signature_status: str
     status: str
     created_at: datetime
+    # E2 — tóm tắt phân công xử lý (badge "Đã giao"): số task + trạng thái gộp
+    # (None chưa giao / assigned / processing / done). Router gắn sau khi list.
+    task_total: int = 0
+    task_status: str | None = None
 
 
 class IncomingListResponse(BaseModel):

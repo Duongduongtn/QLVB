@@ -503,7 +503,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [INC.ASG-01] Là Nhân viên, tôi muốn phân công CV đến cho 1 hoặc cả 2 đơn vị + gán người cụ thể, để rõ trách nhiệm xử lý.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⚠️ Partial (27/06/2026) — model `processing_tasks` (UNIQUE incoming+unit chống đua) + migration 0012. `assign` GDNN/DVDL/**Cả 2 → 2 task ĐỘC LẬP** + noti người được giao (đổi người → noti cả cũ + mới). Người bị khoá → chặn giao. Modal "Phân công" (seg đơn vị + người + hạn + ghi chú) ở chi tiết CV đến; chuông thông báo header poll số chưa đọc + dropdown. **Defer:** badge "Đã giao" ở danh sách CV đến (hiện hiển thị task trong chi tiết).
+- **Trạng thái**: ✅ Done (28/06/2026) — model `processing_tasks` (UNIQUE incoming+unit chống đua) + migration 0012. `assign` GDNN/DVDL/**Cả 2 → 2 task ĐỘC LẬP** + noti người được giao (đổi người → noti cả cũ + mới). Người bị khoá → chặn giao. Modal "Phân công" (seg đơn vị + người + hạn + ghi chú) ở chi tiết CV đến; chuông thông báo header poll số chưa đọc + dropdown. **Badge "Đã giao" trên sổ CV đến (28/06):** `tasks.summary_for_incomings` (1 query group-by, tránh N+1; gộp trạng thái → assigned/processing/done) gắn vào `IncomingListItem`; FE Pill (Đã giao/Đang xử lý/Hoàn thành) trong ô trích yếu; **không rò manager_only** (summary chỉ tính id của trang list — đã lọc manager_only với NV); invalidate `['incoming']` sau khi giao để badge cập nhật ngay. 1 review-nghiệp-vu PASS (fix invalidate). 7 unit test.
 - **Steps to Complete**:
   1. Vào trang chi tiết CV đến.
   2. Click "Phân công".

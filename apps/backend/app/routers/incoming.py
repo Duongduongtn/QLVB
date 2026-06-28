@@ -261,7 +261,15 @@ def list_incoming(
         page=page,
         size=size,
     )
-    return IncomingListResponse(items=[IncomingListItem.model_validate(d) for d in items], total=total)
+    summary = task_service.summary_for_incomings(db, [d.id for d in items])
+    out_items: list[IncomingListItem] = []
+    for d in items:
+        item = IncomingListItem.model_validate(d)
+        if (s := summary.get(d.id)) is not None:
+            item.task_total = s["task_total"]
+            item.task_status = s["task_status"]
+        out_items.append(item)
+    return IncomingListResponse(items=out_items, total=total)
 
 
 @router.get("/{doc_id}", response_model=IncomingOut)

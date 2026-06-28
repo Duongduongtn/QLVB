@@ -52,7 +52,16 @@ interface IncRow {
   signature_status: string;
   status: IncStatus;
   created_at: string;
+  task_total?: number;
+  task_status?: string | null;
 }
+
+// E2 — badge tóm tắt phân công xử lý trên sổ CV đến.
+const TASK_PILL: Record<string, { label: string; variant: 'info' | 'warning' | 'success' }> = {
+  assigned: { label: 'Đã giao', variant: 'info' },
+  processing: { label: 'Đang xử lý', variant: 'warning' },
+  done: { label: 'Hoàn thành', variant: 'success' },
+};
 
 const PAGE_SIZE = 20;
 
@@ -308,7 +317,9 @@ function CongVanDenPage() {
       setAssignee2('');
       setAssignDeadline('');
       setAssignNote('');
+      // Refresh cả task chi tiết LẪN sổ (badge "Đã giao" cập nhật ngay sau khi giao).
       await queryClient.invalidateQueries({ queryKey: ['incoming-tasks'] });
+      await queryClient.invalidateQueries({ queryKey: ['incoming'] });
     },
     onError: (e: Error) => setActErr(e.message),
   });
@@ -473,6 +484,9 @@ function CongVanDenPage() {
                       {it.manager_only && <EyeOff size={14} style={{ color: 'var(--warning)', flexShrink: 0 }} aria-label="Chỉ Quản lý xem" />}
                       <span className="subject">{it.subject ?? <span className="cell-meta">(chưa có trích yếu)</span>}</span>
                       {it.signature_status === 'valid' && <ShieldCheck size={14} style={{ color: 'var(--success)', flexShrink: 0 }} aria-label="Đã ký số hợp lệ" />}
+                      {it.task_status && TASK_PILL[it.task_status] && (
+                        <Pill variant={TASK_PILL[it.task_status].variant}>{TASK_PILL[it.task_status].label}</Pill>
+                      )}
                     </div>
                   </td>
                   <td><span className="cell-meta">{orgName(it.sender_org_id)}</span></td>

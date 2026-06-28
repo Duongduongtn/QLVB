@@ -29,6 +29,46 @@ def _active_user(db: Session, user_id: int) -> User:
     return u
 
 
+def _coarse_status(total: int, done: int, in_progress: int) -> str | None:
+    """Gộp trạng thái nhiều task của 1 CV → 1 nhãn cho badge danh sách (E2).
+    None = chưa giao; 'done' = mọi task xong; 'processing' = đang xử lý/xong dở; 'assigned'
+    = đã giao nhưng chưa ai bắt đầu."""
+    if total == 0:
+        return None
+    if done == total:
+        return "done"
+    if in_progress > 0 or done > 0:
+        return "processing"
+    return "assigned"
+
+
+def summary_for_incomings(db: Session, incoming_ids: list[int]) -> dict[int, dict[str, Any]]:
+    """Tổng hợp phân công theo từng CV đến (1 query, tránh N+1) → {id: {task_total, task_status}}.
+    Dùng cho badge 'Đã giao' trên sổ CV đến (E2)."""
+    if not incoming_ids:
+        return {}
+    rows = db.execute(
+        select(ProcessingTask.incoming_id, ProcessingTask.status, func.count())
+        .where(ProcessingTask.incoming_id.in_(incoming_ids))
+        .group_by(ProcessingTask.incoming_id, ProcessingTask.status)
+    ).all()
+    agg: dict[int, dict[str, int]] = {}
+    for inc_id, status, cnt in rows:
+        d = agg.setdefault(inc_id, {"total": 0, "done": 0, "in_progress": 0})
+        d["total"] += cnt
+        if status == "done":
+            d["done"] += cnt
+        elif status == "in_progress":
+            d["in_progress"] += cnt
+    return {
+        inc_id: {
+            "task_total": d["total"],
+            "task_status": _coarse_status(d["total"], d["done"], d["in_progress"]),
+        }
+        for inc_id, d in agg.items()
+    }
+
+
 def assign(
     db: Session,
     incoming_id: int,

@@ -190,3 +190,36 @@ def test_notify_deadlines_sends_and_marks() -> None:
     assert over.reminded_on == today and soon.reminded_on == today
     assert len([a for a in db.added if type(a).__name__ == "Notification"]) == 2
     assert db.committed
+
+
+# ── E2 badge "Đã giao" — tóm tắt phân công ───────────────────────────────────
+@pytest.mark.parametrize("total,done,inp,expected", [
+    (0, 0, 0, None),
+    (2, 2, 0, "done"),
+    (2, 0, 1, "processing"),
+    (2, 1, 0, "processing"),   # xong dở
+    (2, 0, 0, "assigned"),     # đã giao, chưa ai bắt đầu
+])
+def test_coarse_status(total: int, done: int, inp: int, expected: str | None) -> None:
+    assert svc._coarse_status(total, done, inp) == expected
+
+
+class _SumDB:
+    """Fake db.execute(...).all() trả các dòng (incoming_id, status, count) đã group."""
+
+    def __init__(self, rows: list[Any]) -> None:
+        self._rows = rows
+
+    def execute(self, _stmt: Any) -> _Scalars:
+        return _Scalars(self._rows)
+
+
+def test_summary_for_incomings_aggregates() -> None:
+    db = _SumDB([(10, "done", 1), (10, "new", 1), (11, "new", 2)])
+    out = svc.summary_for_incomings(db, [10, 11])  # type: ignore[arg-type]
+    assert out[10] == {"task_total": 2, "task_status": "processing"}
+    assert out[11] == {"task_total": 2, "task_status": "assigned"}
+
+
+def test_summary_for_incomings_empty() -> None:
+    assert svc.summary_for_incomings(_SumDB([]), []) == {}  # type: ignore[arg-type]
