@@ -32,12 +32,14 @@ from app.schemas.outgoing import (
 )
 from app.services import audit as audit_service
 from app.services import outgoing as out_service
+from app.services import report as report_service
 from app.services import watermark as wm_service
 from app.workers.convert import docx_to_pdf
 
 router = APIRouter()
 
 _MAX_PDF_BYTES = 50 * 1024 * 1024  # PRD NFR: upload ≤ 50MB
+_XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 def _ctx(request: Request) -> tuple[str | None, str | None]:
@@ -67,6 +69,26 @@ def list_outgoing(
     )
     return OutgoingListResponse(
         items=[OutgoingListItem.model_validate(d) for d in items], total=total
+    )
+
+
+@router.get("/export.xlsx")
+async def export_outgoing_list(
+    unit_id: int | None = Query(default=None),
+    status: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+    _: User = Depends(current_user),
+) -> Response:
+    """D6 — xuất danh sách CV đi đang lọc ra Excel (cùng bộ lọc với sổ)."""
+    data = await run_in_threadpool(
+        report_service.build_outgoing_list_xlsx, db, unit_id=unit_id, status=status, q=q
+    )
+    fname = "Danh-sach-cong-van-di.xlsx"
+    return Response(
+        content=data,
+        media_type=_XLSX_MIME,
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(fname)}"},
     )
 
 

@@ -38,6 +38,7 @@ from app.services import audit as audit_service
 from app.services import incoming as inc_service
 from app.services import incoming_attachments as att_service
 from app.services import outgoing as out_service
+from app.services import report as report_service
 from app.services import tasks as task_service
 from app.services import watermark as wm_service
 from app.workers.ocr import extract_text, ocr_attachment
@@ -277,6 +278,39 @@ def list_incoming(
             item.task_status = s["task_status"]
         out_items.append(item)
     return IncomingListResponse(items=out_items, total=total)
+
+
+@router.get("/export.xlsx")
+async def export_incoming_list(
+    status: str | None = Query(default=None),
+    sender_org_id: int | None = Query(default=None),
+    urgency: str | None = Query(default=None),
+    confidentiality: str | None = Query(default=None),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    q: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+    actor: User = Depends(current_user),
+) -> Response:
+    """E5 — xuất danh sách CV đến đang lọc ra Excel. NV không thấy CV 'Chỉ Quản lý xem'."""
+    data = await run_in_threadpool(
+        report_service.build_incoming_list_xlsx,
+        db,
+        include_manager_only=actor.role == "manager",
+        status=status,
+        sender_org_id=sender_org_id,
+        urgency=urgency,
+        confidentiality=confidentiality,
+        date_from=date_from,
+        date_to=date_to,
+        q=q,
+    )
+    fname = "Danh-sach-cong-van-den.xlsx"
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(fname)}"},
+    )
 
 
 @router.get("/{doc_id}", response_model=IncomingOut)

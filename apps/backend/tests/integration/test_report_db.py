@@ -108,6 +108,26 @@ def test_dashboard_g1_metrics(db_session: Session) -> None:
     assert s_other["kpi"]["di_year"] == 0
 
 
+def test_incoming_list_xlsx_respects_manager_only(db_session: Session) -> None:
+    # Bất biến: NV (include_manager_only=False) KHÔNG xuất được CV "Chỉ Quản lý xem".
+    from openpyxl import load_workbook
+
+    mark = "TUYETMATXKZ"  # token hiếm để dò trong sheet
+    db_session.add(IncomingDocument(
+        number="0900", number_int=900, subject=f"CV mật {mark}",
+        status="registered", manager_only=True,
+    ))
+    db_session.flush()
+
+    def _subjects(*, manager: bool) -> str:
+        data = report.build_incoming_list_xlsx(db_session, include_manager_only=manager)
+        ws = load_workbook(BytesIO(data)).active
+        return "\n".join(str(c.value) for row in ws.iter_rows() for c in row if c.value)
+
+    assert mark not in _subjects(manager=False)  # NV: không thấy
+    assert mark in _subjects(manager=True)  # Quản lý: thấy
+
+
 def test_dashboard_unprocessed_edge_cases(db_session: Session) -> None:
     today = date(2026, 6, 28)
     base = report.dashboard_stats(db_session, year=2026, today=today)["kpi"]

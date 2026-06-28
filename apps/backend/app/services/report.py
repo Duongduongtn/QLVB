@@ -251,6 +251,164 @@ def build_register_workbook_bytes(db: Session, *, year: int) -> bytes:
     return buf.getvalue()
 
 
+# --------------------------------------------------------------------------- #
+# D6 / E5 — Xuất Excel DANH SÁCH (theo bộ lọc đang xem ở sổ CV đi / đến).
+# Khác G2 (sổ NĐ 30 cả năm) + G3 (báo cáo pivot): đây là dump đúng danh sách user
+# đang lọc (search/đơn vị/trạng thái…), tái dùng list service để khớp 100% bộ lọc.
+# --------------------------------------------------------------------------- #
+
+_LIST_EXPORT_CAP = 5000  # trần dòng chống dựng workbook quá lớn (sổ năm ~800 CV)
+
+_URGENCY_VN = {
+    "normal": "Thường", "urgent": "Khẩn", "very_urgent": "Thượng khẩn",
+    "express": "Hoả tốc", "express_timed": "Hoả tốc hẹn giờ",
+}
+
+_COLS_OUT_LIST = [
+    ("stt", "STT", 6),
+    ("number", "Số, ký hiệu", 18),
+    ("issue_date", "Ngày phát hành", 15),
+    ("unit", "Đơn vị", 14),
+    ("subject", "Trích yếu", 50),
+    ("status", "Trạng thái", 14),
+]
+_COLS_IN_LIST = [
+    ("stt", "STT", 6),
+    ("number", "Số đến", 10),
+    ("arrival_date", "Ngày đến", 13),
+    ("reference", "Số, ký hiệu", 16),
+    ("doc_date", "Ngày văn bản", 14),
+    ("sender", "Cơ quan gửi", 28),
+    ("subject", "Trích yếu", 44),
+    ("urgency", "Độ khẩn", 12),
+    ("status", "Trạng thái", 13),
+]
+
+
+def _render_list_xlsx(title: str, cols: list[Any], rows: list[dict[str, Any]]) -> bytes:
+    """Dựng 1 sheet danh sách (tiêu đề + header + dữ liệu, `_excel_safe` chống injection)."""
+    from io import BytesIO
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = Workbook()
+    ws = wb.active
+    assert ws is not None
+    ws.title = "Danh sach"
+    ncol = len(cols)
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=ncol)
+    tc = ws.cell(row=1, column=1, value=title)
+    tc.font = Font(bold=True, size=13)
+    tc.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 24
+
+    thin = Side(style="thin", color="999999")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    fill = PatternFill("solid", fgColor="FCE8B2")
+    hr = 3
+    for c, (_key, label, width) in enumerate(cols, start=1):
+        cell = ws.cell(row=hr, column=c, value=label)
+        cell.font = Font(bold=True)
+        cell.fill = fill
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.border = border
+        ws.column_dimensions[get_column_letter(c)].width = width
+    ws.row_dimensions[hr].height = 28
+
+    for r, row in enumerate(rows, start=hr + 1):
+        for c, (key, _label, _w) in enumerate(cols, start=1):
+            cell = ws.cell(row=r, column=c, value=_excel_safe(row.get(key, "")))
+            cell.border = border
+            cell.alignment = Alignment(
+                vertical="top",
+                wrap_text=key in ("subject", "sender"),
+                horizontal="center" if key == "stt" else "left",
+            )
+    ws.freeze_panes = ws.cell(row=hr + 1, column=1)
+
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def build_outgoing_list_xlsx(
+    db: Session, *, unit_id: int | None = None, status: str | None = None, q: str | None = None
+) -> bytes:
+    """D6 — xuất danh sách CV đi đang lọc ra Excel."""
+    from app.services.outgoing import list_outgoing
+
+    docs, _ = list_outgoing(db, unit_id=unit_id, status=status, q=q, page=1, size=_LIST_EXPORT_CAP)
+    units = {u.id: (u.short_name or u.code) for u in db.scalars(select(Unit)).all()}
+    rows = [
+        {
+            "stt": i,
+            "number": d.number or "(chưa cấp số)",
+            "issue_date": _fmt_d(d.issue_date),
+            "unit": units.get(d.unit_id, ""),
+            "subject": d.subject or "",
+            "status": _STATUS_VN.get(d.status, d.status),
+        }
+        for i, d in enumerate(docs, start=1)
+    ]
+    return _render_list_xlsx("DANH SÁCH CÔNG VĂN ĐI", _COLS_OUT_LIST, rows)
+
+
+def build_incoming_list_xlsx(
+    db: Session,
+    *,
+    include_manager_only: bool,
+    status: str | None = None,
+    sender_org_id: int | None = None,
+    urgency: str | None = None,
+    confidentiality: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    q: str | None = None,
+) -> bytes:
+    """E5 — xuất danh sách CV đến đang lọc ra Excel. Tôn trọng manager_only (NV không thấy)."""
+    from app.services.incoming import list_incoming
+
+    docs, _ = list_incoming(
+        db,
+        include_manager_only=include_manager_only,
+        status=status,
+        sender_org_id=sender_org_id,
+        urgency=urgency,
+        confidentiality=confidentiality,
+        date_from=date_from,
+        date_to=date_to,
+        q=q,
+        page=1,
+        size=_LIST_EXPORT_CAP,
+    )
+    sender_ids = {d.sender_org_id for d in docs if d.sender_org_id is not None}
+    sender_map: dict[int, str] = {}
+    if sender_ids:
+        sender_map = {
+            oid: name
+            for oid, name in db.execute(
+                select(Organization.id, Organization.full_name).where(Organization.id.in_(sender_ids))
+            ).all()
+        }
+    rows = [
+        {
+            "stt": i,
+            "number": d.number or "",
+            "arrival_date": _fmt_d(_vn_date(d.created_at)),
+            "reference": d.reference_number or "",
+            "doc_date": _fmt_d(d.document_date),
+            "sender": sender_map.get(d.sender_org_id, "") if d.sender_org_id else "",
+            "subject": d.subject or "",
+            "urgency": _URGENCY_VN.get(d.urgency or "", d.urgency or ""),
+            "status": _STATUS_VN.get(d.status, d.status),
+        }
+        for i, d in enumerate(docs, start=1)
+    ]
+    return _render_list_xlsx("DANH SÁCH CÔNG VĂN ĐẾN", _COLS_IN_LIST, rows)
+
+
 def dashboard_stats(
     db: Session, *, year: int, today: date, unit_id: int | None = None
 ) -> dict[str, Any]:

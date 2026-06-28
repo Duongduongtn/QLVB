@@ -432,7 +432,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [OUT.LST-01] Là người dùng, tôi muốn xem danh sách CV đi, lọc theo đơn vị/thời gian/loại/trạng thái/người ký, để tra cứu nhanh.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⚠️ Partial (27/06/2026) — **backend + FE XONG** (bảng số CV/trích yếu/đơn vị/ngày/trạng thái, search debounce, filter đơn vị+trạng thái, paginate, detail drawer). **Defer:** filter thời gian/loại/người ký/nơi nhận, xuất Excel, cột Loại/Người ký (cần BE trả kèm).
+- **Trạng thái**: ⚠️ Partial (27/06/2026) — **backend + FE XONG** (bảng số CV/trích yếu/đơn vị/ngày/trạng thái, search debounce, filter đơn vị+trạng thái, paginate, detail drawer). **Xuất Excel danh sách ✅ (28/06):** nút "Xuất Excel" ở sổ CV đi → `GET /api/outgoing/export.xlsx` (cùng bộ lọc đơn vị/trạng thái/search; `report.build_outgoing_list_xlsx`, `_excel_safe` chống injection, cap 5000 dòng). **Defer còn lại:** filter thời gian/loại/người ký/nơi nhận, cột Loại/Người ký (cần BE trả kèm).
 - **Done khi**:
   - Danh sách paginate, default sort theo ngày phát hành mới nhất.
   - Filter đa tiêu chí: đơn vị, khoảng thời gian, loại văn bản, trạng thái (Draft/Đã phát hành), người ký, nơi nhận.
@@ -526,7 +526,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [INC.TRK-01] Là người được giao, tôi muốn cập nhật trạng thái xử lý CV, để báo cáo tiến độ.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⚠️ Partial (27/06/2026) — trang **"Việc của tôi"** (poll 15s) cập nhật trạng thái (Mới→Đang xử lý→Hoàn thành / Mở lại) + **chuyển người** (chỉ assignee/Quản lý — chống IDOR) + quá hạn **highlight đỏ**. Cron ngày `notify_due_tasks` nhắc việc sắp tới hạn (ngày mai/hôm nay) + **quá hạn** (cờ `reminded_on` chống spam). **Defer:** báo cáo tiến độ trên dashboard (Nhóm G).
+- **Trạng thái**: ⚠️ Partial (27/06/2026) — trang **"Việc của tôi"** (poll 15s) cập nhật trạng thái (Mới→Đang xử lý→Hoàn thành / Mở lại) + **chuyển người** (chỉ assignee/Quản lý — chống IDOR) + quá hạn **highlight đỏ**. Cron ngày `notify_due_tasks` nhắc việc sắp tới hạn (ngày mai/hôm nay) + **quá hạn** (cờ `reminded_on` chống spam). **✅ báo cáo tiến độ dashboard (28/06):** G1 dashboard đã có KPI "CV chưa xử lý" + "CV quá hạn" (đếm việc mở/quá deadline theo E2/E3) + toggle đơn vị.
 - **Steps to Complete**:
   1. Vào "Việc của tôi".
   2. Mở 1 task → cập nhật trạng thái: Đang xử lý / Đã hoàn thành / Chuyển người khác.
@@ -545,7 +545,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [INC.ATT-01] Là người vào sổ, tôi muốn đính kèm phụ lục (PDF, Excel, ảnh) cho CV chính, để lưu trữ đầy đủ tài liệu liên quan.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⚠️ Partial (27/06/2026) — model `incoming_attachments` (FK CV cha CASCADE, file_id mã hoá envelope) + migration 0014. `services/incoming_attachments`: add (allowlist ext PDF/Word/Excel/ảnh, ≤50MB/file + tổng ≤500MB/CV, mã hoá như CV chính, orphan cleanup khi lỗi), list, tải lẻ, **ZIP gộp** (CV chính + tất cả phụ lục, `_safe_zip_name` chống traversal + dedup tên, semaphore chặn OOM đồng thời), xoá (**chỉ người tải lên hoặc Quản lý** + audit). Phụ lục **PDF → OCR** ghi `ocr_text` qua worker `ocr_attachment` (SessionLocal fire-and-forget; att_tmp KHÔNG mã hoá xoá ngay + beat purge); Excel/ảnh KHÔNG OCR. Router 5 endpoint đều `_visible(doc cha)` (CV "Chỉ Quản lý xem" → NV 404). FE: `AttachmentsCard` trong drawer CV đến (list + thêm + tải lẻ + Tải ZIP gộp + xoá, fmtSize VN). 15 unit test. 2 subagent review PASS không blocker. **Partial vì**: `ocr_text` phụ lục đã lưu nhưng CHƯA wire vào tìm kiếm full-text (story F1 SRC.FTS chưa làm) + F1 phải tôn trọng cờ `manager_only` khi index phụ lục. Nâng ✅ Done khi F1 tiêu thụ.
+- **Trạng thái**: ✅ Done (28/06/2026 — F1 đã tiêu thụ `ocr_text`) — model `incoming_attachments` (FK CV cha CASCADE, file_id mã hoá envelope) + migration 0014. `services/incoming_attachments`: add (allowlist ext PDF/Word/Excel/ảnh, ≤50MB/file + tổng ≤500MB/CV, mã hoá như CV chính, orphan cleanup khi lỗi), list, tải lẻ, **ZIP gộp** (CV chính + tất cả phụ lục, `_safe_zip_name` chống traversal + dedup tên, semaphore chặn OOM đồng thời), xoá (**chỉ người tải lên hoặc Quản lý** + audit). Phụ lục **PDF → OCR** ghi `ocr_text` qua worker `ocr_attachment` (SessionLocal fire-and-forget; att_tmp KHÔNG mã hoá xoá ngay + beat purge); Excel/ảnh KHÔNG OCR. Router 5 endpoint đều `_visible(doc cha)` (CV "Chỉ Quản lý xem" → NV 404). FE: `AttachmentsCard` trong drawer CV đến (list + thêm + tải lẻ + Tải ZIP gộp + xoá, fmtSize VN). 15 unit test. 2 subagent review PASS không blocker. **✅ Done (28/06):** F1 (migration 0018) đã index `ocr_text` phụ lục vào search (trigger + GIN + nhánh EXISTS) với defense-in-depth manager_only (search_vector=NULL khi CV cha mật) → tìm full-text nội dung phụ lục hoạt động, tôn trọng "Chỉ Quản lý xem".
 - **Done khi**:
   - Phụ lục liệt kê dưới CV chính.
   - Tải xuống được riêng lẻ hoặc gộp ZIP (CV chính + tất cả phụ lục).
@@ -559,7 +559,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [INC.LST-01] Là người dùng, tôi muốn xem danh sách CV đến, lọc đa tiêu chí, để tra cứu nhanh.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⚠️ Partial (27/06/2026) — sổ paginate (sort ngày đến mới nhất) + filter **cơ quan gửi / mức khẩn / mức mật / thời gian (năm) / trạng thái** + search số đến/ký hiệu/trích yếu; cột chữ ký số + cờ "Chỉ Quản lý xem"; drawer chi tiết + Tải PDF + toggle ẩn (Quản lý) + Huỷ vào sổ. **Defer (chờ E2/E3/D5):** filter trạng thái xử lý + đơn vị xử lý, lịch sử phân công/xử lý, link CV đi phản hồi, xuất Excel.
+- **Trạng thái**: ⚠️ Partial (27/06/2026) — sổ paginate (sort ngày đến mới nhất) + filter **cơ quan gửi / mức khẩn / mức mật / thời gian (năm) / trạng thái** + search số đến/ký hiệu/trích yếu; cột chữ ký số + cờ "Chỉ Quản lý xem"; drawer chi tiết + Tải PDF + toggle ẩn (Quản lý) + Huỷ vào sổ. **Xuất Excel danh sách ✅ (28/06):** nút "Xuất Excel" ở sổ CV đến → `GET /api/incoming/export.xlsx` (cùng bộ lọc khẩn/mật/cơ quan/năm/trạng thái/search; **tôn trọng manager_only** — NV không xuất được CV "Chỉ Quản lý xem"; `report.build_incoming_list_xlsx`). **Defer còn lại:** filter trạng thái xử lý + đơn vị xử lý, lịch sử phân công/xử lý.
 - **Done khi**:
   - Danh sách paginate, default sort theo ngày đến mới nhất.
   - Filter: thời gian, cơ quan gửi, mức độ khẩn, mức độ mật, trạng thái xử lý, đơn vị xử lý.

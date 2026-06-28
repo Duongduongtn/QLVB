@@ -174,6 +174,15 @@ function CongVanDiPage() {
   const items = listQuery.data?.items ?? [];
   const total = listQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  function exportExcel() {
+    const qs = new URLSearchParams();
+    if (unitFilter !== 'all') qs.set('unit_id', String(unitFilter));
+    if (statusFilter !== 'all') qs.set('status', statusFilter);
+    if (debouncedQ) qs.set('q', debouncedQ);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    window.open(`/api/outgoing/export.xlsx${suffix}`, '_blank');
+  }
   const unitOf = (id: number) => units.find((u) => u.id === id);
   const allChecked = items.length > 0 && items.every((r) => checked.has(r.id));
   const toggleAll = () => setChecked(allChecked ? new Set() : new Set(items.map((r) => r.id)));
@@ -193,7 +202,7 @@ function CongVanDiPage() {
         subhead={`Tổng ${total} công văn của 2 đơn vị`}
         actions={
           <>
-            <button className="btn-secondary" type="button">
+            <button className="btn-secondary" type="button" onClick={exportExcel}>
               <Download size={14} />
               Xuất Excel
             </button>

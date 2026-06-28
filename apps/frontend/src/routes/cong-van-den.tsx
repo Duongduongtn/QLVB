@@ -375,6 +375,21 @@ function CongVanDenPage() {
   const total = listQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  function exportExcel() {
+    const qs = new URLSearchParams();
+    if (urgency !== 'all') qs.set('urgency', urgency);
+    if (confid !== 'all') qs.set('confidentiality', confid);
+    if (sender !== 'all') qs.set('sender_org_id', sender);
+    if (year !== 'all') {
+      qs.set('date_from', `${year}-01-01`);
+      qs.set('date_to', `${year}-12-31`);
+    }
+    if (status !== 'all') qs.set('status', status);
+    if (q) qs.set('q', q);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    window.open(`/api/incoming/export.xlsx${suffix}`, '_blank');
+  }
+
   return (
     <>
       <PageHeader
@@ -382,9 +397,14 @@ function CongVanDenPage() {
         title="Sổ công văn đến"
         subhead={`Sổ chung 2 đơn vị · ${total} công văn`}
         actions={
-          <button className="btn-primary" type="button" onClick={() => navigate({ to: '/cong-van-den/vao-so' })}>
-            <Plus size={14} /> Vào sổ mới
-          </button>
+          <>
+            <button className="btn-secondary" type="button" onClick={exportExcel}>
+              <Download size={14} /> Xuất Excel
+            </button>
+            <button className="btn-primary" type="button" onClick={() => navigate({ to: '/cong-van-den/vao-so' })}>
+              <Plus size={14} /> Vào sổ mới
+            </button>
+          </>
         }
         filters={
           <>

@@ -69,6 +69,20 @@ def test_excel_safe(raw: object, expected: object) -> None:
     assert report._excel_safe(raw) == expected
 
 
+def test_outgoing_list_xlsx_headers() -> None:
+    ws = _open(report.build_outgoing_list_xlsx(FakeDB()))  # type: ignore[arg-type]
+    assert "CÔNG VĂN ĐI" in ws.cell(row=1, column=1).value
+    headers = [ws.cell(row=3, column=c).value for c in range(1, len(report._COLS_OUT_LIST) + 1)]
+    assert headers == [label for _k, label, _w in report._COLS_OUT_LIST]
+
+
+def test_incoming_list_xlsx_headers() -> None:
+    ws = _open(report.build_incoming_list_xlsx(FakeDB(), include_manager_only=True))  # type: ignore[arg-type]
+    assert "CÔNG VĂN ĐẾN" in ws.cell(row=1, column=1).value
+    headers = [ws.cell(row=3, column=c).value for c in range(1, len(report._COLS_IN_LIST) + 1)]
+    assert headers == [label for _k, label, _w in report._COLS_IN_LIST]
+
+
 def test_dashboard_stats_empty() -> None:
     s = report.dashboard_stats(FakeDB(), year=2026, today=date(2026, 6, 28))  # type: ignore[arg-type]
     assert s["year"] == 2026
