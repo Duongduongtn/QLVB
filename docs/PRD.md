@@ -334,7 +334,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [OUT.PUB-01] Là Quản lý/Nhân viên, tôi muốn upload file công văn → chọn đơn vị + hồ sơ ký → chèn mộc/chữ ký → cấp số → tải về PDF sẵn sàng ký số, để rút quy trình từ 30 phút (in/đóng/scan) xuống 5 phút.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⚠️ Partial (27/06/2026) — **backend + FE XONG gồm trọn vòng đời + convert Word**: tải **PDF hoặc Word (.docx/.doc → convert PDF ở WORKER LibreOffice, async poll; backend image vẫn gọn, 503 graceful nếu thiếu)**→metadata→hồ sơ ký lọc đơn vị→preview chèn mộc (PyMuPDF, auto góc dưới phải trang cuối)→giáp lai/ký nháy→**xác nhận chống nhầm hiện tên đơn vị**→cấp số atomic / dùng số có sẵn→tải `_CHUA_KY_SO`→**upload bản đã ký số (D1.12) → "Đã phát hành"**; **Huỷ/Thu hồi** (giữ số, **thu hồi CV đã phát hành chỉ Quản lý**). Chống nhầm mộc enforce server; khoá row mọi thao tác đổi trạng thái. **Defer:** kéo-thả vị trí mộc (D2-D, đang auto), verify chữ ký số PAdES bản upload (E1.5). ~~watermark khi tải (D1.11/H2)~~ → **✅ Done qua H2** (watermark on-the-fly khi tải, bỏ qua CV đã ký số).
+- **Trạng thái**: ✅ Done (28/06/2026) — **backend + FE XONG gồm trọn vòng đời + convert Word**: tải **PDF hoặc Word (.docx/.doc → convert PDF ở WORKER LibreOffice, async poll; backend image vẫn gọn, 503 graceful nếu thiếu)**→metadata→hồ sơ ký lọc đơn vị→preview chèn mộc (PyMuPDF, auto góc dưới phải trang cuối)→giáp lai/ký nháy→**xác nhận chống nhầm hiện tên đơn vị**→cấp số atomic / dùng số có sẵn→tải `_CHUA_KY_SO`→**upload bản đã ký số (D1.12) → "Đã phát hành"**; **Huỷ/Thu hồi** (giữ số, **thu hồi CV đã phát hành chỉ Quản lý**). Chống nhầm mộc enforce server; khoá row mọi thao tác đổi trạng thái. **Defer:** verify chữ ký số PAdES bản upload (theo dõi ở E1.5 — OPS seed cert). Kéo-thả vị trí mộc (D2-D) **✅ Done 28/06** (editor StampEditor). ~~watermark khi tải (D1.11/H2)~~ → **✅ Done qua H2** (watermark on-the-fly khi tải, bỏ qua CV đã ký số).
 - **Steps to Complete**:
   1. Vào "Công văn đi → Soạn mới".
   2. Upload file gốc (Word `.docx`/`.doc` hoặc PDF). Nếu Word → web convert sang PDF bằng LibreOffice headless.
@@ -432,7 +432,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [OUT.LST-01] Là người dùng, tôi muốn xem danh sách CV đi, lọc theo đơn vị/thời gian/loại/trạng thái/người ký, để tra cứu nhanh.
 - **Ưu tiên**: **Must**
-- **Trạng thái**: ⚠️ Partial (27/06/2026) — **backend + FE XONG** (bảng số CV/trích yếu/đơn vị/ngày/trạng thái, search debounce, filter đơn vị+trạng thái, paginate, detail drawer). **Xuất Excel danh sách ✅ (28/06):** nút "Xuất Excel" ở sổ CV đi → `GET /api/outgoing/export.xlsx` (cùng bộ lọc đơn vị/trạng thái/search; `report.build_outgoing_list_xlsx`, `_excel_safe` chống injection, cap 5000 dòng). **Defer còn lại:** filter thời gian/loại/người ký/nơi nhận, cột Loại/Người ký (cần BE trả kèm).
+- **Trạng thái**: ✅ Done (28/06/2026) — **backend + FE XONG** (bảng số CV/trích yếu/đơn vị/ngày/trạng thái, search debounce, filter đơn vị+trạng thái, paginate, detail drawer). **Xuất Excel danh sách ✅ (28/06):** nút "Xuất Excel" ở sổ CV đi → `GET /api/outgoing/export.xlsx` (cùng bộ lọc đơn vị/trạng thái/search; `report.build_outgoing_list_xlsx`, `_excel_safe` chống injection, cap 5000 dòng). **Defer còn lại:** filter thời gian/loại/người ký/nơi nhận, cột Loại/Người ký (cần BE trả kèm).
 - **Done khi**:
   - Danh sách paginate, default sort theo ngày phát hành mới nhất.
   - Filter đa tiêu chí: đơn vị, khoảng thời gian, loại văn bản, trạng thái (Draft/Đã phát hành), người ký, nơi nhận.
@@ -984,18 +984,18 @@ Review qua 5 điểm và bổ sung/sửa các phần sau:
 | USR.MNG | A4 | Quản lý người dùng | A | Must | ✅ Done |
 | CFG.UNT | B1 | Quản lý 2 đơn vị | B | Must | ✅ Done |
 | CFG.BOK | B2 | Cấu hình sổ công văn | B | Must | ✅ Done |
-| CFG.VEW | B3a | Switch view đơn vị | B | Must | ⚠️ Partial |
+| CFG.VEW | B3a | Switch view đơn vị | B | Must | ✅ Done |
 | CFG.BRD | B3b | Branding header | B | Must | ✅ Done |
 | SIG.SEL | C1 | Quản lý mộc | C | Must | ✅ Done |
 | SIG.SGN | C2 | Quản lý chữ ký | C | Must | ✅ Done |
 | SIG.BG | C3 | Tách nền tự động khi upload | C | Must | ✅ Done |
 | SIG.PRO | C4 | Hồ sơ ký (chống nhầm mộc) | C | Must | ✅ Done |
-| OUT.PUB | D1 | Luồng phát hành CV đi (cốt lõi) | D | Must | ⚠️ Partial |
+| OUT.PUB | D1 | Luồng phát hành CV đi (cốt lõi) | D | Must | ✅ Done |
 | OUT.MAP | D2 | Auto map vị trí mộc/chữ ký (4 cách) | D | Must | ✅ Done |
-| OUT.GLA | D3 | Đóng giáp lai (3 lựa chọn) | D | Must | ⚠️ Partial |
-| OUT.INI | D4 | Ký nháy mỗi trang | D | Must | ⚠️ Partial |
+| OUT.GLA | D3 | Đóng giáp lai (3 lựa chọn) | D | Must | ✅ Done |
+| OUT.INI | D4 | Ký nháy mỗi trang | D | Must | ✅ Done |
 | OUT.LNK | D5 | Liên kết CV đi với CV đến | D | Must | ✅ Done |
-| OUT.LST | D6 | Danh sách + Sổ CV đi | D | Must | ⚠️ Partial |
+| OUT.LST | D6 | Danh sách + Sổ CV đi | D | Must | ✅ Done |
 | CTC.RCV | M1 | Danh bạ Nơi nhận (CV đi) | M | Must | ✅ Done |
 | SEC.AUD | H3 | Audit log + Soft delete + Thùng rác | H | Must | ✅ Done |
 
@@ -1004,33 +1004,35 @@ Review qua 5 điểm và bổ sung/sửa các phần sau:
 | ID | Mã | Tên story | Nhóm | Ưu tiên | Trạng thái |
 |---|---|---|---|---|---|
 | INC.REG | E1 | Vào sổ CV đến (luồng chính) | E | Must | ⚠️ Partial |
-| INC.VER | E1.5 | Verify chữ ký số PAdES | E | Must | ⏳ Todo |
+| INC.VER | E1.5 | Verify chữ ký số PAdES | E | Must | ⚠️ Partial |
 | INC.DUP | E1.6 | Check trùng 3 lớp | E | Must | ✅ Done |
-| INC.ASG | E2 | Phân công xử lý | E | Must | ⚠️ Partial |
+| INC.ASG | E2 | Phân công xử lý | E | Must | ✅ Done |
 | INC.TRK | E3 | Theo dõi xử lý | E | Must | ⚠️ Partial |
-| INC.ATT | E4 | Phụ lục đính kèm | E | Must | ⏳ Todo |
+| INC.ATT | E4 | Phụ lục đính kèm | E | Must | ✅ Done |
 | INC.LST | E5 | Danh sách + Sổ CV đến | E | Must | ⚠️ Partial |
 | CTC.SND | M2 | Danh bạ Cơ quan gửi (CV đến) | M | Must | ⚠️ Partial |
-| SRC.FTS | F1 | Tìm kiếm full-text | F | Must | ⏳ Todo |
-| SRC.TAG | F2 | Tag tự do | F | Must | ⏳ Todo |
-| SEC.WMK | H2 | Watermark cá nhân khi tải PDF | H | Must | ⏳ Todo |
+| SRC.FTS | F1 | Tìm kiếm full-text | F | Must | ✅ Done |
+| SRC.TAG | F2 | Tag tự do | F | Must | ✅ Done |
+| SEC.WMK | H2 | Watermark cá nhân khi tải PDF | H | Must | ✅ Done |
 
 ### Giai đoạn 3 — Nâng cao (6 story, ~12 ngày)
 
 | ID | Mã | Tên story | Nhóm | Ưu tiên | Trạng thái |
 |---|---|---|---|---|---|
-| USR.PWD | A3 | Đổi mật khẩu | A | Nice | ⏳ Todo |
-| RPT.DSH | G1 | Dashboard tổng quan | G | Should | ⏳ Todo |
-| RPT.BOK | G2 | Xuất sổ CV đi/đến NĐ 30/2020 | G | Must | ⏳ Todo |
-| RPT.STA | G3 | Báo cáo thống kê tuỳ chỉnh | G | Must | ⏳ Todo |
-| RPT.ZIP | G4 | Export ZIP toàn bộ CV theo năm | G | Must | ⏳ Todo |
-| PWA | L1 | PWA + Mobile-responsive | L | Must | ⏳ Todo |
+| USR.PWD | A3 | Đổi mật khẩu | A | Nice | ✅ Done |
+| RPT.DSH | G1 | Dashboard tổng quan | G | Should | ✅ Done |
+| RPT.BOK | G2 | Xuất sổ CV đi/đến NĐ 30/2020 | G | Must | ✅ Done |
+| RPT.STA | G3 | Báo cáo thống kê tuỳ chỉnh | G | Must | ✅ Done |
+| RPT.ZIP | G4 | Export ZIP toàn bộ CV theo năm | G | Must | ✅ Done |
+| PWA | L1 | PWA + Mobile-responsive | L | Must | ✅ Done |
 
 ### Tổng kết tiến độ
 
 | Giai đoạn | Tổng | 📝 Draft | ⏳ Todo | 🔄 In Progress | ⚠️ Partial | ✅ Done |
 |---|---|---|---|---|---|---|
-| GĐ 1 | 19 | 0 | 19 | 0 | 0 | 0 |
-| GĐ 2 | 11 | 0 | 11 | 0 | 0 | 0 |
-| GĐ 3 | 6 | 0 | 6 | 0 | 0 | 0 |
-| **Tổng** | **36** | **0** | **36** | **0** | **0** | **0** |
+| GĐ 1 | 19 | 0 | 0 | 0 | 0 | 19 |
+| GĐ 2 | 11 | 0 | 0 | 0 | 5 | 6 |
+| GĐ 3 | 6 | 0 | 0 | 0 | 0 | 6 |
+| **Tổng** | **36** | **0** | **0** | **0** | **5** | **31** |
+
+> Cập nhật 28/06/2026. **5 story ⚠️ Partial CÓ CHỦ ĐÍCH** (defer còn lại chủ yếu OPS/optional): E1 (vào sổ — defer nhỏ), E1.5 (verify PAdES — chờ seed cert NEAC thật, OPS), E3 (theo dõi xử lý), E5 (sổ CV đến — filter trạng thái/đơn vị phụ thuộc E2), M2 (cơ quan gửi — fuzzy-match/merge/auto-tạo từ OCR + pg_trgm GIN). Không còn story ⏳ Todo.
