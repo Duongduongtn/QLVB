@@ -18,9 +18,9 @@ from app.core.database import get_db
 from app.core.deps import current_user
 from app.core.http import client_ip
 from app.models.user import User
-from app.schemas.auth import LoginRequest, UserOut
+from app.schemas.auth import ChangePasswordRequest, LoginRequest, UserOut
 from app.services.audit import log_action
-from app.services.auth import authenticate
+from app.services.auth import authenticate, change_password
 from app.services.session import destroy_session
 
 router = APIRouter()
@@ -75,6 +75,33 @@ def logout(
     db.commit()
     response = Response(status_code=204)
     # Khớp thuộc tính với cookie lúc set (login) để mọi trình duyệt xoá chắc chắn.
+    response.delete_cookie(
+        settings.session_cookie_name,
+        path="/",
+        httponly=True,
+        secure=settings.session_secure_cookie and settings.environment != "dev",
+        samesite="strict",
+    )
+    return response
+
+
+@router.put("/password", status_code=204)
+def update_password(
+    payload: ChangePasswordRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> Response:
+    """A3 — đổi mật khẩu. Thành công → kick mọi phiên + xoá cookie (bắt đăng nhập lại)."""
+    change_password(
+        db,
+        user,
+        current_password=payload.current_password,
+        new_password=payload.new_password,
+        ip=client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    response = Response(status_code=204)
     response.delete_cookie(
         settings.session_cookie_name,
         path="/",

@@ -173,7 +173,7 @@ _Đã bỏ_: I (Email + Zalo OA), J (Sao y bản chính), K (Import sổ cũ Exc
 
 - **User Story**: [USR.PWD-01] Là người dùng, tôi muốn tự đổi mật khẩu, để bảo mật tài khoản cá nhân.
 - **Ưu tiên**: **Nice** _(giai đoạn 1 chưa cần; tạm thời Quản lý reset pass cho user qua màn hình Quản lý người dùng)_
-- **Trạng thái**: ⏳ Todo
+- **Trạng thái**: ✅ Done (28/06/2026) — `services/auth.change_password` (verify mật khẩu hiện tại qua bcrypt constant-time; chặn trùng mật khẩu cũ `PASSWORD_UNCHANGED`; set hash mới; audit `password_changed`; **kick MỌI phiên sau commit** → bắt đăng nhập lại mọi thiết bị). Schema `ChangePasswordRequest` tái dùng `_check_password` (≥8, chữ+số → 422 kèm lý do). Router `PUT /api/auth/password` (current_user) + `delete_cookie` khớp thuộc tính. FE: bật nút "Đổi mật khẩu" trong menu tài khoản → `ChangePasswordModal` (current/new/confirm, validate client + khớp confirm, 204 → `onLogout` dọn client + về login). 3 unit test. 1 review-code PASS không blocker (defer GĐ sau: rate-limit dò current_password + kick best-effort khi Redis lỗi). **Bỏ nút "Sắp có".**
 - **Done khi**: nhập pass hiện tại + pass mới (2 lần) → pass mới hợp lệ (≥ 8 ký tự, có cả chữ + số), khác pass cũ → đổi xong và bị bắt đăng nhập lại.
 - **Edge cases**: pass mới giống pass cũ → từ chối. Pass yếu → từ chối kèm lý do cụ thể.
 

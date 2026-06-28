@@ -34,6 +34,7 @@ import { useBranding } from '~/lib/branding';
 import { useAuth, type Role } from '~/stores/auth';
 import { useUnitView, type UnitView } from '~/stores/unitView';
 import { NotificationBell } from '~/components/NotificationBell';
+import { Modal } from '~/components/Modal';
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -165,6 +166,7 @@ function AppShell({
   const { data: branding } = useBranding();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   // Đóng sidebar mobile + menu tài khoản khi đổi route
@@ -279,9 +281,8 @@ function AppShell({
                   <button
                     type="button"
                     className="nav-item w-full"
-                    style={{ borderLeft: 'none', opacity: 0.5, cursor: 'not-allowed' }}
-                    disabled
-                    title="Sắp có"
+                    style={{ borderLeft: 'none' }}
+                    onClick={() => { setUserOpen(false); setPwOpen(true); }}
                     role="menuitem"
                   >
                     <KeyRound className="nav-icon" size={16} /> Đổi mật khẩu
@@ -369,7 +370,92 @@ function AppShell({
           </div>
         </main>
       </div>
+
+      <ChangePasswordModal open={pwOpen} onClose={() => setPwOpen(false)} onSuccess={onLogout} />
     </div>
+  );
+}
+
+function ChangePasswordModal({
+  open,
+  onClose,
+  onSuccess,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [cur, setCur] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  function reset() {
+    setCur(''); setNext(''); setConfirm(''); setErr(null); setBusy(false);
+  }
+
+  async function submit() {
+    setErr(null);
+    if (next.length < 8 || !/[A-Za-z]/.test(next) || !/\d/.test(next)) {
+      setErr('Mật khẩu mới phải từ 8 ký tự và gồm cả chữ lẫn số.');
+      return;
+    }
+    if (next !== confirm) {
+      setErr('Xác nhận mật khẩu mới không khớp.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch('/api/auth/password', {
+        method: 'PUT',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ current_password: cur, new_password: next }),
+      });
+      if (res.status === 204) {
+        reset();
+        onSuccess(); // phiên đã bị kick + cookie xoá → dọn client + về trang đăng nhập
+        return;
+      }
+      const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+      setErr(body?.error?.message ?? 'Đổi mật khẩu thất bại.');
+    } catch {
+      setErr('Lỗi kết nối, thử lại sau.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={() => { reset(); onClose(); }}
+      title="Đổi mật khẩu"
+      actions={
+        <>
+          <button className="btn-secondary" type="button" onClick={() => { reset(); onClose(); }}>Huỷ</button>
+          <button className="btn-primary" type="button" disabled={busy || !cur || !next} onClick={submit}>
+            {busy ? 'Đang đổi…' : 'Đổi mật khẩu'}
+          </button>
+        </>
+      }
+    >
+      <div>
+        <label className="field-label" htmlFor="pw-cur">Mật khẩu hiện tại</label>
+        <input id="pw-cur" type="password" className="text-input" autoComplete="current-password" value={cur} onChange={(e) => setCur(e.target.value)} />
+      </div>
+      <div>
+        <label className="field-label" htmlFor="pw-new">Mật khẩu mới</label>
+        <input id="pw-new" type="password" className="text-input" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} />
+      </div>
+      <div>
+        <label className="field-label" htmlFor="pw-confirm">Nhập lại mật khẩu mới</label>
+        <input id="pw-confirm" type="password" className="text-input" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+      </div>
+      <p className="cell-meta">Tối thiểu 8 ký tự, gồm cả chữ và số. Đổi xong sẽ phải đăng nhập lại.</p>
+      {err && <p className="cell-meta" style={{ color: 'var(--danger)' }}>{err}</p>}
+    </Modal>
   );
 }
 

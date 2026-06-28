@@ -21,7 +21,7 @@ from app.core.errors import AppError
 from app.core.security import hash_password, verify_password
 from app.models.user import User
 from app.services.audit import log_action
-from app.services.session import clear_failures, create_session, register_failure
+from app.services.session import clear_failures, create_session, kick_sessions, register_failure
 
 _GENERIC_ERROR = "Sai username hoặc mật khẩu"
 
@@ -125,3 +125,40 @@ def authenticate(
     )
     db.commit()
     return user, sid, ttl
+
+
+def change_password(
+    db: Session,
+    user: User,
+    *,
+    current_password: str,
+    new_password: str,
+    ip: str | None,
+    user_agent: str | None,
+) -> None:
+    """A3 — đổi mật khẩu cho chính user. Verify mật khẩu hiện tại, chặn trùng mật khẩu cũ,
+    rồi KICK MỌI phiên (bắt đăng nhập lại — PRD A3 "Done khi"). Raise AppError ở nhánh lỗi.
+    """
+    if not verify_password(current_password, user.password_hash):
+        raise AppError(
+            "Mật khẩu hiện tại không đúng", code="INVALID_CREDENTIALS", http_status=400
+        )
+    if verify_password(new_password, user.password_hash):
+        raise AppError(
+            "Mật khẩu mới phải khác mật khẩu hiện tại",
+            code="PASSWORD_UNCHANGED",
+            http_status=400,
+        )
+    user.password_hash = hash_password(new_password)
+    log_action(
+        db,
+        action="password_changed",
+        user_id=user.id,
+        object_type="user",
+        object_id=user.id,
+        ip=ip,
+        user_agent=user_agent,
+    )
+    db.commit()
+    # Sau commit: đẩy mọi phiên (kể cả phiên hiện tại) → buộc đăng nhập lại bằng mật khẩu mới.
+    kick_sessions(user.id)
