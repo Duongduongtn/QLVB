@@ -11,7 +11,9 @@ from sqlalchemy.orm import Session
 
 from app.models.document_type import DocumentType
 from app.models.incoming_document import IncomingDocument
+from app.models.organization import Organization
 from app.models.outgoing_document import OutgoingDocument
+from app.models.processing_task import ProcessingTask
 from app.models.unit import Unit
 from app.services import report
 
@@ -69,6 +71,71 @@ def test_dashboard_stats_counts(db_session: Session) -> None:
     assert s["kpi"]["di_year"] >= 1
     assert s["kpi"]["den_year"] >= 1
     assert s["kpi"]["di_month"] >= 1  # tháng 6
+
+
+def test_dashboard_g1_metrics(db_session: Session) -> None:
+    unit = _gdnn(db_session)
+    dt = _doctype(db_session, unit.id)
+    db_session.add(OutgoingDocument(
+        unit_id=unit.id, doc_type_id=dt.id, number="003/2026/CV", number_int=3,
+        subject="CV pie loại VB", issue_date=date(2026, 6, 10), status="published",
+    ))
+    org = Organization(full_name="Sở Lao động Thương binh Xã hội", is_sender=True)
+    db_session.add(org)
+    db_session.flush()
+    inc = IncomingDocument(
+        number="0002", number_int=2, subject="CV đến có việc xử lý",
+        status="registered", sender_org_id=org.id,
+    )
+    db_session.add(inc)
+    db_session.flush()
+    # 1 việc đang mở + quá hạn (deadline trước "hôm nay").
+    db_session.add(ProcessingTask(
+        incoming_id=inc.id, unit_id=unit.id, status="in_progress", deadline=date(2026, 6, 1),
+    ))
+    db_session.flush()
+
+    today = date(2026, 6, 28)
+    s = report.dashboard_stats(db_session, year=2026, today=today)
+    assert s["kpi"]["chua_xu_ly"] >= 1
+    assert s["kpi"]["qua_han"] >= 1  # deadline 01/06 < 28/06
+    assert any("Lao động" in t["name"] for t in s["top_senders"])
+    assert any(t["name"] == "Công văn" and t["count"] >= 1 for t in s["by_type"])
+
+    # Toggle đơn vị: lọc CV đi + việc theo đơn vị GDNN → vẫn thấy; đơn vị khác (id giả) → 0 việc.
+    s_other = report.dashboard_stats(db_session, year=2026, today=today, unit_id=10_000_000)
+    assert s_other["kpi"]["chua_xu_ly"] == 0
+    assert s_other["kpi"]["di_year"] == 0
+
+
+def test_dashboard_unprocessed_edge_cases(db_session: Session) -> None:
+    today = date(2026, 6, 28)
+    base = report.dashboard_stats(db_session, year=2026, today=today)["kpi"]
+
+    # (1) CV registered CHƯA giao task nào → tính 'chưa xử lý' (view toàn bộ), KHÔNG quá hạn.
+    inc_unassigned = IncomingDocument(number="0101", number_int=101, subject="Chưa giao", status="registered")
+    db_session.add(inc_unassigned)
+    # (2) CV có task DONE → KHÔNG tính chưa xử lý.
+    inc_done = IncomingDocument(number="0102", number_int=102, subject="Đã xong", status="registered")
+    db_session.add(inc_done)
+    # (3) CV có task mở nhưng KHÔNG deadline → chưa xử lý nhưng KHÔNG quá hạn.
+    inc_nodl = IncomingDocument(number="0103", number_int=103, subject="Không hạn", status="registered")
+    db_session.add(inc_nodl)
+    # (4) CV đã HUỶ vào sổ với task mở → KHÔNG tính (loại nháp + huỷ qua status='registered').
+    inc_cancel = IncomingDocument(number="0104", number_int=104, subject="Đã huỷ", status="cancelled")
+    db_session.add(inc_cancel)
+    unit = _gdnn(db_session)
+    db_session.flush()
+    db_session.add(ProcessingTask(incoming_id=inc_done.id, unit_id=unit.id, status="done", deadline=date(2026, 6, 1)))
+    db_session.add(ProcessingTask(incoming_id=inc_nodl.id, unit_id=unit.id, status="new", deadline=None))
+    db_session.add(ProcessingTask(incoming_id=inc_cancel.id, unit_id=unit.id, status="new", deadline=date(2026, 6, 1)))
+    db_session.flush()
+
+    k = report.dashboard_stats(db_session, year=2026, today=today)["kpi"]
+    # +2 chưa xử lý: inc_unassigned (chưa giao) + inc_nodl (việc mở). inc_done & inc_cancel KHÔNG.
+    assert k["chua_xu_ly"] == base["chua_xu_ly"] + 2
+    # quá hạn KHÔNG tăng: done không tính, nodl không deadline, cancel bị loại khỏi base.
+    assert k["qua_han"] == base["qua_han"]
 
 
 def test_incoming_register_arrival_number_is_real(db_session: Session) -> None:

@@ -42,10 +42,13 @@ def _vn_today() -> date:
 @router.get("/stats", response_model=DashboardStats)
 def stats(
     year: int = Query(..., ge=2000, le=2100),
+    unit_id: int | None = Query(None, ge=1),
     db: Session = Depends(get_db),
     _: User = Depends(require_manager),
 ) -> DashboardStats:
-    data = report_service.dashboard_stats(db, year=year, today=datetime.now(UTC).date())
+    # "Hôm nay" theo giờ VN (UTC+7) để tính quá hạn không lệch biên ngày.
+    today = (datetime.now(UTC) + timedelta(hours=7)).date()
+    data = report_service.dashboard_stats(db, year=year, today=today, unit_id=unit_id)
     return DashboardStats(**data)
 
 

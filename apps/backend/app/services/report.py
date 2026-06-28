@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.errors import ValidationFailed
@@ -17,6 +17,7 @@ from app.models.document_type import DocumentType
 from app.models.incoming_document import IncomingDocument
 from app.models.organization import Organization
 from app.models.outgoing_document import OutgoingDocument, OutgoingRecipient
+from app.models.processing_task import ProcessingTask
 from app.models.signature import Signature
 from app.models.signing_profile import SigningProfile
 from app.models.unit import Unit
@@ -250,8 +251,12 @@ def build_register_workbook_bytes(db: Session, *, year: int) -> bytes:
     return buf.getvalue()
 
 
-def dashboard_stats(db: Session, *, year: int, today: date) -> dict[str, Any]:
-    """KPI + 12 tháng CV đi/đến (đếm thật) cho trang Báo cáo. Trang manager-only → đếm cả mọi CV."""
+def dashboard_stats(
+    db: Session, *, year: int, today: date, unit_id: int | None = None
+) -> dict[str, Any]:
+    """Dashboard G1 (manager-only → đếm mọi CV). KPI + 12 tháng CV đi/đến + việc chưa xử lý/quá
+    hạn + top cơ quan gửi + cơ cấu loại VB đi. `unit_id` (toggle đơn vị) lọc CV ĐI + việc xử lý
+    theo đơn vị; CV ĐẾN dùng chung 2 đơn vị nên KHÔNG lọc (top cơ quan gửi luôn gồm cả 2)."""
     lo, hi = _year_range(year)
 
     def _monthly(date_col: Any, conds: list[Any]) -> dict[int, int]:
@@ -263,16 +268,87 @@ def dashboard_stats(db: Session, *, year: int, today: date) -> dict[str, Any]:
         ).all()
         return {int(r.m): int(r.c) for r in rows}
 
-    di_conds = [OutgoingDocument.deleted_at.is_(None), OutgoingDocument.number_int.is_not(None)]
+    di_conds: list[Any] = [
+        OutgoingDocument.deleted_at.is_(None),
+        OutgoingDocument.number_int.is_not(None),
+    ]
+    if unit_id is not None:
+        di_conds.append(OutgoingDocument.unit_id == unit_id)
+    # CV đến lưu created_at UTC → quy về giờ VN trước khi cắt năm/tháng (chống lệch biên ngày/
+    # tháng/năm sát giao thừa, nhất quán G3). CV đi dùng issue_date (Date) nên không cần.
+    inc_vn = func.timezone("Asia/Ho_Chi_Minh", IncomingDocument.created_at)
     den_conds = [IncomingDocument.deleted_at.is_(None), IncomingDocument.number_int.is_not(None)]
     di_by_month = _monthly(OutgoingDocument.issue_date, di_conds)
-    den_by_month = _monthly(IncomingDocument.created_at, den_conds)
+    den_by_month = _monthly(inc_vn, den_conds)
 
     months = [
         {"month": m, "di": di_by_month.get(m, 0), "den": den_by_month.get(m, 0)}
         for m in range(1, 13)
     ]
     cur_m = today.month if today.year == year else 0
+
+    # ── Việc xử lý chưa xong / quá hạn (E2/E3) — đếm theo CV ĐẾN đã vào sổ (registered, loại
+    #    nháp + huỷ), năm tiếp nhận theo giờ VN. "Chưa xử lý" = còn việc mở HOẶC chưa giao việc
+    #    nào (chỉ tính CV-chưa-giao khi xem TOÀN BỘ — CV chưa giao không thuộc đơn vị nào nên
+    #    view theo đơn vị chỉ đếm việc mở của đơn vị đó). "Quá hạn" = có việc mở đã quá deadline.
+    reg_conds = [
+        IncomingDocument.deleted_at.is_(None),
+        IncomingDocument.status == "registered",
+        inc_vn >= lo,
+        inc_vn < hi,
+    ]
+    task_unit = [ProcessingTask.unit_id == unit_id] if unit_id is not None else []
+
+    def _task_exists(*extra: Any) -> Any:
+        return (
+            select(1)
+            .select_from(ProcessingTask)
+            .where(ProcessingTask.incoming_id == IncomingDocument.id, *task_unit, *extra)
+            .exists()
+        )
+
+    open_exists = _task_exists(ProcessingTask.status != "done")
+    overdue_exists = _task_exists(
+        ProcessingTask.status != "done",
+        ProcessingTask.deadline.is_not(None),
+        ProcessingTask.deadline < today,
+    )
+    unprocessed = open_exists if unit_id is not None else or_(open_exists, ~_task_exists())
+    chua_xu_ly = (
+        db.scalar(select(func.count()).select_from(IncomingDocument).where(*reg_conds, unprocessed))
+        or 0
+    )
+    qua_han = (
+        db.scalar(
+            select(func.count()).select_from(IncomingDocument).where(*reg_conds, overdue_exists)
+        )
+        or 0
+    )
+
+    # ── Top cơ quan gửi (CV đến đã vào sổ) — luôn gồm cả 2 đơn vị (sổ đến dùng chung) ──
+    sender_rows = db.execute(
+        select(Organization.full_name, func.count().label("c"))
+        .select_from(IncomingDocument)
+        .outerjoin(Organization, Organization.id == IncomingDocument.sender_org_id)
+        .where(*reg_conds)
+        .group_by(Organization.full_name)
+        .order_by(func.count().desc())
+        .limit(7)
+    ).all()
+    top_senders = [{"name": r[0] or _NO_ORG, "count": int(r[1])} for r in sender_rows]
+
+    # ── Cơ cấu loại văn bản (CV đi đã cấp số) — pie (top 7 để khớp bảng màu lát) ──
+    type_rows = db.execute(
+        select(DocumentType.name, func.count().label("c"))
+        .select_from(OutgoingDocument)
+        .join(DocumentType, DocumentType.id == OutgoingDocument.doc_type_id)
+        .where(*di_conds, OutgoingDocument.issue_date >= lo, OutgoingDocument.issue_date < hi)
+        .group_by(DocumentType.name)
+        .order_by(func.count().desc())
+        .limit(7)
+    ).all()
+    by_type = [{"name": r[0] or _NO_TYPE, "count": int(r[1])} for r in type_rows]
+
     return {
         "year": year,
         "kpi": {
@@ -280,8 +356,12 @@ def dashboard_stats(db: Session, *, year: int, today: date) -> dict[str, Any]:
             "den_year": sum(den_by_month.values()),
             "di_month": di_by_month.get(cur_m, 0),
             "den_month": den_by_month.get(cur_m, 0),
+            "chua_xu_ly": int(chua_xu_ly),
+            "qua_han": int(qua_han),
         },
         "months": months,
+        "top_senders": top_senders,
+        "by_type": by_type,
     }
 
 

@@ -72,9 +72,13 @@ def test_excel_safe(raw: object, expected: object) -> None:
 def test_dashboard_stats_empty() -> None:
     s = report.dashboard_stats(FakeDB(), year=2026, today=date(2026, 6, 28))  # type: ignore[arg-type]
     assert s["year"] == 2026
-    assert s["kpi"] == {"di_year": 0, "den_year": 0, "di_month": 0, "den_month": 0}
+    assert s["kpi"] == {
+        "di_year": 0, "den_year": 0, "di_month": 0, "den_month": 0,
+        "chua_xu_ly": 0, "qua_han": 0,
+    }
     assert len(s["months"]) == 12
     assert s["months"][0] == {"month": 1, "di": 0, "den": 0}
+    assert s["top_senders"] == [] and s["by_type"] == []
 
 
 # --------------------------------------------------------------------------- #

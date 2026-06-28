@@ -5,6 +5,7 @@ import { Archive, Download, FileSpreadsheet, SlidersHorizontal } from 'lucide-re
 
 import { api } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
+import { useUnitView } from '~/stores/unitView';
 import { fmtInt, fmtNum } from '~/lib/format';
 import { FilterMenu, PageHeader } from '~/components/ui';
 import { Modal } from '~/components/Modal';
@@ -32,11 +33,35 @@ export const Route = createFileRoute('/bao-cao')({
   component: BaoCaoPage,
 });
 
+interface NameCount {
+  name: string;
+  count: number;
+}
 interface Stats {
   year: number;
-  kpi: { di_year: number; den_year: number; di_month: number; den_month: number };
+  kpi: {
+    di_year: number;
+    den_year: number;
+    di_month: number;
+    den_month: number;
+    chua_xu_ly: number;
+    qua_han: number;
+  };
   months: { month: number; di: number; den: number }[];
+  top_senders: NameCount[];
+  by_type: NameCount[];
 }
+
+// Bảng màu lát bánh (chỉ token design-system, KHÔNG raw Tailwind).
+const SLICE_COLORS = [
+  'var(--kinpaku-rich)',
+  'var(--unit-gdnn)',
+  'var(--unit-dvdl)',
+  'var(--info)',
+  'var(--success)',
+  'var(--warning)',
+  'var(--kinpaku-deep)',
+];
 
 const YEARS = (() => {
   const y = new Date().getFullYear();
@@ -49,9 +74,69 @@ const BOOKS = [
   { value: 'den', label: 'Sổ đến (chung 2 đơn vị)' },
 ];
 
+/** Donut cơ cấu loại VB (conic-gradient bằng token design-system) + chú thích. */
+function Donut({ data }: { data: NameCount[] }) {
+  const total = data.reduce((s, d) => s + d.count, 0);
+  if (total === 0) return <p className="cell-meta">Chưa có dữ liệu.</p>;
+  let acc = 0;
+  const stops = data
+    .map((d, i) => {
+      const start = (acc / total) * 360;
+      acc += d.count;
+      return `${SLICE_COLORS[i % SLICE_COLORS.length]} ${start}deg ${(acc / total) * 360}deg`;
+    })
+    .join(', ');
+  return (
+    <div className="flex items-center" style={{ gap: 20, flexWrap: 'wrap' }}>
+      <div
+        style={{ width: 140, height: 140, borderRadius: '50%', background: `conic-gradient(${stops})`, flexShrink: 0, position: 'relative' }}
+        role="img"
+        aria-label="Biểu đồ cơ cấu loại văn bản"
+      >
+        <div style={{ position: 'absolute', inset: 28, borderRadius: '50%', background: 'var(--paper-raised)' }} />
+      </div>
+      <ul className="flex flex-col" style={{ gap: 6, margin: 0, padding: 0, listStyle: 'none', minWidth: 0, flex: 1 }}>
+        {data.map((d, i) => (
+          <li key={d.name} className="flex items-center" style={{ gap: 8, fontSize: '0.82rem' }}>
+            <span style={{ width: 10, height: 10, borderRadius: 2, background: SLICE_COLORS[i % SLICE_COLORS.length], flexShrink: 0 }} />
+            <span style={{ color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
+            <span className="cell-meta" style={{ marginLeft: 'auto', flexShrink: 0 }}>
+              {fmtInt(d.count)} · {Math.round((d.count / total) * 100)}%
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Top cơ quan gửi — thanh ngang tỉ lệ. */
+function SenderBars({ data }: { data: NameCount[] }) {
+  if (data.length === 0) return <p className="cell-meta">Chưa có dữ liệu.</p>;
+  const max = Math.max(1, ...data.map((d) => d.count));
+  return (
+    <ul className="flex flex-col" style={{ gap: 10, margin: 0, padding: 0, listStyle: 'none' }}>
+      {data.map((d) => (
+        <li key={d.name} className="flex flex-col" style={{ gap: 4 }}>
+          <div className="flex items-center justify-between" style={{ gap: 8, fontSize: '0.82rem' }}>
+            <span style={{ color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
+            <span className="cell-meta" style={{ flexShrink: 0 }}>{fmtInt(d.count)}</span>
+          </div>
+          <div style={{ height: 6, borderRadius: 3, background: 'var(--rule)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${(d.count / max) * 100}%`, background: 'var(--kinpaku-rich)' }} />
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function BaoCaoPage() {
   const me = useAuth((s) => s.user);
   const navigate = useNavigate();
+  // Toggle đơn vị tái dùng switcher toàn cục ở header (B3a). 'all' → không lọc; số → unit_id.
+  const unitView = useUnitView((s) => s.view);
+  const unitId = typeof unitView === 'number' ? unitView : undefined;
   const [year, setYear] = useState(String(YEARS[0]));
   const [modalOpen, setModalOpen] = useState(false);
   const [bookYear, setBookYear] = useState(String(YEARS[0]));
@@ -107,23 +192,29 @@ function BaoCaoPage() {
   }
 
   const statsQuery = useQuery({
-    queryKey: ['report-stats', year],
+    queryKey: ['report-stats', year, unitId ?? 'all'],
     enabled: !!me,
     queryFn: async () => {
-      const res = await api.GET('/api/reports/stats', { params: { query: { year: Number(year) } } });
+      const query: { year: number; unit_id?: number } = { year: Number(year) };
+      if (unitId !== undefined) query.unit_id = unitId;
+      const res = await api.GET('/api/reports/stats', { params: { query } });
       return res.data as Stats;
     },
   });
   const stats = statsQuery.data;
   const months = useMemo(() => stats?.months ?? [], [stats]);
   const maxBar = useMemo(() => Math.max(1, ...months.flatMap((m) => [m.di, m.den])), [months]);
+  const topSenders = useMemo(() => stats?.top_senders ?? [], [stats]);
+  const byType = useMemo(() => stats?.by_type ?? [], [stats]);
 
   const kpis = stats
     ? [
-        { label: 'CV đi năm nay', value: stats.kpi.di_year },
-        { label: 'CV đến năm nay', value: stats.kpi.den_year },
         { label: 'CV đi tháng này', value: stats.kpi.di_month },
         { label: 'CV đến tháng này', value: stats.kpi.den_month },
+        { label: 'CV đi năm nay', value: stats.kpi.di_year },
+        { label: 'CV đến năm nay', value: stats.kpi.den_year },
+        { label: 'CV chưa xử lý', value: stats.kpi.chua_xu_ly },
+        { label: 'CV quá hạn', value: stats.kpi.qua_han, danger: stats.kpi.qua_han > 0 },
       ]
     : [];
 
@@ -164,12 +255,17 @@ function BaoCaoPage() {
       />
 
       {/* KPI cards */}
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
-        {(kpis.length ? kpis : [0, 1, 2, 3].map(() => ({ label: '—', value: 0 }))).map((k, i) => (
+      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, marginBottom: 24 }}>
+        {(kpis.length ? kpis : Array.from({ length: 6 }, () => ({ label: '—', value: 0, danger: false }))).map((k, i) => (
           <div key={i} className="kpi-card">
             <span className="kpi-label">{k.label}</span>
             <div className="flex items-baseline" style={{ gap: 8 }}>
-              <span className="kpi-value">{statsQuery.isLoading ? '…' : fmtInt(k.value)}</span>
+              <span
+                className="kpi-value"
+                style={'danger' in k && k.danger ? { color: 'var(--danger)' } : undefined}
+              >
+                {statsQuery.isLoading ? '…' : fmtInt(k.value)}
+              </span>
             </div>
           </div>
         ))}
@@ -199,6 +295,18 @@ function BaoCaoPage() {
             </div>
           ))}
           {months.length === 0 && <div className="cell-meta" style={{ margin: 'auto' }}>Chưa có dữ liệu.</div>}
+        </div>
+      </div>
+
+      {/* Cơ cấu loại VB (pie) + Top cơ quan gửi */}
+      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16, marginTop: 24 }}>
+        <div className="card" style={{ padding: 24 }}>
+          <span className="section-title" style={{ display: 'block', marginBottom: 20 }}>Cơ cấu loại văn bản đi</span>
+          <Donut data={byType} />
+        </div>
+        <div className="card" style={{ padding: 24 }}>
+          <span className="section-title" style={{ display: 'block', marginBottom: 20 }}>Top cơ quan gửi (CV đến)</span>
+          <SenderBars data={topSenders} />
         </div>
       </div>
 
