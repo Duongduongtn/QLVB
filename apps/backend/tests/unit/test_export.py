@@ -59,6 +59,25 @@ def test_build_year_zip_structure(tmp_path: Path) -> None:
     assert stats["oversize"] is False
 
 
+def test_build_year_zip_includes_index_pdf(tmp_path: Path) -> None:
+    dest = tmp_path / "out.zip"
+    export.build_year_zip(
+        _items(), dest_path=dest, index_bytes=b"X", index_pdf=b"%PDF-1.4 fake",
+        read_file=lambda it: b"d",
+    )
+    with zipfile.ZipFile(dest) as zf:
+        names = zf.namelist()
+        assert "index.xlsx" in names
+        assert "index.pdf" in names
+
+
+def test_build_year_zip_no_index_pdf_when_none(tmp_path: Path) -> None:
+    dest = tmp_path / "out.zip"
+    export.build_year_zip(_items(), dest_path=dest, index_bytes=b"X", read_file=lambda it: b"d")
+    with zipfile.ZipFile(dest) as zf:
+        assert "index.pdf" not in zf.namelist()
+
+
 def test_build_year_zip_read_error_isolated(tmp_path: Path) -> None:
     # 1 file lỗi đọc → đếm errors, KHÔNG phá cả gói.
     def bad_read(it: ExportItem) -> bytes:

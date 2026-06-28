@@ -21,6 +21,7 @@ def export_year(self: Any, year: int, unit: str | None = None) -> dict[str, Any]
     """Gom CV năm `year` (lọc đơn vị CV đi qua `unit`) thành ZIP có cấu trúc thư mục."""
     from app.core.config import settings
     from app.core.database import SessionLocal
+    from app.core.logging import logger
     from app.core.storage import read_asset, read_encrypted_file
     from app.services import export as export_svc
     from app.services import report as report_svc
@@ -36,6 +37,16 @@ def export_year(self: Any, year: int, unit: str | None = None) -> dict[str, Any]
     with SessionLocal() as db:
         items = export_svc.gather_year_items(db, year=year, unit=unit)
         index_bytes = report_svc.build_register_workbook_bytes(db, year=year)
+
+    # index.pdf mẫu NĐ 30 (G4) — best-effort: worker có LibreOffice; lỗi/thiếu → bỏ qua,
+    # ZIP vẫn có index.xlsx (không phá cả gói).
+    index_pdf: bytes | None = None
+    try:
+        from app.services.convert import convert_xlsx_to_pdf
+
+        index_pdf = convert_xlsx_to_pdf(index_bytes)
+    except Exception:
+        logger.warning("export.index_pdf_failed", exc_info=True)
 
     total = len(items)
     self.update_state(state="PROGRESS", meta={"done": 0, "total": total})
@@ -53,7 +64,8 @@ def export_year(self: Any, year: int, unit: str | None = None) -> dict[str, Any]
         return read_asset(it.storage_key)
 
     stats = export_svc.build_year_zip(
-        items, dest_path=dest, index_bytes=index_bytes, read_file=_read, progress=_progress
+        items, dest_path=dest, index_bytes=index_bytes, index_pdf=index_pdf,
+        read_file=_read, progress=_progress,
     )
     return {"key": rel_key, "year": year, **stats}
 

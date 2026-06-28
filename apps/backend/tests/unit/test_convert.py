@@ -74,3 +74,24 @@ def test_convert_docx_to_pdf_real() -> None:
     pdf = convert.convert_word_to_pdf(_minimal_docx(), ext="docx")
     assert pdf[:4] == b"%PDF"
     assert len(pdf) > 1000
+
+
+@pytest.mark.slow
+def test_convert_xlsx_to_pdf_real() -> None:
+    """G4 — index.xlsx (sổ NĐ30) → index.pdf qua LibreOffice."""
+    if not _has_soffice():
+        pytest.skip("Cần LibreOffice (soffice) để convert")
+    from io import BytesIO
+
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    assert ws is not None
+    ws["A1"] = "SỔ ĐĂNG KÝ VĂN BẢN ĐI — NĂM 2026"
+    ws["A2"] = "001/2026/CV"
+    buf = BytesIO()
+    wb.save(buf)
+    pdf = convert.convert_xlsx_to_pdf(buf.getvalue())
+    assert pdf[:4] == b"%PDF"
+    assert len(pdf) > 1000

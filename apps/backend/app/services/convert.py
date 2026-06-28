@@ -58,7 +58,17 @@ def convert_word_to_pdf(data: bytes, *, ext: str, timeout: int = 90) -> bytes:
     safe_ext = ext.lower().lstrip(".")
     if safe_ext not in WORD_EXTS:
         raise AppError(f"Không hỗ trợ chuyển đổi định dạng .{safe_ext}", code="CONVERT_UNSUPPORTED")
+    return _soffice_to_pdf(data, ext=safe_ext, timeout=timeout)
 
+
+def convert_xlsx_to_pdf(data: bytes, *, timeout: int = 90) -> bytes:
+    """Convert Excel (.xlsx) sang PDF (bytes) — G4 index.pdf mẫu NĐ 30. Chạy ở worker."""
+    return _soffice_to_pdf(data, ext="xlsx", timeout=timeout)
+
+
+def _soffice_to_pdf(data: bytes, *, ext: str, timeout: int) -> bytes:
+    """Lõi chung: ghi bytes ra file tạm → soffice --convert-to pdf → đọc PDF. Raise AppError."""
+    safe_ext = ext.lower().lstrip(".")
     soffice = _soffice_bin()
     with tempfile.TemporaryDirectory(prefix="qlcv_conv_") as tmp:
         tmp_path = Path(tmp)

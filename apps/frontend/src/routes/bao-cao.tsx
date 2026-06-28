@@ -267,7 +267,7 @@ function BaoCaoPage() {
                 <option value="dvdl">Công ty CP DVDL</option>
               </select>
             </div>
-            <p className="cell-meta">ZIP gồm PDF + metadata.json từng CV theo thư mục năm, kèm index.xlsx (sổ NĐ 30). CV đến dùng chung 2 đơn vị nên luôn gồm.</p>
+            <p className="cell-meta">ZIP gồm PDF + metadata.json từng CV theo thư mục năm, kèm index.xlsx + index.pdf (sổ NĐ 30). CV đến dùng chung 2 đơn vị nên luôn gồm.</p>
             {zipError && <p className="cell-meta" style={{ color: 'var(--danger)' }}>{zipError}</p>}
           </>
         )}

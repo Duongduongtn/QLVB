@@ -245,6 +245,7 @@ def build_year_zip(
     dest_path: Path,
     index_bytes: bytes,
     read_file: Callable[[ExportItem], bytes],
+    index_pdf: bytes | None = None,
     progress: Callable[[int, int], None] | None = None,
     max_bytes: int = DEFAULT_MAX_BYTES,
 ) -> dict[str, Any]:
@@ -275,6 +276,8 @@ def build_year_zip(
             if progress is not None:
                 progress(i, total)
         zf.writestr("index.xlsx", index_bytes)
+        if index_pdf is not None:
+            zf.writestr("index.pdf", index_pdf)
 
     size = dest_path.stat().st_size
     return {
