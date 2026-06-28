@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell } from 'lucide-react';
+import { Bell, BellOff, BellRing } from 'lucide-react';
 
 import { api } from '~/lib/api';
 import { fmtDateTime } from '~/lib/format';
+import { disablePush, enablePush, getPushState, type PushState } from '~/lib/push';
 
 interface Notif {
   id: number;
@@ -20,6 +21,38 @@ export function NotificationBell() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [pushState, setPushState] = useState<PushState>('unsupported');
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushMsg, setPushMsg] = useState<string | null>(null);
+
+  // Nạp trạng thái push của thiết bị khi mở dropdown (SW đã sẵn sàng).
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    void getPushState().then((s) => {
+      if (alive) setPushState(s);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [open]);
+
+  async function togglePush() {
+    setPushBusy(true);
+    setPushMsg(null);
+    try {
+      if (pushState === 'subscribed') {
+        await disablePush();
+        setPushState('unsubscribed');
+      } else {
+        const res = await enablePush();
+        if (res.ok) setPushState('subscribed');
+        else setPushMsg(res.reason ?? 'Không bật được thông báo.');
+      }
+    } finally {
+      setPushBusy(false);
+    }
+  }
 
   const countQuery = useQuery({
     queryKey: ['notif', 'count'],
@@ -93,6 +126,35 @@ export function NotificationBell() {
                   <span className="cell-meta">{fmtDateTime(n.created_at)}</span>
                 </button>
               ))
+            )}
+            {/* Web Push (L1) — bật/tắt thông báo đẩy trên thiết bị này. Ẩn khi không hỗ trợ
+                (iOS<16.4 / trình duyệt cũ) → dùng chuông in-app làm fallback. */}
+            {pushState !== 'unsupported' && (
+              <div style={{ padding: '10px 14px', borderTop: '1px solid var(--rule)' }}>
+                {pushState === 'denied' ? (
+                  <span className="cell-meta" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <BellOff size={14} /> Thông báo bị chặn — bật lại trong cài đặt trình duyệt.
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-ghost w-full"
+                    style={{ justifyContent: 'flex-start', gap: 8, height: 32, fontSize: '0.82rem' }}
+                    disabled={pushBusy}
+                    onClick={togglePush}
+                  >
+                    {pushState === 'subscribed' ? <BellRing size={15} /> : <Bell size={15} />}
+                    {pushBusy
+                      ? 'Đang xử lý…'
+                      : pushState === 'subscribed'
+                        ? 'Tắt thông báo đẩy thiết bị này'
+                        : 'Bật thông báo đẩy thiết bị này'}
+                  </button>
+                )}
+                {pushMsg && (
+                  <p className="cell-meta" style={{ color: 'var(--danger)', marginTop: 4 }}>{pushMsg}</p>
+                )}
+              </div>
             )}
           </div>
         </>

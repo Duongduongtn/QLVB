@@ -22,6 +22,7 @@ celery = Celery(
     include=[
         "app.workers.convert",
         "app.workers.ocr",
+        "app.workers.push",
         "app.workers.rembg_task",
         "app.workers.sign_verify",
         "app.workers.zip_export",

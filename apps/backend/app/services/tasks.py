@@ -19,6 +19,7 @@ from app.models.processing_task import ProcessingTask
 from app.models.unit import Unit
 from app.models.user import User
 from app.services import notification
+from app.services import push as push_service
 from app.services.audit import log_action
 
 
@@ -298,6 +299,8 @@ def notify_deadlines(db: Session, *, today: date) -> int:
         else:
             msg = "Việc xử lý công văn đến sắp tới hạn (ngày mai)"
         notification.create(db, user_id=t.assignee_id, type="task_due", message=msg, link="/viec-cua-toi")
+        # Web Push (L1) — đã chạy trong worker (cron); gửi thẳng. No-op nếu chưa cấu hình VAPID.
+        push_service.send_to_user(db, t.assignee_id, title="Nhắc hạn xử lý", body=msg, url="/viec-cua-toi")
         t.reminded_on = today
         sent += 1
     db.commit()

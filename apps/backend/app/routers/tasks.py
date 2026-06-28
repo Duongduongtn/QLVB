@@ -19,6 +19,7 @@ from app.schemas.tasks import (
     TaskStatusUpdate,
 )
 from app.services import tasks as task_service
+from app.workers.push import send_web_push
 
 router = APIRouter()
 
@@ -91,4 +92,9 @@ def reassign_task(
     t = task_service.reassign(
         db, task_id, payload.assignee_id, actor_id=actor.id, actor_role=actor.role, ip=ip, ua=ua
     )
+    # Web Push (L1) — báo người nhận mới (đẩy nền, không chặn response).
+    if t.assignee_id is not None:
+        send_web_push.delay(
+            t.assignee_id, "Việc mới được giao", "Bạn được chuyển giao 1 việc xử lý CV đến", "/viec-cua-toi"
+        )
     return TaskOut.model_validate(t)

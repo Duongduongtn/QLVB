@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 
 import { api } from '~/lib/api';
+import { disablePush } from '~/lib/push';
 import { useBranding } from '~/lib/branding';
 import { useAuth, type Role } from '~/stores/auth';
 import { useUnitView, type UnitView } from '~/stores/unitView';
@@ -134,6 +135,8 @@ function RootLayout() {
   async function handleLogout() {
     // Xoá phiên ở server trước; dù lỗi mạng vẫn dọn client + về trang login.
     try {
+      // Thiết bị chung: huỷ kênh push để người trước không nhận thông báo sau khi đăng xuất.
+      await disablePush().catch(() => undefined);
       await api.POST('/api/auth/logout', {});
     } finally {
       clear();

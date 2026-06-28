@@ -22,5 +22,6 @@
       "~/*": ["./src/*"]
     }
   },
-  "include": ["src", "tests/e2e/**/*.ts"]
+  "include": ["src", "tests/e2e/**/*.ts"],
+  "exclude": ["src/sw.ts"]
 }

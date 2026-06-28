@@ -28,6 +28,7 @@ from app.routers import (
     notifications,
     organizations,
     outgoing,
+    push,
     reports,
     seals,
     search,
@@ -97,6 +98,7 @@ app.include_router(outgoing.router, prefix="/api/outgoing", tags=["outgoing"])
 app.include_router(incoming.router, prefix="/api/incoming", tags=["incoming"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
+app.include_router(push.router, prefix="/api/push", tags=["push"])
 app.include_router(trash.router, prefix="/api/trash", tags=["trash"])
 app.include_router(audit.router, prefix="/api/audit-logs", tags=["audit"])
 app.include_router(search.router, prefix="/api/search", tags=["search"])

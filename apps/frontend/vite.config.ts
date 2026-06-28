@@ -9,7 +9,15 @@ export default defineConfig({
     TanStackRouterVite({ routesDirectory: './src/routes' }),
     react(),
     VitePWA({
+      // injectManifest: SW tự viết (src/sw.ts) để chèn handler Web Push (L1) — generateSW
+      // không cho tuỳ biến sự kiện push/notificationclick. Logic offline-cache port sang sw.ts.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       registerType: 'autoUpdate',
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
+      },
       includeAssets: ['favicon.svg', 'icons/apple-touch-icon.png'],
       manifest: {
         name: 'QLCV Thành Đạt',
@@ -23,39 +31,6 @@ export default defineConfig({
           { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
           { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
           { src: 'icons/icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-        ],
-      },
-      workbox: {
-        cleanupOutdatedCaches: true,
-        navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/api\//],
-        runtimeCaching: [
-          {
-            // Offline đọc lại list/chi tiết CV đã tải gần đây. ALLOWLIST (chỉ JSON list/detail
-            // không nhạy cảm) — KHÔNG cache ảnh mộc/chữ ký (/image,/asset), file nhị phân
-            // (/file,/download,/preview,.xlsx,.zip), hay /api/auth/me (tránh tưởng phiên còn
-            // sống offline). Negative lookahead loại nhánh nhị phân dưới cùng prefix.
-            urlPattern:
-              /\/api\/(?:incoming|outgoing|tasks|search|tags|organizations|units|notifications)(?![^?]*(?:\/file|\/download|\/image|\/asset|\/preview|attachments|\.xlsx|\.zip))/i,
-            method: 'GET',
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'qlcv-api',
-              networkTimeoutSeconds: 4,
-              expiration: { maxEntries: 80, maxAgeSeconds: 24 * 60 * 60 },
-              cacheableResponse: { statuses: [200] },
-            },
-          },
-          {
-            // Font Google (offline shell giữ đúng typography).
-            urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'qlcv-fonts',
-              expiration: { maxEntries: 20, maxAgeSeconds: 365 * 24 * 60 * 60 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
         ],
       },
     }),

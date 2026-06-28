@@ -41,6 +41,7 @@ from app.services import outgoing as out_service
 from app.services import tasks as task_service
 from app.services import watermark as wm_service
 from app.workers.ocr import extract_text, ocr_attachment
+from app.workers.push import send_web_push
 from app.workers.sign_verify import verify_pades
 
 router = APIRouter()
@@ -148,11 +149,17 @@ def assign_incoming(
     actor: User = Depends(current_user),
 ) -> list[TaskOut]:
     """E2 — phân công xử lý cho 1 hoặc cả 2 đơn vị (mỗi đơn vị 1 task độc lập)."""
-    _visible(inc_service.get_incoming(db, doc_id), actor)
+    doc = _visible(inc_service.get_incoming(db, doc_id), actor)
     ip, ua = _ctx(request)
     tasks = task_service.assign(
         db, doc_id, [a.model_dump() for a in payload.assignments], actor_id=actor.id, ip=ip, ua=ua
     )
+    # Web Push (L1) — đẩy nền sau khi giao xong, không chặn response. 1 push/người được giao.
+    number = doc.number or "(nháp)"
+    for assignee_id in {t.assignee_id for t in tasks if t.assignee_id is not None}:
+        send_web_push.delay(
+            assignee_id, "Việc mới được giao", f"Bạn được giao xử lý CV đến {number}", "/viec-cua-toi"
+        )
     return [TaskOut.model_validate(t) for t in tasks]
 
 

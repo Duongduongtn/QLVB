@@ -14,6 +14,7 @@ from app.models.notification import Notification
 from app.models.organization import Organization
 from app.models.outgoing_document import OutgoingDocument, OutgoingRecipient
 from app.models.processing_task import ProcessingTask
+from app.models.push_subscription import PushSubscription
 from app.models.seal import Seal
 from app.models.signature import Signature
 from app.models.signing_profile import SigningProfile
@@ -36,6 +37,7 @@ __all__ = [
     "OutgoingDocument",
     "OutgoingRecipient",
     "ProcessingTask",
+    "PushSubscription",
     "Seal",
     "Signature",
     "SigningProfile",

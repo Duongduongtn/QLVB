@@ -139,4 +139,5 @@ networks:
     driver: bridge
   qlcv_worker_net:
     driver: bridge
-    internal: false              # cần Internet để gọi R2 (TDD §2.4 egress whitelist ở firewall)
+    internal: false              # cần Internet để gọi R2 + push provider (Web Push L1: fcm/
+                                 # mozilla/apple/wns) — TDD §2.4 egress whitelist ở firewall
