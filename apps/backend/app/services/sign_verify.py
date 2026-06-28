@@ -155,13 +155,18 @@ def _name_of(name: Any) -> str | None:
 
 
 def _org_of(name: Any) -> str | None:
-    """Tên cơ quan (Organization O=) trong subject chứng thư — nguồn 'cơ quan phát hành'."""
+    """Tên cơ quan phát hành từ subject chứng thư.
+
+    Ưu tiên Organizational Unit (OU=) vì cert CQNN VN thường ghi đơn vị phát hành thật ở OU
+    (vd 'SỞ XÂY DỰNG', 'CỤC ĐƯỜNG BỘ VIỆT NAM'), còn O= là cơ quan chủ quản cấp cert (vd
+    'ỦY BAN NHÂN DÂN THÀNH PHỐ ĐỒNG NAI', 'BỘ XÂY DỰNG'). Fallback O= khi không có OU.
+    """
     try:
-        native = name.native  # dict: {'organization_name', 'common_name', ...}
-        org = native.get("organization_name") or native.get("organizational_unit_name")
-        if isinstance(org, (list, tuple)):
-            org = org[0] if org else None
-        return str(org).strip() or None if org else None
+        native = name.native  # dict: {'organizational_unit_name', 'organization_name', ...}
+        org = native.get("organizational_unit_name") or native.get("organization_name")
+        if isinstance(org, (list, tuple)):  # nhiều OU → lấy cái cụ thể nhất (cuối)
+            org = org[-1] if org else None
+        return (str(org).strip() or None) if org else None
     except Exception:
         return None
 
