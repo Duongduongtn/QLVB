@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
   AlertCircle,
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Check,
+  Clock,
   FileText,
-  Hash,
   ScanText,
   ShieldAlert,
   ShieldCheck,
@@ -17,8 +17,9 @@ import {
 } from 'lucide-react';
 
 import { api, type ApiErrorEnvelope } from '~/lib/api';
-import { PageHeader, Pill } from '~/components/ui';
+import { PageHeader } from '~/components/ui';
 import { WizardGuide } from '~/components/WizardGuide';
+import { SenderCombobox, type OrgLite } from '~/components/SenderCombobox';
 import { fmtDate, fmtDateTime } from '~/lib/format';
 import { CONFIDENTIALITY_LABEL, URGENCY_LABEL } from '~/lib/incoming';
 
@@ -26,17 +27,6 @@ export const Route = createFileRoute('/cong-van-den_/vao-so')({
   component: VaoSoPage,
 });
 
-const STEPS = [
-  { id: 1, label: 'Tải file PDF', icon: UploadCloud },
-  { id: 2, label: 'Kiểm tra & vào sổ', icon: ScanText },
-  { id: 3, label: 'Hoàn tất', icon: Hash },
-];
-
-interface OrgLite {
-  id: number;
-  full_name: string;
-  short_name: string | null;
-}
 interface DocTypeLite {
   id: number;
   name: string;
@@ -173,6 +163,7 @@ function VaoSoPage() {
   const [queue, setQueue] = useState<QItem[]>([]);
   const [cursor, setCursor] = useState(0);
   const [registered, setRegistered] = useState<{ fileName: string; number: string | null }[]>([]);
+  const [doneIdx, setDoneIdx] = useState<Set<number>>(new Set()); // index file đã lưu/bỏ qua (cho rail)
   const current = queue[cursor] ?? null;
   const docId = current?.docId ?? null;
   const taskId = current?.taskId ?? null;
@@ -236,7 +227,7 @@ function VaoSoPage() {
     e.target.value = '';
     if (files.length === 0) return;
     if (files.some((f) => f.type !== 'application/pdf')) {
-      setErr('Chỉ nhận file PDF');
+      setErr('Chỉ nhận file PDF (hỗ trợ Word sẽ bổ sung sau)');
       return;
     }
     setErr(null);
@@ -253,6 +244,7 @@ function VaoSoPage() {
         items.push({ docId: body.doc.id, taskId: body.ocr_task_id, sigTaskId: body.sig_task_id, fileName: f.name });
       }
       setRegistered([]);
+      setDoneIdx(new Set());
       setQueue(items);
       setCursor(0);
       setStep(2);
@@ -265,6 +257,7 @@ function VaoSoPage() {
 
   // E1 batch — xong 1 file → sang file kế; hết hàng đợi → bước tổng kết.
   function advanceOrFinish() {
+    setDoneIdx((s) => new Set(s).add(cursor));
     if (cursor + 1 < queue.length) setCursor((c) => c + 1);
     else setStep(3);
   }
@@ -339,8 +332,6 @@ function VaoSoPage() {
   }
 
   // GET doc mới nhất từ server → đổ giá trị auto-fill (OCR + chữ ký) vào các field user CHƯA sửa.
-  // Dùng 1 GET chuẩn sau mỗi poll: 2 endpoint poll trả snapshot ở thời điểm khác nhau (OCR có thể
-  // chạy trước khi chữ ký ghi tên cơ quan) → tin trực tiếp body.doc sẽ đè nhầm. GET phản ánh DB cuối.
   async function applyAutofill() {
     if (!docId) return;
     const res = await fetch(`/api/incoming/${docId}`, { credentials: 'include' });
@@ -364,7 +355,7 @@ function VaoSoPage() {
   async function saveAndRegister() {
     if (!docId || !doc) return;
     if (!doc.subject?.trim()) {
-      setErr('Nhập trích yếu');
+      setErr('Nhập tiêu đề công văn');
       return;
     }
     const typeId = incTypes[0]?.id;
@@ -440,12 +431,23 @@ function VaoSoPage() {
     green: { icon: AlertCircle, color: 'var(--success)' },
   };
 
+  // Thiếu trường quan trọng (Tiêu đề bắt buộc) → đánh dấu file "cần nhập tay" ở rail.
+  const needsInput = ocrDone && !(doc?.subject?.trim());
+
+  /** Trạng thái 1 file trong rail: done ✅ · đang mở ▶ · cần nhập ⚠️ · đang xử lý ⏳ · chờ. */
+  function fileState(i: number): 'done' | 'current-warn' | 'current' | 'processing' | 'pending' {
+    if (doneIdx.has(i)) return 'done';
+    if (i !== cursor) return 'pending';
+    if (!ocrDone) return 'processing';
+    return needsInput ? 'current-warn' : 'current';
+  }
+
   return (
     <>
       <PageHeader
-        breadcrumb={[{ label: 'Công văn đến', to: '/cong-van-den' }, { label: 'Vào sổ mới' }]}
-        title="Vào sổ công văn đến"
-        subhead="Tải PDF → tự đọc OCR + check trùng → cấp số đến (sổ chung 2 đơn vị)"
+        breadcrumb={[{ label: 'Công văn đến', to: '/cong-van-den' }, { label: 'Thêm công văn' }]}
+        title="Thêm công văn đến"
+        subhead="Tải PDF → tự đọc OCR + chữ ký số → xem trang đầu, bổ sung thông tin → cấp số đến"
         actions={
           <button className="btn-ghost" type="button" onClick={() => navigate({ to: '/cong-van-den' })}>
             <ArrowLeft size={14} /> Quay lại sổ
@@ -459,400 +461,232 @@ function VaoSoPage() {
         </div>
       )}
 
-      <WizardGuide
-        storageKey="guide-vao-so"
-        title="Hướng dẫn vào sổ công văn đến (cho người mới)"
-        intro="Chỉ 3 bước. Bạn tải file PDF, hệ thống tự đọc và điền sẵn thông tin — bạn chỉ xem lại rồi vào sổ."
-        steps={[
-          { label: 'Tải file PDF', detail: 'Chọn file PDF của công văn nhận được (tối đa 50MB).' },
-          { label: 'Kiểm tra & vào sổ', detail: 'Hệ thống tự đọc OCR + chữ ký số và TỰ ĐIỀN số ký hiệu, ngày, cơ quan gửi, trích yếu (cơ quan chưa có trong danh bạ vẫn điền được). Bạn xem lại, bổ sung nếu cần rồi bấm “Lưu & cấp số đến”. Nếu trùng sổ sẽ có cảnh báo.' },
-          { label: 'Hoàn tất', detail: 'Hệ thống cấp số đến (sổ chung 2 đơn vị) và lưu vào sổ.' },
-        ]}
-      />
-
-      <div className="flex flex-col lg:flex-row" style={{ gap: 24, alignItems: 'flex-start' }}>
-        {/* Step rail */}
-        <div className="card" style={{ padding: 16, width: '100%', maxWidth: 280, flexShrink: 0 }}>
-          <div className="eyebrow" style={{ marginBottom: 12 }}>Các bước</div>
-          <div className="flex flex-col" style={{ gap: 2 }}>
-            {STEPS.map((s) => {
-              const done = s.id < step;
-              const active = s.id === step;
-              const Icon = s.icon;
-              return (
-                <div key={s.id} className="flex items-center" style={{ gap: 12, padding: '10px 12px', borderRadius: 4, background: active ? 'var(--paper-deep)' : 'transparent', color: active ? 'var(--ink)' : 'var(--ink-body)', fontWeight: active ? 600 : 500, fontSize: '0.85rem' }}>
-                  <span className="flex items-center justify-center" style={{ width: 24, height: 24, borderRadius: 999, flexShrink: 0, background: done ? 'var(--success)' : active ? 'var(--kinpaku)' : 'var(--light-graphite)', color: done || active ? 'var(--ink)' : 'var(--ink-muted)' }}>
-                    {done ? <Check size={14} /> : <Icon size={13} />}
-                  </span>
-                  {s.label}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="card" style={{ padding: 28, flex: 1, minWidth: 0, width: '100%' }}>
-          {step === 1 && (
-            <div>
-              <h2 className="section-title" style={{ marginBottom: 16 }}>Tải file PDF công văn đến</h2>
-              <input ref={fileRef} type="file" accept="application/pdf" multiple className="hidden" onChange={onPickFiles} />
-              <button
-                type="button"
-                className="flex flex-col items-center justify-center"
-                onClick={() => fileRef.current?.click()}
-                disabled={busy}
-                style={{ width: '100%', border: '1.5px dashed var(--rule-strong)', borderRadius: 8, padding: '48px 24px', gap: 12, background: 'var(--paper-deep)', cursor: 'pointer' }}
-              >
-                <UploadCloud size={40} strokeWidth={1.25} style={{ color: 'var(--kinpaku-deep)' }} />
-                <div style={{ fontWeight: 500, color: 'var(--ink)' }}>{busy ? 'Đang tải lên…' : 'Bấm để chọn một hoặc nhiều file PDF'}</div>
-                <div className="cell-meta">Chọn nhiều file để vào sổ hàng loạt — mỗi file tối đa 50MB</div>
-              </button>
-            </div>
-          )}
-
-          {step === 2 && (
-            <div>
-              <h2 className="section-title" style={{ marginBottom: 16 }}>Kết quả kiểm tra tự động</h2>
-              <div className="flex items-center" style={{ gap: 10, marginBottom: 16, padding: 12, border: '1px solid var(--rule)', borderRadius: 6 }}>
-                <FileText size={16} style={{ color: 'var(--ink-muted)' }} />
-                <span style={{ flex: 1, fontSize: '0.85rem', color: 'var(--ink)' }}>{fileName}</span>
-                {queue.length > 1 && (
-                  <span className="cell-meta" style={{ flexShrink: 0 }}>File {cursor + 1}/{queue.length}</span>
-                )}
-                <Pill variant="success" dot>Đã tải</Pill>
-              </div>
-
-              <SignatureBadge status={sigStatus} info={sigInfo} />
-
-              <div className="eyebrow" style={{ marginBottom: 10 }}>Kiểm tra trùng 3 lớp</div>
-              {!ocrDone ? (
-                <div className="flex items-center" style={{ gap: 10, padding: 12, color: 'var(--ink-muted)', fontSize: '0.85rem' }}>
-                  <ScanText size={16} /> Đang đọc OCR + đối chiếu trùng…
-                </div>
-              ) : dups.length === 0 ? (
-                <div className="flex items-center" style={{ gap: 10, padding: 12, borderRadius: 6, background: 'var(--success-soft)' }}>
-                  <Check size={16} style={{ color: 'var(--success)' }} />
-                  <span style={{ fontSize: '0.85rem', color: 'var(--ink)' }}>Không phát hiện trùng — an toàn để vào sổ.</span>
-                </div>
-              ) : (
-                <div className="flex flex-col" style={{ gap: 8 }}>
-                  {dups.map((d) => {
-                    const st = DUP_STYLE[d.level] ?? { icon: AlertCircle, color: 'var(--success)' };
-                    const Icon = st.icon;
-                    return (
-                      <div key={`${d.layer}-${d.doc_id}`} className="flex items-start" style={{ gap: 10, padding: 12, border: '1px solid var(--rule)', borderRadius: 6 }}>
-                        <Icon size={16} style={{ color: st.color, flexShrink: 0, marginTop: 2 }} />
-                        <div>
-                          <div style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--ink)' }}>
-                            Lớp {d.layer} — {d.layer === 1 ? 'Trùng tuyệt đối (SHA-256)' : d.layer === 2 ? 'Trùng metadata' : 'OCR tương đồng cao'}
-                          </div>
-                          <div className="cell-meta">Trùng với {d.number ?? d.reference_number ?? `CV #${d.doc_id}`}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {doc && (
-                <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid var(--rule)' }}>
-              <h2 className="section-title" style={{ marginBottom: 4 }}>Thông tin công văn</h2>
-              <p className="cell-meta" style={{ marginBottom: 16 }}>Đã tự điền từ OCR + chữ ký số — kiểm tra, bổ sung nếu cần rồi bấm vào sổ.</p>
-              <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label className="field-label" id="sender-label">Cơ quan gửi</label>
-                  <SenderCombobox
-                    orgId={doc.sender_org_id}
-                    orgName={doc.sender_org_name}
-                    onChange={(id, name) => {
-                      touchedRef.current.add('sender');
-                      setDoc((d) => (d ? { ...d, sender_org_id: id, sender_org_name: name } : d));
-                    }}
-                    orgs={orgs}
-                    hint={senderHint}
-                  />
-                </div>
-                <div>
-                  <label className="field-label">Số ký hiệu</label>
-                  <input className="text-input" value={doc.reference_number ?? ''} onChange={(e) => setField('reference_number', e.target.value)} />
-                </div>
-                <div>
-                  <label className="field-label">Ngày văn bản</label>
-                  <input className="text-input" type="date" value={doc.document_date ?? ''} onChange={(e) => setField('document_date', e.target.value || null)} />
-                </div>
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label className="field-label">Trích yếu</label>
-                  <input className="text-input" value={doc.subject ?? ''} onChange={(e) => setField('subject', e.target.value)} />
-                </div>
-                <div>
-                  <label className="field-label">Mức độ khẩn</label>
-                  <select className="text-input" value={doc.urgency} onChange={(e) => setField('urgency', e.target.value)}>
-                    {Object.entries(URGENCY_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="field-label">Mức độ mật</label>
-                  <select className="text-input" value={doc.confidentiality} onChange={(e) => setField('confidentiality', e.target.value)}>
-                    {Object.entries(CONFIDENTIALITY_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="field-label">Hạn xử lý</label>
-                  <input className="text-input" type="date" value={doc.deadline ?? ''} onChange={(e) => setField('deadline', e.target.value || null)} />
-                </div>
-              </div>
-              <label className="flex items-center" style={{ gap: 10, marginTop: 16, cursor: 'pointer', fontSize: '0.85rem', color: 'var(--ink)' }}>
-                <input type="checkbox" className="qlcv-check" checked={doc.manager_only} onChange={(e) => setField('manager_only', e.target.checked)} />
-                Chỉ Quản lý xem (ẩn khỏi Nhân viên)
-              </label>
-                </div>
-              )}
-            </div>
-          )}
-
-          {step === 3 && (
-            <div className="flex flex-col items-center" style={{ textAlign: 'center', padding: '24px 0', gap: 12 }}>
-              <span className="flex items-center justify-center" style={{ width: 56, height: 56, borderRadius: 999, background: 'var(--success-soft)' }}>
-                <Check size={28} style={{ color: 'var(--success)' }} />
-              </span>
-              <h2 className="section-title">
-                {registered.length > 1 ? `Đã vào sổ ${registered.length} công văn đến` : 'Đã vào sổ công văn đến'}
-              </h2>
-              {registered.length <= 1 ? (
-                <div className="cell-mono" style={{ fontSize: '0.95rem' }}>Số đến: <span className="num">{registered[0]?.number ?? '—'}</span></div>
-              ) : (
-                <div className="flex flex-col" style={{ gap: 6, width: '100%', maxWidth: 420, textAlign: 'left' }}>
-                  {registered.map((r, i) => (
-                    <div key={i} className="flex items-center justify-between" style={{ gap: 10, padding: '8px 12px', border: '1px solid var(--rule)', borderRadius: 6 }}>
-                      <span className="cell-meta" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.fileName}</span>
-                      <span className="cell-mono num" style={{ flexShrink: 0 }}>{r.number ?? '—'}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <p className="cell-meta" style={{ maxWidth: 380 }}>File PDF gốc đã lưu mã hoá. Có thể phân công xử lý ở bước sau.</p>
-              <div className="flex items-center" style={{ gap: 8, marginTop: 8 }}>
-                <button className="btn-primary" type="button" onClick={() => navigate({ to: '/cong-van-den' })}>Về sổ CV đến</button>
-              </div>
-            </div>
-          )}
-
-          {step === 2 && (
-            <div className="flex items-center justify-between" style={{ marginTop: 28, paddingTop: 20, borderTop: '1px solid var(--rule)' }}>
-              <button className="btn-secondary" type="button" disabled={busy} onClick={() => { setQueue([]); setCursor(0); setStep(1); }}>
-                <ArrowLeft size={14} /> Chọn lại từ đầu
-              </button>
-              <span className="cell-meta">
-                {queue.length > 1 ? `File ${cursor + 1}/${queue.length}` : `Bước ${step} / ${STEPS.length}`}
-              </span>
-              <div className="flex items-center" style={{ gap: 8 }}>
-                {queue.length > 1 && (
-                  <button className="btn-secondary" type="button" disabled={busy} onClick={advanceOrFinish} title="Bỏ qua file này, để lại bản nháp">
-                    Bỏ qua file này
-                  </button>
-                )}
-                <button className="btn-primary" type="button" disabled={busy || !ocrDone} onClick={saveAndRegister}>
-                  {busy ? 'Đang lưu…' : !ocrDone ? 'Đang đọc tự động…' : queue.length > 1 && cursor + 1 < queue.length ? 'Lưu & file kế' : 'Lưu & cấp số đến'} <ArrowRight size={14} />
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </>
-  );
-}
-
-/**
- * M2 — chọn cơ quan gửi: gõ để tìm trong danh bạ (is_sender) HOẶC giữ tên tự do nếu cơ quan
- * chưa có trong danh bạ (auto-fill từ chữ ký số / OCR). orgId = khớp danh bạ; orgName = tên text.
- */
-function SenderCombobox({
-  orgId,
-  orgName,
-  onChange,
-  orgs,
-  hint,
-}: {
-  orgId: number | null;
-  orgName: string | null;
-  onChange: (id: number | null, name: string | null) => void;
-  orgs: OrgLite[];
-  hint: string | null;
-}) {
-  const [text, setText] = useState('');
-  const [open, setOpen] = useState(false);
-  const [debounced, setDebounced] = useState('');
-
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(text.trim()), 250);
-    return () => clearTimeout(t);
-  }, [text]);
-
-  const search = useQuery({
-    queryKey: ['org-search', 'sender', debounced],
-    enabled: open,
-    queryFn: async () => {
-      const res = await api.GET('/api/organizations', {
-        params: { query: { role: 'sender', q: debounced || undefined, size: 12 } },
-      });
-      return (res.data?.items ?? []) as OrgLite[];
-    },
-  });
-  const results = search.data ?? [];
-
-  const queryClient = useQueryClient();
-  // M2 — gợi ý cơ quan tên GẦN GIỐNG (fuzzy) để chọn đúng cơ quan đã có, tránh tạo trùng.
-  const similar = useQuery({
-    queryKey: ['org-similar', 'sender', debounced],
-    enabled: open && debounced.length >= 2,
-    queryFn: async () => {
-      const { data } = await api.GET('/api/organizations/similar', {
-        params: { query: { role: 'sender', name: debounced, limit: 5 } },
-      });
-      return (data ?? []) as { id: number; full_name: string; short_name: string | null; similarity: number; doc_count: number }[];
-    },
-  });
-  const resultIds = new Set(results.map((o) => o.id));
-  const fuzzy = (similar.data ?? []).filter((o) => !resultIds.has(o.id)); // không lặp kết quả tìm thường
-
-  // M2 — auto-tạo cơ quan vào danh bạ ngay khi vào sổ (cơ quan chưa có trong danh bạ).
-  const createMut = useMutation({
-    mutationFn: async (name: string) => {
-      const { data, error } = await api.POST('/api/organizations', {
-        body: { full_name: name, role: 'sender' },
-      });
-      if (error || !data) throw new Error('Tạo cơ quan thất bại');
-      return data as OrgLite;
-    },
-    onSuccess: async (o) => {
-      await queryClient.invalidateQueries({ queryKey: ['organizations'] });
-      onChange(o.id, o.short_name ?? o.full_name);
-      setOpen(false);
-      setText('');
-    },
-  });
-
-  const selected = orgs.find((o) => o.id === orgId) ?? null;
-  // Nhãn hiển thị: ưu tiên org khớp danh bạ, sau đó tên free-text.
-  const label = selected ? (selected.short_name ?? selected.full_name) : (orgName ?? '');
-  const typed = text.trim();
-  const hasValue = orgId !== null || !!orgName;
-
-  return (
-    <div className="relative">
-      <div className="flex items-center" style={{ gap: 6 }}>
-        <input
-          className="text-input"
-          role="combobox"
-          aria-expanded={open}
-          aria-labelledby="sender-label"
-          placeholder="Gõ tên cơ quan gửi (tìm danh bạ hoặc nhập tự do)…"
-          value={open ? text : label}
-          onFocus={() => { setOpen(true); setText(''); }}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') { setOpen(false); (e.target as HTMLInputElement).blur(); }
-            if (e.key === 'Enter' && typed) { onChange(null, typed); setOpen(false); setText(''); (e.target as HTMLInputElement).blur(); }
-          }}
-        />
-        {hasValue && (
-          <button type="button" className="btn-ghost" style={{ height: 32, flexShrink: 0 }} aria-label="Bỏ chọn cơ quan" onClick={() => onChange(null, null)}>
-            Bỏ chọn
-          </button>
-        )}
-      </div>
-      {/* Cơ quan ngoài danh bạ → hiển thị rõ là tên tự do (chưa liên kết danh bạ). */}
-      {!open && orgId === null && orgName && (
-        <div className="cell-meta" style={{ marginTop: 4 }}>Tên tự do (chưa có trong danh bạ).</div>
-      )}
-      {open && (
+      {step === 1 && (
         <>
-          <div style={{ position: 'fixed', inset: 0, zIndex: 35 }} aria-hidden="true" onClick={() => setOpen(false)} />
-          <div role="listbox" className="card" style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, maxHeight: 260, overflowY: 'auto', zIndex: 36, padding: 6, boxShadow: '0 10px 30px oklch(18% 0.02 95 / 0.16)' }}>
-            {typed && (
-              <button
-                type="button"
-                className="nav-item w-full"
-                style={{ borderLeft: 'none', textAlign: 'left' }}
-                onClick={() => { onChange(null, typed); setOpen(false); setText(''); }}
-              >
-                <span style={{ minWidth: 0 }}>
-                  <span style={{ display: 'block', color: 'var(--ink)', fontSize: '0.85rem' }}>Dùng “{typed}”</span>
-                  <span className="cell-meta" style={{ display: 'block' }}>Tên tự do — cơ quan chưa có trong danh bạ</span>
-                </span>
-              </button>
-            )}
-            {typed && (
-              <button
-                type="button"
-                className="nav-item w-full"
-                style={{ borderLeft: 'none', textAlign: 'left' }}
-                disabled={createMut.isPending}
-                onClick={() => createMut.mutate(typed)}
-              >
-                <span style={{ minWidth: 0 }}>
-                  <span style={{ display: 'block', color: 'var(--kinpaku-deep)', fontSize: '0.85rem' }}>
-                    {createMut.isPending ? 'Đang thêm…' : `➕ Thêm “${typed}” vào danh bạ`}
-                  </span>
-                  <span className="cell-meta" style={{ display: 'block' }}>Lưu cơ quan gửi mới để lần sau chọn nhanh</span>
-                </span>
-              </button>
-            )}
-            {/* Gợi ý gần giống (fuzzy) — tránh tạo trùng cơ quan đã có với tên hơi khác. */}
-            {fuzzy.length > 0 && (
-              <>
-                <div className="cell-meta" style={{ padding: '6px 10px 2px' }}>Có thể bạn muốn:</div>
-                {fuzzy.map((o) => (
-                  <button
-                    key={`sim-${o.id}`}
-                    type="button"
-                    className="nav-item w-full"
-                    style={{ borderLeft: 'none', textAlign: 'left' }}
-                    onClick={() => { onChange(o.id, o.short_name ?? o.full_name); setOpen(false); setText(''); }}
-                  >
-                    <span style={{ minWidth: 0 }}>
-                      <span style={{ display: 'block', color: 'var(--ink)', fontSize: '0.85rem' }}>{o.short_name ?? o.full_name}</span>
-                      <span className="cell-meta" style={{ display: 'block' }}>giống {Math.round(o.similarity * 100)}% · {o.doc_count} CV</span>
-                    </span>
-                  </button>
-                ))}
-              </>
-            )}
-            {search.isFetching && results.length === 0 ? (
-              <div className="cell-meta" style={{ padding: '8px 10px' }}>Đang tìm…</div>
-            ) : results.length === 0 ? (
-              <div className="cell-meta" style={{ padding: '8px 10px' }}>Không có cơ quan khớp trong danh bạ — gõ để dùng tên tự do.</div>
-            ) : (
-              results.map((o) => (
-                <button
-                  key={o.id}
-                  type="button"
-                  role="option"
-                  aria-selected={o.id === orgId}
-                  className="nav-item w-full"
-                  style={{ borderLeft: 'none', textAlign: 'left' }}
-                  onClick={() => { onChange(o.id, o.short_name ?? o.full_name); setOpen(false); setText(''); }}
-                >
-                  <span style={{ minWidth: 0 }}>
-                    <span style={{ display: 'block', color: 'var(--ink)', fontSize: '0.85rem' }}>{o.short_name ?? o.full_name}</span>
-                    {o.short_name && <span className="cell-meta" style={{ display: 'block' }}>{o.full_name}</span>}
-                  </span>
-                </button>
-              ))
-            )}
+          <WizardGuide
+            storageKey="guide-vao-so"
+            title="Hướng dẫn thêm công văn đến (cho người mới)"
+            intro="Tải file PDF, hệ thống tự đọc và điền sẵn thông tin. Bạn xem TRANG ĐẦU công văn ngay bên cạnh để đối chiếu, bổ sung nếu cần rồi cấp số đến."
+            steps={[
+              { label: 'Tải file PDF', detail: 'Chọn một hoặc nhiều file PDF của công văn nhận được (tối đa 50MB/file).' },
+              { label: 'Xem & bổ sung', detail: 'Mỗi file: xem trang đầu bên trái, form thông tin bên phải (đã tự điền từ OCR/chữ ký số). Kiểm tra rồi bấm “Lưu & cấp số đến”.' },
+              { label: 'Hoàn tất', detail: 'Hệ thống cấp số đến (sổ chung 2 đơn vị) và lưu vào sổ.' },
+            ]}
+          />
+          <div className="card" style={{ padding: 28 }}>
+            <h2 className="section-title" style={{ marginBottom: 16 }}>Tải file PDF công văn đến</h2>
+            <input ref={fileRef} type="file" accept="application/pdf" multiple className="hidden" onChange={onPickFiles} />
+            <button
+              type="button"
+              className="flex flex-col items-center justify-center"
+              onClick={() => fileRef.current?.click()}
+              disabled={busy}
+              style={{ width: '100%', border: '1.5px dashed var(--rule-strong)', borderRadius: 8, padding: '48px 24px', gap: 12, background: 'var(--paper-deep)', cursor: 'pointer' }}
+            >
+              <UploadCloud size={40} strokeWidth={1.25} style={{ color: 'var(--kinpaku-deep)' }} />
+              <div style={{ fontWeight: 500, color: 'var(--ink)' }}>{busy ? 'Đang tải lên…' : 'Bấm để chọn một hoặc nhiều file PDF'}</div>
+              <div className="cell-meta">Chọn nhiều file để vào sổ hàng loạt — mỗi file tối đa 50MB</div>
+            </button>
           </div>
         </>
       )}
-      {hint && orgId === null && !orgName && (
-        <div className="flex items-center cell-meta" style={{ gap: 6, marginTop: 4 }}>
-          <span>OCR gợi ý: {hint}</span>
-          <button type="button" className="btn-ghost" style={{ height: 24, padding: '0 8px' }} onClick={() => onChange(null, hint)}>
-            Dùng
-          </button>
+
+      {step === 2 && current && (
+        <div className="flex flex-col lg:flex-row" style={{ gap: 16, alignItems: 'flex-start' }}>
+          {/* ── Khột 1: rail danh sách file + tiến độ ── */}
+          <div className="card" style={{ padding: 12, width: '100%', maxWidth: 240, flexShrink: 0 }}>
+            <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
+              <div className="eyebrow">Danh sách file</div>
+              <span className="cell-meta">{doneIdx.size}/{queue.length} xong</span>
+            </div>
+            <div className="flex flex-col" style={{ gap: 2 }}>
+              {queue.map((q, i) => {
+                const st = fileState(i);
+                const tone =
+                  st === 'done' ? 'var(--success)'
+                  : st === 'current-warn' ? 'var(--warning)'
+                  : st === 'processing' ? 'var(--ink-faint)'
+                  : 'var(--ink-muted)';
+                const label =
+                  st === 'done' ? '✓' : st === 'current-warn' ? '!' : st === 'processing' ? '…' : '•';
+                return (
+                  <button
+                    key={q.docId}
+                    type="button"
+                    className="flex items-center w-full"
+                    onClick={() => setCursor(i)}
+                    style={{
+                      gap: 8, padding: '8px 10px', borderRadius: 4, textAlign: 'left', border: 'none',
+                      background: i === cursor ? 'var(--paper-deep)' : 'transparent', cursor: 'pointer',
+                    }}
+                    title={q.fileName}
+                  >
+                    <span style={{ width: 16, textAlign: 'center', color: tone, fontWeight: 700, flexShrink: 0 }}>{label}</span>
+                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.82rem', color: i === cursor ? 'var(--ink)' : 'var(--ink-body)', fontWeight: i === cursor ? 600 : 400 }}>
+                      {q.fileName}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="cell-meta" style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <span><b style={{ color: 'var(--success)' }}>✓</b> đã lưu · <b style={{ color: 'var(--warning)' }}>!</b> cần nhập tay</span>
+              <span><b>…</b> đang đọc · <b>•</b> chờ</span>
+            </div>
+          </div>
+
+          {/* ── Khột 2: xem TRANG ĐẦU công văn (PDF) ── */}
+          <div className="card" style={{ padding: 0, flex: 1, minWidth: 0, width: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div className="flex items-center" style={{ gap: 8, padding: '10px 14px', borderBottom: '1px solid var(--rule)' }}>
+              <FileText size={15} style={{ color: 'var(--ink-muted)', flexShrink: 0 }} />
+              <span style={{ flex: 1, minWidth: 0, fontSize: '0.85rem', color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fileName}</span>
+              {queue.length > 1 && <span className="cell-meta" style={{ flexShrink: 0 }}>File {cursor + 1}/{queue.length}</span>}
+            </div>
+            <iframe
+              key={docId ?? 'none'}
+              title={`Trang đầu công văn ${fileName}`}
+              src={docId ? `/api/incoming/${docId}/file` : ''}
+              style={{ width: '100%', border: 'none', background: 'var(--paper-deep)', minHeight: '72vh', flex: 1 }}
+            />
+          </div>
+
+          {/* ── Khột 3: form thông tin + chữ ký + trùng ── */}
+          <div className="card" style={{ padding: 20, width: '100%', maxWidth: 440, flexShrink: 0 }}>
+            <SignatureBadge status={sigStatus} info={sigInfo} />
+
+            <div className="eyebrow" style={{ marginBottom: 8 }}>Kiểm tra trùng</div>
+            {!ocrDone ? (
+              <div className="flex items-center" style={{ gap: 10, padding: '4px 0 12px', color: 'var(--ink-muted)', fontSize: '0.85rem' }}>
+                <ScanText size={16} /> Đang đọc OCR + đối chiếu trùng…
+              </div>
+            ) : dups.length === 0 ? (
+              <div className="flex items-center" style={{ gap: 10, padding: 10, borderRadius: 6, background: 'var(--success-soft)', marginBottom: 12 }}>
+                <Check size={16} style={{ color: 'var(--success)' }} />
+                <span style={{ fontSize: '0.85rem', color: 'var(--ink)' }}>Không phát hiện trùng.</span>
+              </div>
+            ) : (
+              <div className="flex flex-col" style={{ gap: 8, marginBottom: 12 }}>
+                {dups.map((d) => {
+                  const stl = DUP_STYLE[d.level] ?? { icon: AlertCircle, color: 'var(--success)' };
+                  const Icon = stl.icon;
+                  return (
+                    <div key={`${d.layer}-${d.doc_id}`} className="flex items-start" style={{ gap: 10, padding: 10, border: '1px solid var(--rule)', borderRadius: 6 }}>
+                      <Icon size={16} style={{ color: stl.color, flexShrink: 0, marginTop: 2 }} />
+                      <div>
+                        <div style={{ fontSize: '0.82rem', fontWeight: 500, color: 'var(--ink)' }}>
+                          Lớp {d.layer} — {d.layer === 1 ? 'Trùng tuyệt đối' : d.layer === 2 ? 'Trùng metadata' : 'Nội dung tương đồng'}
+                        </div>
+                        <div className="cell-meta">Trùng với {d.number ?? d.reference_number ?? `CV #${d.doc_id}`}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {doc && (
+              <>
+                <div className="eyebrow" style={{ margin: '4px 0 4px' }}>Thông tin công văn</div>
+                <p className="cell-meta" style={{ marginBottom: 12 }}>Đã tự điền từ OCR + chữ ký số — đối chiếu TRANG ĐẦU bên trái, bổ sung nếu cần.</p>
+                <div className="flex flex-col" style={{ gap: 12 }}>
+                  <div>
+                    <label className="field-label">Cơ quan phát hành</label>
+                    <SenderCombobox
+                      orgId={doc.sender_org_id}
+                      orgName={doc.sender_org_name}
+                      onChange={(id, name) => {
+                        touchedRef.current.add('sender');
+                        setDoc((d) => (d ? { ...d, sender_org_id: id, sender_org_name: name } : d));
+                      }}
+                      orgs={orgs}
+                      hint={senderHint}
+                    />
+                  </div>
+                  <div>
+                    <label className="field-label">Ngày phát hành</label>
+                    <input className="text-input" type="date" value={doc.document_date ?? ''} onChange={(e) => setField('document_date', e.target.value || null)} />
+                  </div>
+                  <div>
+                    <label className="field-label">Tiêu đề công văn</label>
+                    <textarea className="text-input" rows={2} value={doc.subject ?? ''} onChange={(e) => setField('subject', e.target.value)} placeholder="Trích yếu / tiêu đề công văn…" />
+                    {needsInput && <p className="cell-meta" style={{ color: 'var(--warning)', marginTop: 4 }}>Không đọc được tự động — vui lòng nhập theo trang đầu.</p>}
+                  </div>
+                  <div>
+                    <label className="field-label">Số công văn</label>
+                    <input className="text-input" value={doc.reference_number ?? ''} onChange={(e) => setField('reference_number', e.target.value)} placeholder="Số ký hiệu của cơ quan gửi" />
+                  </div>
+                  <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div>
+                      <label className="field-label">Mức độ khẩn</label>
+                      <select className="text-input" value={doc.urgency} onChange={(e) => setField('urgency', e.target.value)}>
+                        {Object.entries(URGENCY_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="field-label">Mức độ mật</label>
+                      <select className="text-input" value={doc.confidentiality} onChange={(e) => setField('confidentiality', e.target.value)}>
+                        {Object.entries(CONFIDENTIALITY_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <label className="flex items-center" style={{ gap: 10, cursor: 'pointer', fontSize: '0.85rem', color: 'var(--ink)' }}>
+                    <input type="checkbox" className="qlcv-check" checked={doc.manager_only} onChange={(e) => setField('manager_only', e.target.checked)} />
+                    Chỉ Quản lý xem (ẩn khỏi Nhân viên)
+                  </label>
+                </div>
+              </>
+            )}
+
+            {/* Nav bước 2 */}
+            <div className="flex items-center justify-between" style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--rule)', gap: 8 }}>
+              <button className="btn-ghost" type="button" disabled={busy} onClick={() => { setQueue([]); setCursor(0); setStep(1); }}>
+                <ArrowLeft size={14} /> Chọn lại
+              </button>
+              <div className="flex items-center" style={{ gap: 8 }}>
+                {queue.length > 1 && cursor + 1 < queue.length && (
+                  <button className="btn-secondary" type="button" disabled={busy} onClick={advanceOrFinish} title="Bỏ qua file này, để lại bản nháp">
+                    Bỏ qua
+                  </button>
+                )}
+                <button className="btn-primary" type="button" disabled={busy || !ocrDone} onClick={saveAndRegister}>
+                  {busy ? 'Đang lưu…' : !ocrDone ? 'Đang đọc…' : queue.length > 1 && cursor + 1 < queue.length ? 'Lưu & file kế' : 'Lưu & cấp số đến'} <ArrowRight size={14} />
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
-    </div>
+
+      {step === 3 && (
+        <div className="card" style={{ padding: 28 }}>
+          <div className="flex flex-col items-center" style={{ textAlign: 'center', padding: '24px 0', gap: 12 }}>
+            <span className="flex items-center justify-center" style={{ width: 56, height: 56, borderRadius: 999, background: 'var(--success-soft)' }}>
+              <Check size={28} style={{ color: 'var(--success)' }} />
+            </span>
+            <h2 className="section-title">
+              {registered.length > 1 ? `Đã vào sổ ${registered.length} công văn đến` : 'Đã vào sổ công văn đến'}
+            </h2>
+            {registered.length <= 1 ? (
+              <div className="cell-mono" style={{ fontSize: '0.95rem' }}>Số đến: <span className="num">{registered[0]?.number ?? '—'}</span></div>
+            ) : (
+              <div className="flex flex-col" style={{ gap: 6, width: '100%', maxWidth: 420, textAlign: 'left' }}>
+                {registered.map((r, i) => (
+                  <div key={i} className="flex items-center justify-between" style={{ gap: 10, padding: '8px 12px', border: '1px solid var(--rule)', borderRadius: 6 }}>
+                    <span className="cell-meta" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.fileName}</span>
+                    <span className="cell-mono num" style={{ flexShrink: 0 }}>{r.number ?? '—'}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="cell-meta" style={{ maxWidth: 380 }}>File PDF gốc đã lưu mã hoá. Có thể phân công xử lý ở bước sau.</p>
+            <div className="flex items-center" style={{ gap: 8, marginTop: 8 }}>
+              <button className="btn-primary" type="button" onClick={() => navigate({ to: '/cong-van-den' })}>
+                <Clock size={14} /> Về sổ CV đến
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
