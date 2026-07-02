@@ -178,10 +178,12 @@ function VaoSoPage() {
   const [ocrDone, setOcrDone] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const touchedRef = useRef<Set<string>>(new Set()); // field user đã tự sửa → auto-fill KHÔNG đè
+  const activeDocIdRef = useRef<number | null>(null); // docId đang mở — chống fetch cũ đổ nhầm form
 
   // Chuyển sang file kế trong hàng đợi → reset trạng thái xử lý + nạp lại nháp tương ứng.
   useEffect(() => {
     if (!current) return;
+    activeDocIdRef.current = current.docId;
     let alive = true;
     setErr(null);
     setOcrDone(false);
@@ -274,7 +276,7 @@ function VaoSoPage() {
         setDups(body.duplicates ?? []);
         setSenderHint(body.sender_hint ?? null);
         setOcrDone(true);
-        void applyAutofill();
+        void applyAutofill(docId!);
         return true;
       }
       if (body.status === 'error') {
@@ -291,7 +293,6 @@ function VaoSoPage() {
       alive = false;
       clearInterval(iv);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, docId, taskId, ocrDone]);
 
   // Bước 2: poll verify chữ ký số (PAdES) song song OCR — E1.5.
@@ -305,12 +306,12 @@ function VaoSoPage() {
       if (body.status === 'done') {
         setSigStatus(body.signature_status ?? 'none');
         setSigInfo(body.signature_info ?? null);
-        void applyAutofill(); // GET doc mới nhất → đổ tên cơ quan (từ chữ ký số) vào field chưa sửa
+        void applyAutofill(docId!); // GET doc mới nhất → đổ tên cơ quan (từ chữ ký số) vào field chưa sửa
         return true;
       }
       if (body.status === 'error') {
         setSigStatus('error');
-        void applyAutofill();
+        void applyAutofill(docId!);
         return true;
       }
       return false;
@@ -323,7 +324,6 @@ function VaoSoPage() {
       alive = false;
       clearInterval(iv);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, docId, sigTaskId, sigStatus]);
 
   function setField<K extends keyof Doc>(k: K, v: Doc[K]) {
@@ -332,11 +332,11 @@ function VaoSoPage() {
   }
 
   // GET doc mới nhất từ server → đổ giá trị auto-fill (OCR + chữ ký) vào các field user CHƯA sửa.
-  async function applyAutofill() {
-    if (!docId) return;
-    const res = await fetch(`/api/incoming/${docId}`, { credentials: 'include' });
+  async function applyAutofill(id: number) {
+    const res = await fetch(`/api/incoming/${id}`, { credentials: 'include' });
     if (!res.ok) return;
     const fresh = (await res.json()) as Doc;
+    if (activeDocIdRef.current !== id) return; // đã đổi file trong lúc fetch → bỏ, tránh đổ nhầm form
     const t = touchedRef.current;
     setDoc((d) => {
       if (!d) return fresh;
@@ -514,7 +514,11 @@ function VaoSoPage() {
                     key={q.docId}
                     type="button"
                     className="flex items-center w-full"
-                    onClick={() => setCursor(i)}
+                    onClick={() => {
+                      // Rời file đang nhập dở (có sửa tay chưa lưu) → cảnh báo tránh mất dữ liệu.
+                      if (i !== cursor && touchedRef.current.size > 0 && !window.confirm('Rời file này? Thông tin đang nhập chưa lưu sẽ mất.')) return;
+                      setCursor(i);
+                    }}
                     style={{
                       gap: 8, padding: '8px 10px', borderRadius: 4, textAlign: 'left', border: 'none',
                       background: i === cursor ? 'var(--paper-deep)' : 'transparent', cursor: 'pointer',
@@ -530,7 +534,7 @@ function VaoSoPage() {
               })}
             </div>
             <div className="cell-meta" style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <span><b style={{ color: 'var(--success)' }}>✓</b> đã lưu · <b style={{ color: 'var(--warning)' }}>!</b> cần nhập tay</span>
+              <span><b style={{ color: 'var(--success)' }}>✓</b> đã xử lý (lưu/bỏ qua) · <b style={{ color: 'var(--warning)' }}>!</b> cần nhập tay</span>
               <span><b>…</b> đang đọc · <b>•</b> chờ</span>
             </div>
           </div>
