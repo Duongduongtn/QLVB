@@ -138,6 +138,7 @@ Giao diện app PHẢI khớp `ui-demo/`. Vỏ + bảng màu + typography đến
 3. Implement đầy đủ từng tiêu chí "Done khi" trong story.
 4. **FE: đọc `ui-demo/` + dùng design system (xem mục "Frontend — Design system" trên) — KHÔNG tự sáng tạo layout/màu/font.**
 5. Code xong → gọi subagent `review-nghiep-vu` (đối chiếu PRD/TDD) **và** `review-code` (chất lượng + security) trước khi merge.
+   - **Model subagent = `sonnet`** (đã set trong frontmatter 2 agent). Mọi subagent spawn qua Agent tool trong dự án này cũng dùng `model: sonnet` (tiết kiệm token/chi phí; main loop giữ Opus).
 6. Cập nhật trạng thái story trong PRD.md (📝 Draft / ⏳ Todo / 🔄 In Progress / ⚠️ Partial / ✅ Done) **không chờ user nhắc**.
 7. Hỏi trước khi làm nếu PRD/TDD có gì chưa rõ.
 

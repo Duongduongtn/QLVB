@@ -2,7 +2,7 @@
 name: review-nghiep-vu
 description: Review nghiệp vụ QLCV — kiểm tra code có tuân thủ PRD.md, TDD.md (13 quyết định kiến trúc), state machine CV đi/đến/task, các bất biến (cấp số atomic, dedup 3 lớp, manager_only, kick session, watermark on-the-fly), phân quyền manager/staff, và tiêu chí "Done khi" của từng user story. Gọi khi vừa code xong 1 user story hoặc nhóm story, trước khi merge.
 tools: Read, Glob, Grep, Bash
-model: inherit
+model: sonnet
 effort: high
 maxTurns: 20
 ---

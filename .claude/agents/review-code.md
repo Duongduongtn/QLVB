@@ -2,7 +2,7 @@
 name: review-code
 description: Review code kỹ thuật QLCV — chất lượng code, security, test coverage, performance, convention. Tham chiếu skill code-review-and-quality + security-and-hardening + karpathy-guidelines + skill stack-specific (fastapi-pro, react-best-practices, postgres-patterns...). Gọi sau khi code xong, trước khi merge. KHÔNG review nghiệp vụ (đã có subagent review-nghiep-vu lo).
 tools: Read, Glob, Grep, Bash
-model: inherit
+model: sonnet
 effort: high
 maxTurns: 20
 ---
