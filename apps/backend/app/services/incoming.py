@@ -239,6 +239,13 @@ def check_duplicates(db: Session, doc: IncomingDocument) -> list[dict[str, Any]]
     return dups
 
 
+def _json_safe(v: Any) -> Any:
+    """Đưa giá trị về dạng JSON-hoá được để ghi vào audit detail (date → ISO)."""
+    if isinstance(v, date):
+        return v.isoformat()
+    return v
+
+
 def update(
     db: Session,
     doc_id: int,
@@ -248,12 +255,23 @@ def update(
     ip: str | None,
     ua: str | None,
 ) -> IncomingDocument:
-    """Sửa metadata khi còn nháp."""
+    """Sửa metadata công văn đến.
+
+    Cho sửa cả khi ĐÃ vào sổ (sửa số ký hiệu/ngày/cơ quan/trích yếu...) — chỉ chặn
+    khi đã huỷ. Ghi lịch sử tác động: trường nào đổi + giá trị cũ→mới vào audit.
+    """
     doc = _lock(db, doc_id)
-    if doc.status != "draft":
-        raise Conflict("Chỉ sửa khi công văn còn nháp")
+    if doc.status == "cancelled":
+        raise Conflict("Công văn đã huỷ vào sổ — không sửa được")
+    changed: dict[str, dict[str, Any]] = {}
     for k, v in fields.items():
+        old = getattr(doc, k, None)
+        if old == v:
+            continue  # không đổi → không ghi nhận
+        changed[k] = {"old": _json_safe(old), "new": _json_safe(v)}
         setattr(doc, k, v)
+    if not changed:
+        return doc  # không có thay đổi thực → khỏi ghi log
     log_action(
         db,
         action="incoming_update",
@@ -262,6 +280,7 @@ def update(
         object_id=doc.id,
         ip=ip,
         user_agent=ua,
+        detail={"fields": list(changed.keys()), "changed": changed},
     )
     db.commit()
     db.refresh(doc)

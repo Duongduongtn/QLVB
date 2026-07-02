@@ -103,6 +103,20 @@ def list_logs(
     return [(row[0], row[1]) for row in db.execute(stmt).all()], total
 
 
+def list_object_history(
+    db: Session, *, object_type: str, object_id: int, limit: int = 100
+) -> list[tuple[AuditLog, str | None]]:
+    """Lịch sử tác động của 1 đối tượng (mới nhất trước) kèm tên đăng nhập người thao tác."""
+    stmt = (
+        select(AuditLog, User.username)
+        .outerjoin(User, User.id == AuditLog.user_id)
+        .where(AuditLog.object_type == object_type, AuditLog.object_id == object_id)
+        .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+        .limit(limit)
+    )
+    return [(row[0], row[1]) for row in db.execute(stmt).all()]
+
+
 def list_actions(db: Session) -> list[str]:
     """Danh sách action phân biệt (cho dropdown lọc)."""
     return list(db.scalars(select(AuditLog.action).distinct().order_by(AuditLog.action)).all())

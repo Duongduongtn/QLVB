@@ -25,6 +25,7 @@ from app.models.user import User
 from app.schemas.incoming import (
     AttachmentOut,
     DuplicateOut,
+    IncomingHistoryItem,
     IncomingListItem,
     IncomingListResponse,
     IncomingOut,
@@ -189,6 +190,31 @@ def duplicates(
 ) -> list[DuplicateOut]:
     doc = _visible(inc_service.get_incoming(db, doc_id), actor)
     return [DuplicateOut(**d) for d in inc_service.check_duplicates(db, doc)]
+
+
+@router.get("/{doc_id}/history", response_model=list[IncomingHistoryItem])
+def incoming_history(
+    doc_id: int, db: Session = Depends(get_db), actor: User = Depends(current_user)
+) -> list[IncomingHistoryItem]:
+    """Lịch sử tác động của công văn (ai sửa/tải/vào sổ, khi nào, trường nào đổi).
+
+    Người xem được CV đều gọi được (khác /api/audit chỉ Quản lý). Ẩn ip/user_agent.
+    """
+    _visible(inc_service.get_incoming(db, doc_id), actor)
+    rows = audit_service.list_object_history(
+        db, object_type="incoming_document", object_id=doc_id
+    )
+    return [
+        IncomingHistoryItem(
+            id=log.id,
+            created_at=log.created_at,
+            user_id=log.user_id,
+            username=username,
+            action=log.action,
+            detail=log.detail,
+        )
+        for log, username in rows
+    ]
 
 
 @router.patch("/{doc_id}", response_model=IncomingOut)

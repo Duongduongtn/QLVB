@@ -67,6 +67,21 @@ class IncomingOut(BaseModel):
     updated_at: datetime
 
 
+class IncomingHistoryItem(BaseModel):
+    """1 dòng lịch sử tác động của CV đến (tạo/sửa/vào sổ/huỷ/tải...).
+
+    KHÔNG lộ ip/user_agent — người xem được CV đều gọi được, không chỉ Quản lý.
+    `detail.fields` (nếu có) liệt kê trường đã sửa để hiển thị "sửa Tiêu đề, Ngày...".
+    """
+
+    id: int
+    created_at: datetime
+    user_id: int | None
+    username: str | None
+    action: str
+    detail: dict[str, Any] | None
+
+
 class IncomingListItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

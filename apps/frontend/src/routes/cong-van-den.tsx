@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Ban, ChevronLeft, ChevronRight, Download, EyeOff, FileArchive, Inbox, Paperclip, Search, ShieldCheck, Trash2, UploadCloud, UserPlus } from 'lucide-react';
+import { Ban, ChevronLeft, ChevronRight, Download, Eye, EyeOff, FileArchive, History, Inbox, MoreHorizontal, Paperclip, Pencil, RefreshCw, Search, ShieldCheck, Trash2, UploadCloud, UserPlus } from 'lucide-react';
 
 import { api, type ApiErrorEnvelope } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
@@ -9,8 +9,51 @@ import { fmtDate, fmtDateTime, fmtInt, fmtNum } from '~/lib/format';
 import { EmptyState, FilterMenu, InfoRow, PageHeader, Pill } from '~/components/ui';
 import { Drawer } from '~/components/Drawer';
 import { Modal } from '~/components/Modal';
+import { PdfViewerModal } from '~/components/PdfViewerModal';
+import { SenderCombobox } from '~/components/SenderCombobox';
 import { TagEditor } from '~/components/TagEditor';
 import { CONFIDENTIALITY_LABEL, URGENCY_LABEL } from '~/lib/incoming';
+
+/** Form sửa 4 trường quan trọng trong drawer (Sửa tại chỗ). */
+interface EditForm {
+  subject: string;
+  reference_number: string;
+  document_date: string;
+  sender_org_id: number | null;
+  sender_org_name: string | null;
+}
+const EMPTY_FORM: EditForm = { subject: '', reference_number: '', document_date: '', sender_org_id: null, sender_org_name: null };
+
+/** Chi tiết đầy đủ (bổ sung sender_org_name free-text mà dòng list thiếu). */
+interface IncDetail {
+  id: number;
+  subject: string | null;
+  reference_number: string | null;
+  document_date: string | null;
+  sender_org_id: number | null;
+  sender_org_name: string | null;
+}
+
+/** 1 dòng lịch sử tác động (khớp IncomingHistoryItem của backend). */
+interface HistoryItem {
+  id: number;
+  created_at: string;
+  username: string | null;
+  action: string;
+  detail: { fields?: string[] } | null;
+}
+
+// Nhãn tiếng Việt cho lịch sử tác động.
+const HIST_FIELD_LABEL: Record<string, string> = {
+  subject: 'Tiêu đề', reference_number: 'Số công văn', document_date: 'Ngày phát hành',
+  sender_org_id: 'Cơ quan phát hành', sender_org_name: 'Cơ quan phát hành',
+  urgency: 'Mức khẩn', confidentiality: 'Mức mật', deadline: 'Hạn xử lý', manager_only: 'Chế độ xem',
+};
+const HIST_ACTION_LABEL: Record<string, string> = {
+  incoming_create: 'tải công văn lên', incoming_update: 'sửa thông tin', incoming_register: 'vào sổ',
+  incoming_cancel: 'huỷ vào sổ', incoming_set_manager_only: 'đổi chế độ xem',
+  incoming_download: 'tải file', incoming_download_raw: 'tải bản gốc (không watermark)',
+};
 
 interface UnitLite2 {
   id: number;
@@ -289,6 +332,114 @@ function CongVanDenPage() {
   });
   const users = useMemo(() => usersQuery.data?.items ?? [], [usersQuery.data]);
 
+  // ── Xem nội dung / Sửa tại chỗ / Lịch sử / Đổi người (redesign drawer) ──
+  const [viewerDoc, setViewerDoc] = useState<IncRow | null>(null);
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<EditForm>(EMPTY_FORM);
+  const [reassignTask, setReassignTask] = useState<number | null>(null);
+
+  // Chi tiết đầy đủ (có sender_org_name free-text) — seed form sửa + hiện cơ quan chính xác.
+  const detailQuery = useQuery({
+    queryKey: ['incoming-detail', selected?.id],
+    enabled: !!selected,
+    queryFn: async () => {
+      const res = await api.GET('/api/incoming/{doc_id}', { params: { path: { doc_id: selected!.id } } });
+      return (res.data ?? null) as IncDetail | null;
+    },
+  });
+  const detail = detailQuery.data ?? null;
+
+  const historyQuery = useQuery({
+    queryKey: ['incoming-history', selected?.id],
+    enabled: !!selected,
+    queryFn: async () => {
+      const res = await api.GET('/api/incoming/{doc_id}/history', { params: { path: { doc_id: selected!.id } } });
+      return (res.data ?? []) as HistoryItem[];
+    },
+  });
+  const history = historyQuery.data ?? [];
+
+  // Đổi CV đang mở → thoát chế độ sửa + đóng menu ⋯.
+  useEffect(() => {
+    setEditing(false);
+    setOverflowOpen(false);
+    setReassignTask(null);
+  }, [selected?.id]);
+
+  function startEdit() {
+    setForm({
+      subject: detail?.subject ?? selected?.subject ?? '',
+      reference_number: detail?.reference_number ?? selected?.reference_number ?? '',
+      document_date: detail?.document_date ?? selected?.document_date ?? '',
+      sender_org_id: detail?.sender_org_id ?? selected?.sender_org_id ?? null,
+      sender_org_name: detail?.sender_org_name ?? null,
+    });
+    setActErr(null);
+    setEditing(true);
+  }
+
+  async function saveEdit() {
+    if (!selected) return;
+    if (!form.subject.trim()) {
+      setActErr('Nhập tiêu đề công văn');
+      return;
+    }
+    setSaving(true);
+    setActErr(null);
+    try {
+      const { error } = await api.PATCH('/api/incoming/{doc_id}', {
+        params: { path: { doc_id: selected.id } },
+        body: {
+          subject: form.subject.trim(),
+          reference_number: form.reference_number.trim() || null,
+          document_date: form.document_date || null,
+          sender_org_id: form.sender_org_id,
+          sender_org_name: form.sender_org_name,
+        },
+      });
+      if (error) throw new Error(errMsg(error, 'Lưu thất bại'));
+      setEditing(false);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['incoming'] }),
+        queryClient.invalidateQueries({ queryKey: ['incoming-detail', selected.id] }),
+        queryClient.invalidateQueries({ queryKey: ['incoming-history', selected.id] }),
+      ]);
+    } catch (e) {
+      setActErr((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function downloadFile(docId: number) {
+    // Tải bản có watermark cá nhân — ép LƯU về (thẻ a[download] same-origin thắng inline).
+    const a = document.createElement('a');
+    a.href = `/api/incoming/${docId}/file`;
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  async function reassign(taskId: number, assigneeId: number) {
+    setActErr(null);
+    const { error } = await api.POST('/api/tasks/{task_id}/reassign', {
+      params: { path: { task_id: taskId } },
+      body: { assignee_id: assigneeId },
+    });
+    if (error) {
+      setActErr(errMsg(error, 'Đổi người thất bại'));
+      return;
+    }
+    setReassignTask(null);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['incoming-tasks', selected?.id] }),
+      queryClient.invalidateQueries({ queryKey: ['incoming'] }),
+    ]);
+  }
+
   // ── Phân công (E2) ──
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignUnits, setAssignUnits] = useState<'first' | 'second' | 'both'>('first');
@@ -487,12 +638,13 @@ function CongVanDenPage() {
                 <th style={{ width: 150 }}>Cơ quan gửi</th>
                 <th style={{ width: 110 }}>Khẩn</th>
                 <th style={{ width: 110 }}>Ngày đến</th>
-                <th style={{ width: 130, paddingRight: 24 }}>Trạng thái</th>
+                <th style={{ width: 130 }}>Trạng thái</th>
+                <th style={{ width: 56, paddingRight: 24 }} aria-label="Xem nội dung"></th>
               </tr>
             </thead>
             <tbody>
               {listQuery.isLoading && (
-                <tr><td colSpan={7} style={{ textAlign: 'center', padding: '32px 0', color: 'var(--ink-faint)' }}>Đang tải…</td></tr>
+                <tr><td colSpan={8} style={{ textAlign: 'center', padding: '32px 0', color: 'var(--ink-faint)' }}>Đang tải…</td></tr>
               )}
               {items.map((it) => (
                 <tr key={it.id} onClick={() => setSelected(it)} style={{ cursor: 'pointer' }}>
@@ -517,11 +669,22 @@ function CongVanDenPage() {
                     )}
                   </td>
                   <td><span className="cell-meta">{fmtDate(it.created_at)}</span></td>
-                  <td style={{ paddingRight: 24 }}>
+                  <td>
                     <span className={`pill ${STATUS_PILL[it.status].cls}`}>
                       {STATUS_PILL[it.status].dot && <span className="dot" />}
                       {STATUS_PILL[it.status].label}
                     </span>
+                  </td>
+                  <td style={{ paddingRight: 24 }}>
+                    <button
+                      className="action-btn"
+                      type="button"
+                      aria-label="Xem nội dung công văn"
+                      title="Xem nội dung"
+                      onClick={(e) => { e.stopPropagation(); setViewerDoc(it); }}
+                    >
+                      <Eye size={15} />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -547,83 +710,182 @@ function CongVanDenPage() {
         open={!!selected}
         onClose={() => setSelected(null)}
         eyebrow="Công văn đến"
-        title={selected?.number ?? 'Bản nháp'}
+        title={selected ? `Số đến ${selected.number ?? '—'}` : 'Bản nháp'}
         width={480}
-        actions={
-          selected && (
-            <>
-              <button className="btn-secondary" style={{ height: 32 }} type="button" onClick={() => window.open(`/api/incoming/${selected.id}/file`, '_blank')}>
-                <Download size={13} /> Tải PDF
-              </button>
-              {me.role === 'manager' && (
-                <button className="btn-ghost" style={{ height: 32 }} type="button" title="Tải bản gốc không watermark (ghi audit lý do)" onClick={() => downloadRaw(selected.id)}>
-                  <Download size={13} /> Bản gốc (không WM)
-                </button>
-              )}
-              {me.role === 'manager' && (
-                <button className="btn-secondary" style={{ height: 32 }} type="button" disabled={toggleManagerOnly.isPending} onClick={() => toggleManagerOnly.mutate(selected)}>
-                  {selected.manager_only ? 'Bỏ ẩn' : 'Chỉ Quản lý xem'}
-                </button>
-              )}
-              {selected.status !== 'cancelled' && (
-                <button className="btn-ghost" style={{ height: 32, color: 'var(--danger)' }} type="button" onClick={() => cancelDoc(selected)}>
-                  <Ban size={13} /> Huỷ vào sổ
-                </button>
-              )}
-              {selected.status === 'registered' && (
-                <button className="btn-primary" style={{ height: 32 }} type="button" onClick={() => setAssignOpen(true)}>
-                  <UserPlus size={13} /> Phân công
-                </button>
-              )}
-            </>
-          )
-        }
       >
         {selected && (
           <>
-            <div className="subject" style={{ fontWeight: 500, marginBottom: 12 }}>{selected.subject ?? '(chưa có trích yếu)'}</div>
-            <div className="card" style={{ padding: 16, marginBottom: 16 }}>
-              <InfoRow label="Số đến"><span className="cell-mono num">{selected.number ?? '—'}</span></InfoRow>
-              <InfoRow label="Số ký hiệu"><span className="cell-mono">{selected.reference_number ?? '—'}</span></InfoRow>
-              <InfoRow label="Ngày văn bản">{selected.document_date ? fmtDate(selected.document_date) : '—'}</InfoRow>
-              <InfoRow label="Cơ quan gửi">{orgName(selected.sender_org_id)}</InfoRow>
-              <InfoRow label="Mức độ khẩn">{URGENCY_LABEL[selected.urgency] ?? selected.urgency}</InfoRow>
-              <InfoRow label="Mức độ mật">{CONFIDENTIALITY_LABEL[selected.confidentiality] ?? selected.confidentiality}</InfoRow>
-              <InfoRow label="Chữ ký số">
-                {selected.signature_status === 'valid' ? (
-                  <Pill variant="success" dot><ShieldCheck size={12} /> Hợp lệ</Pill>
-                ) : selected.signature_status === 'invalid' ? (
-                  <Pill variant="warning">Không hợp lệ</Pill>
-                ) : (
-                  <span className="cell-meta">Chưa kiểm</span>
+            {/* Thanh nút chính — dính trên đầu, luôn thấy khi cuộn */}
+            <div
+              className="flex items-center"
+              style={{ gap: 8, flexWrap: 'wrap', position: 'sticky', top: 0, zIndex: 5, background: 'var(--paper-raised)', margin: '-20px -20px 16px', padding: '12px 20px', borderBottom: '1px solid var(--rule)' }}
+            >
+              <button className="btn-primary" style={{ height: 32 }} type="button" onClick={() => setViewerDoc(selected)}>
+                <Eye size={14} /> Xem nội dung
+              </button>
+              {selected.status === 'registered' && (
+                <button className="btn-secondary" style={{ height: 32 }} type="button" onClick={() => setAssignOpen(true)}>
+                  <UserPlus size={14} /> Phân công
+                </button>
+              )}
+              <div className="relative" style={{ marginLeft: 'auto' }}>
+                <button
+                  className="icon-btn"
+                  type="button"
+                  aria-label="Thêm thao tác"
+                  aria-haspopup="menu"
+                  aria-expanded={overflowOpen}
+                  onClick={() => setOverflowOpen((v) => !v)}
+                >
+                  <MoreHorizontal size={18} />
+                </button>
+                {overflowOpen && (
+                  <>
+                    <div style={{ position: 'fixed', inset: 0, zIndex: 35 }} aria-hidden="true" onClick={() => setOverflowOpen(false)} />
+                    <div role="menu" className="card" style={{ position: 'absolute', right: 0, top: 40, width: 236, padding: 6, zIndex: 36, boxShadow: '0 10px 30px oklch(18% 0.02 95 / 0.16)' }}>
+                      <button type="button" role="menuitem" className="nav-item w-full" style={{ borderLeft: 'none' }} onClick={() => { setOverflowOpen(false); downloadFile(selected.id); }}>
+                        <Download className="nav-icon" size={16} /> Tải PDF
+                      </button>
+                      {me.role === 'manager' && (
+                        <button type="button" role="menuitem" className="nav-item w-full" style={{ borderLeft: 'none' }} onClick={() => { setOverflowOpen(false); downloadRaw(selected.id); }}>
+                          <Download className="nav-icon" size={16} /> Bản gốc (không watermark)
+                        </button>
+                      )}
+                      {me.role === 'manager' && (
+                        <button type="button" role="menuitem" className="nav-item w-full" style={{ borderLeft: 'none' }} disabled={toggleManagerOnly.isPending} onClick={() => { setOverflowOpen(false); toggleManagerOnly.mutate(selected); }}>
+                          <EyeOff className="nav-icon" size={16} /> {selected.manager_only ? 'Bỏ ẩn (cho Nhân viên xem)' : 'Chỉ Quản lý xem'}
+                        </button>
+                      )}
+                      {selected.status !== 'cancelled' && (
+                        <button type="button" role="menuitem" className="nav-item w-full" style={{ borderLeft: 'none', color: 'var(--danger)' }} onClick={() => { setOverflowOpen(false); cancelDoc(selected); }}>
+                          <Ban className="nav-icon" size={16} style={{ color: 'var(--danger)' }} /> Huỷ vào sổ
+                        </button>
+                      )}
+                    </div>
+                  </>
                 )}
-              </InfoRow>
-              <InfoRow label="Vào sổ lúc">{fmtDateTime(selected.created_at)}</InfoRow>
+              </div>
             </div>
-            <AttachmentsCard docId={selected.id} />
-            <TagEditor objectType="incoming" objectId={selected.id} />
+
+            {/* Thẻ thông tin — 4 trường quan trọng + Sửa tại chỗ */}
+            <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+              <div className="flex items-center justify-between" style={{ marginBottom: editing ? 14 : 6 }}>
+                <div className="eyebrow">Thông tin công văn</div>
+                {!editing && selected.status !== 'cancelled' && (
+                  <button className="btn-ghost" style={{ height: 28 }} type="button" onClick={startEdit}>
+                    <Pencil size={13} /> Sửa
+                  </button>
+                )}
+              </div>
+              {!editing ? (
+                <>
+                  <InfoRow label="Đơn vị phát hành">
+                    <span className="flex items-center" style={{ gap: 6 }}>
+                      {selected.sender_org_id ? orgName(selected.sender_org_id) : (detail?.sender_org_name ?? '—')}
+                      {selected.signature_status === 'valid' && <ShieldCheck size={14} style={{ color: 'var(--success)', flexShrink: 0 }} aria-label="Đã ký số hợp lệ" />}
+                    </span>
+                  </InfoRow>
+                  <InfoRow label="Ngày phát hành">{selected.document_date ? fmtDate(selected.document_date) : '—'}</InfoRow>
+                  <InfoRow label="Tiêu đề công văn">{selected.subject ?? '—'}</InfoRow>
+                  <InfoRow label="Số công văn"><span className="cell-mono">{selected.reference_number ?? '—'}</span></InfoRow>
+                </>
+              ) : (
+                <div className="flex flex-col" style={{ gap: 12 }}>
+                  <div>
+                    <label className="field-label">Đơn vị phát hành</label>
+                    <SenderCombobox
+                      orgId={form.sender_org_id}
+                      orgName={form.sender_org_name}
+                      orgs={orgs}
+                      onChange={(id, name) => setForm((f) => ({ ...f, sender_org_id: id, sender_org_name: name }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="field-label">Ngày phát hành</label>
+                    <input className="text-input" type="date" value={form.document_date} onChange={(e) => setForm((f) => ({ ...f, document_date: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="field-label">Tiêu đề công văn</label>
+                    <textarea className="text-input" rows={2} value={form.subject} onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="field-label">Số công văn</label>
+                    <input className="text-input" value={form.reference_number} onChange={(e) => setForm((f) => ({ ...f, reference_number: e.target.value }))} />
+                  </div>
+                  <div className="flex items-center justify-end" style={{ gap: 8 }}>
+                    <button className="btn-secondary" style={{ height: 32 }} type="button" disabled={saving} onClick={() => setEditing(false)}>Huỷ</button>
+                    <button className="btn-primary" style={{ height: 32 }} type="button" disabled={saving} onClick={saveEdit}>{saving ? 'Đang lưu…' : 'Lưu'}</button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Phân công + Đổi người */}
             {tasks.length > 0 && (
               <div className="card" style={{ padding: 16, marginBottom: 16 }}>
                 <div className="eyebrow" style={{ marginBottom: 8 }}>Phân công xử lý</div>
-                <div className="flex flex-col" style={{ gap: 6 }}>
+                <div className="flex flex-col" style={{ gap: 10 }}>
                   {tasks.map((t) => {
-                    const u = allUnits.find((x) => x.id === t.unit_id);
                     const who = users.find((x) => x.id === t.assignee_id);
                     const sv = t.status === 'done' ? 'success' : t.status === 'in_progress' ? 'warning' : 'info';
                     const sl = t.status === 'done' ? 'Hoàn thành' : t.status === 'in_progress' ? 'Đang xử lý' : 'Mới';
                     return (
-                      <div key={t.id} className="flex items-center" style={{ gap: 8 }}>
-                        <span style={{ fontWeight: 600, color: 'var(--ink)', minWidth: 56 }}>{u?.short_name ?? u?.code ?? '—'}</span>
-                        <span className="cell-meta" style={{ flex: 1, minWidth: 0 }}>{who?.full_name ?? 'Chưa giao'}</span>
-                        <Pill variant={sv} dot>{sl}</Pill>
+                      <div key={t.id} className="flex flex-col" style={{ gap: 6 }}>
+                        <div className="flex items-center" style={{ gap: 8 }}>
+                          <span className="cell-meta" style={{ flex: 1, minWidth: 0, color: 'var(--ink)' }}>{who?.full_name ?? 'Chưa giao'}</span>
+                          <Pill variant={sv} dot>{sl}</Pill>
+                          <button className="btn-ghost" style={{ height: 26 }} type="button" onClick={() => setReassignTask(reassignTask === t.id ? null : t.id)}>
+                            <RefreshCw size={12} /> Đổi người
+                          </button>
+                        </div>
+                        {reassignTask === t.id && (
+                          <select className="text-input" defaultValue="" onChange={(e) => { if (e.target.value) void reassign(t.id, Number(e.target.value)); }}>
+                            <option value="">— Chọn người xử lý mới —</option>
+                            {users.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+                          </select>
+                        )}
                       </div>
                     );
                   })}
                 </div>
               </div>
             )}
+
+            {/* Lịch sử tác động */}
+            <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+              <div className="eyebrow flex items-center" style={{ gap: 6, marginBottom: 10 }}>
+                <History size={13} /> Lịch sử tác động
+              </div>
+              {historyQuery.isLoading ? (
+                <p className="cell-meta">Đang tải…</p>
+              ) : history.length === 0 ? (
+                <p className="cell-meta">Chưa có tác động nào được ghi.</p>
+              ) : (
+                <div className="flex flex-col" style={{ gap: 10 }}>
+                  {history.map((h) => {
+                    const fields = h.action === 'incoming_update' ? (h.detail?.fields ?? []) : [];
+                    const labels = Array.from(new Set(fields.map((f) => HIST_FIELD_LABEL[f] ?? f)));
+                    return (
+                      <div key={h.id} className="flex items-start" style={{ gap: 8 }}>
+                        <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--ink-faint)', marginTop: 6, flexShrink: 0 }} aria-hidden="true" />
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: '0.82rem', color: 'var(--ink)' }}>
+                            <strong style={{ fontWeight: 600 }}>{h.username ?? 'Hệ thống'}</strong> {HIST_ACTION_LABEL[h.action] ?? h.action}
+                            {labels.length > 0 && <span className="cell-meta"> ({labels.join(', ')})</span>}
+                          </div>
+                          <div className="cell-meta">{fmtDateTime(h.created_at)}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <AttachmentsCard docId={selected.id} />
+            <TagEditor objectType="incoming" objectId={selected.id} />
             {replies.length > 0 && (
-              <div className="card" style={{ padding: 16 }}>
+              <div className="card" style={{ padding: 16, marginTop: 16 }}>
                 <div className="eyebrow" style={{ marginBottom: 8 }}>Công văn đi phản hồi ({replies.length})</div>
                 <div className="flex flex-col" style={{ gap: 6 }}>
                   {replies.map((r) => (
@@ -638,6 +900,14 @@ function CongVanDenPage() {
           </>
         )}
       </Drawer>
+
+      <PdfViewerModal
+        open={!!viewerDoc}
+        onClose={() => setViewerDoc(null)}
+        title={viewerDoc ? `Công văn số đến ${viewerDoc.number ?? viewerDoc.reference_number ?? ''}` : ''}
+        src={viewerDoc ? `/api/incoming/${viewerDoc.id}/file` : ''}
+        onDownload={viewerDoc ? () => downloadFile(viewerDoc.id) : undefined}
+      />
 
       <Modal
         open={assignOpen}
