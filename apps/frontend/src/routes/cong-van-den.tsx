@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Ban, ChevronLeft, ChevronRight, Download, EyeOff, FileArchive, Inbox, Paperclip, Plus, Search, ShieldCheck, Trash2, UploadCloud, UserPlus } from 'lucide-react';
+import { Ban, ChevronLeft, ChevronRight, Download, EyeOff, FileArchive, Inbox, Paperclip, Search, ShieldCheck, Trash2, UploadCloud, UserPlus } from 'lucide-react';
 
 import { api, type ApiErrorEnvelope } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
@@ -199,7 +199,6 @@ function AttachmentsCard({ docId }: { docId: number }) {
 
 function CongVanDenPage() {
   const me = useAuth((s) => s.user);
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { q: urlQ } = Route.useSearch();
   const [q, setQ] = useState(urlQ ?? '');
@@ -401,9 +400,6 @@ function CongVanDenPage() {
             <button className="btn-secondary" type="button" onClick={exportExcel}>
               <Download size={14} /> Xuất Excel
             </button>
-            <button className="btn-primary" type="button" onClick={() => navigate({ to: '/cong-van-den/vao-so' })}>
-              <Plus size={14} /> Vào sổ mới
-            </button>
           </>
         }
         filters={
@@ -532,7 +528,7 @@ function CongVanDenPage() {
             </tbody>
           </table>
           {!listQuery.isLoading && items.length === 0 && (
-            <EmptyState icon={Inbox} title="Sổ công văn đến trống" desc="Bấm “Vào sổ mới” để tải PDF công văn đến." />
+            <EmptyState icon={Inbox} title="Sổ công văn đến trống" desc="Bấm “＋ Công văn đến” trên thanh trên cùng để tải công văn lên." />
           )}
         </div>
 

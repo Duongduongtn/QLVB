@@ -17,6 +17,7 @@ import {
   LogOut,
   Menu,
   MonitorSmartphone,
+  Plus,
   BarChart3,
   ScrollText,
   Search,
@@ -273,6 +274,9 @@ function AppShell({
 
           {/* Search toàn cục (Ctrl+K) — F1 full-text CV đi/đến */}
           <GlobalSearch />
+
+          {/* Tạo nhanh — 2 nút cố định mọi trang (CV đi đậm / CV đến viền) */}
+          <QuickCreate />
 
           {/* Notification bell */}
           <NotificationBell />
@@ -558,6 +562,69 @@ function Sidebar({
         );
       })}
     </nav>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* QuickCreate — 2 nút tạo nhanh cố định trên header, mọi trang.        */
+/* Desktop: "Công văn đi" (đậm) + "Công văn đến" (viền), có vạch ngăn.  */
+/* Mobile: gộp 1 nút ＋ mở menu để đỡ chật.                             */
+/* ------------------------------------------------------------------ */
+function QuickCreate() {
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+
+  function go(to: '/cong-van-den/vao-so' | '/cong-van-di/soan') {
+    setOpen(false);
+    navigate({ to });
+  }
+
+  return (
+    <>
+      {/* Desktop — 2 nút tách biệt */}
+      <div className="hidden md:flex items-center" style={{ gap: 8 }}>
+        <button className="btn-secondary" style={{ height: 34 }} type="button" onClick={() => go('/cong-van-den/vao-so')}>
+          <Plus size={15} /> Công văn đến
+        </button>
+        <button className="btn-primary" style={{ height: 34 }} type="button" onClick={() => go('/cong-van-di/soan')}>
+          <Plus size={15} /> Công văn đi
+        </button>
+      </div>
+
+      {/* Mobile — 1 nút ＋ có menu */}
+      <div className="relative md:hidden">
+        <button
+          className="icon-btn"
+          type="button"
+          aria-label="Tạo mới"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <Plus size={20} />
+        </button>
+        {open && (
+          <>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 35 }} aria-hidden="true" onClick={() => setOpen(false)} />
+            <div
+              role="menu"
+              className="card"
+              style={{ position: 'absolute', right: 0, top: 44, width: 210, padding: 6, zIndex: 36, boxShadow: '0 10px 30px oklch(18% 0.02 95 / 0.16)' }}
+            >
+              <button type="button" role="menuitem" className="nav-item w-full" style={{ borderLeft: 'none' }} onClick={() => go('/cong-van-den/vao-so')}>
+                <Inbox className="nav-icon" size={16} /> Thêm công văn đến
+              </button>
+              <button type="button" role="menuitem" className="nav-item w-full" style={{ borderLeft: 'none' }} onClick={() => go('/cong-van-di/soan')}>
+                <Send className="nav-icon" size={16} /> Tạo công văn đi
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Vạch ngăn với chuông / tài khoản */}
+      <div className="hidden md:block" style={{ width: 1, height: 24, background: 'var(--rule)' }} aria-hidden="true" />
+    </>
   );
 }
 

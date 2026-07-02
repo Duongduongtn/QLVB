@@ -89,7 +89,6 @@ function NumberCell({ number }: { number: string | null }) {
 
 function CongVanDiPage() {
   const me = useAuth((s) => s.user);
-  const navigate = useNavigate();
   const { q: urlQ } = Route.useSearch();
   const [q, setQ] = useState(urlQ ?? '');
   const [debouncedQ, setDebouncedQ] = useState(urlQ ?? '');
@@ -205,14 +204,6 @@ function CongVanDiPage() {
             <button className="btn-secondary" type="button" onClick={exportExcel}>
               <Download size={14} />
               Xuất Excel
-            </button>
-            <button
-              className="btn-primary"
-              type="button"
-              onClick={() => navigate({ to: '/cong-van-di/soan' })}
-            >
-              <Upload size={14} />
-              Nạp công văn mới
             </button>
           </>
         }
