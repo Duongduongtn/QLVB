@@ -152,10 +152,10 @@ def test_auto_register_on_upload_allocates(monkeypatch: pytest.MonkeyPatch) -> N
     assert "incoming_register" in [getattr(a, "action", None) for a in db.added]
 
 
-def test_auto_register_no_doctype_keeps_draft() -> None:
+def test_auto_register_no_doctype_rejects() -> None:
     doc = _doc(status="draft", number=None)
-    inc._auto_register_on_upload(FakeDB(doc=doc, rows=[]), doc, actor_id=1, ip=None, ua=None)  # type: ignore[arg-type]
-    assert doc.status == "draft" and doc.number is None  # chưa cấu hình sổ → để nháp
+    with pytest.raises(ValidationFailed):  # chưa cấu hình sổ 'in' → từ chối (không tạo nháp mồ côi)
+        inc._auto_register_on_upload(FakeDB(doc=doc, rows=[]), doc, actor_id=1, ip=None, ua=None)  # type: ignore[arg-type]
 
 
 # ── xoá mềm ─────────────────────────────────────────────────────────

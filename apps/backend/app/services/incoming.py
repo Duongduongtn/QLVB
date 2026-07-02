@@ -63,7 +63,11 @@ def _auto_register_on_upload(
         select(DocumentType).where(DocumentType.direction == "in").order_by(DocumentType.id)
     ).first()
     if dt is None:
-        return  # chưa cấu hình sổ đến → để nháp
+        # Chưa cấu hình sổ đến → TỪ CHỐI (create_from_upload rollback + xoá asset) thay vì
+        # tạo nháp mồ côi không lối vào sổ (FE đã bỏ nút cấp số tay).
+        raise ValidationFailed(
+            "Chưa cấu hình sổ công văn đến — vào Cấu hình → Sổ công văn để tạo sổ trước khi tải lên"
+        )
     today = datetime.now(_VN_TZ).date()
     number_int, formatted = numbering.allocate_number(db, dt, unit_code=None, on_date=today)
     doc.doc_type_id = dt.id

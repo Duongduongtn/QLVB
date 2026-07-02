@@ -596,7 +596,7 @@ function VaoSoPage() {
               </button>
               <div className="flex items-center" style={{ gap: 8 }}>
                 {queue.length > 1 && cursor + 1 < queue.length && (
-                  <button className="btn-secondary" type="button" disabled={busy} onClick={advanceOrFinish} title="Bỏ qua file này, để lại bản nháp">
+                  <button className="btn-secondary" type="button" disabled={busy} onClick={advanceOrFinish} title="Bỏ qua file này — đã có số đến, bổ sung thông tin sau trong sổ">
                     Bỏ qua
                   </button>
                 )}
