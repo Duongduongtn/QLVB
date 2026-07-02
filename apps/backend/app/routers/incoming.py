@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, date, datetime
+from typing import Any
 from urllib.parse import quote
 
 from celery.result import AsyncResult
@@ -211,10 +212,19 @@ def incoming_history(
             user_id=log.user_id,
             username=username,
             action=log.action,
-            detail=log.detail,
+            detail=_public_history_detail(log.detail),
         )
         for log, username in rows
     ]
+
+
+def _public_history_detail(detail: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Lịch sử công khai chỉ phơi DANH SÁCH trường đã sửa — giấu giá trị cũ/mới và lý do
+    tải bản gốc (chỉ /api/audit của Quản lý mới xem đầy đủ). Tránh rò thông tin nhạy cảm."""
+    if not detail:
+        return None
+    fields = detail.get("fields")
+    return {"fields": fields} if fields else None
 
 
 @router.patch("/{doc_id}", response_model=IncomingOut)
@@ -228,6 +238,10 @@ def update_incoming(
     _visible(inc_service.get_incoming(db, doc_id), actor)
     ip, ua = _ctx(request)
     fields = payload.model_dump(exclude_unset=True)
+    # Cờ "Chỉ Quản lý xem" là đặc quyền Quản lý (mirror POST /{id}/manager-only require_manager) —
+    # Nhân viên KHÔNG được bật/tắt qua PATCH (chống bypass phân quyền object-level).
+    if actor.role != "manager":
+        fields.pop("manager_only", None)
     doc = inc_service.update(db, doc_id, fields, actor_id=actor.id, ip=ip, ua=ua)
     return IncomingOut.model_validate(doc)
 

@@ -246,6 +246,24 @@ def _json_safe(v: Any) -> Any:
     return v
 
 
+# Whitelist trường được sửa qua update() — hàng rào chống mass-assignment: dù sau này ai
+# thêm field vào IncomingUpdate cũng KHÔNG tự động ghi được nếu chưa thêm vào đây. `number`
+# (số đến) cố tình KHÔNG có mặt → bất biến. `manager_only` được router chặn theo vai trò.
+_UPDATABLE_FIELDS = frozenset(
+    {
+        "reference_number",
+        "document_date",
+        "sender_org_id",
+        "sender_org_name",
+        "subject",
+        "urgency",
+        "confidentiality",
+        "deadline",
+        "manager_only",
+    }
+)
+
+
 def update(
     db: Session,
     doc_id: int,
@@ -265,6 +283,8 @@ def update(
         raise Conflict("Công văn đã huỷ vào sổ — không sửa được")
     changed: dict[str, dict[str, Any]] = {}
     for k, v in fields.items():
+        if k not in _UPDATABLE_FIELDS:
+            continue  # chống mass-assignment (không ghi field ngoài whitelist)
         old = getattr(doc, k, None)
         if old == v:
             continue  # không đổi → không ghi nhận

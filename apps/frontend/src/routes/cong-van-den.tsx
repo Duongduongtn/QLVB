@@ -772,8 +772,8 @@ function CongVanDenPage() {
               <div className="flex items-center justify-between" style={{ marginBottom: editing ? 14 : 6 }}>
                 <div className="eyebrow">Thông tin công văn</div>
                 {!editing && selected.status !== 'cancelled' && (
-                  <button className="btn-ghost" style={{ height: 28 }} type="button" onClick={startEdit}>
-                    <Pencil size={13} /> Sửa
+                  <button className="btn-ghost" style={{ height: 28 }} type="button" disabled={detailQuery.isLoading} onClick={startEdit}>
+                    <Pencil size={13} /> {detailQuery.isLoading ? 'Đang tải…' : 'Sửa'}
                   </button>
                 )}
               </div>
