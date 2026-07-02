@@ -253,6 +253,20 @@ def update_incoming(
     return IncomingOut.model_validate(doc)
 
 
+@router.delete("/{doc_id}", status_code=204)
+def delete_incoming(
+    doc_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_manager),
+) -> Response:
+    """Xoá mềm công văn đến (chỉ Quản lý). Ẩn khỏi sổ; audit giữ lại; số đến không tái dùng."""
+    _visible(inc_service.get_incoming(db, doc_id), actor)
+    ip, ua = _ctx(request)
+    inc_service.soft_delete(db, doc_id, actor_id=actor.id, ip=ip, ua=ua)
+    return Response(status_code=204)
+
+
 @router.post("/{doc_id}/register", response_model=IncomingOut)
 def register_incoming(
     doc_id: int,

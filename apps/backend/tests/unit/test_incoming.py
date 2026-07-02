@@ -27,8 +27,12 @@ class _Scalars:
     def all(self) -> list[Any]:
         return self._rows
 
+    def first(self) -> Any:
+        return self._rows[0] if self._rows else None
+
 
 class _DocType:
+    id = 1
     direction = "in"
     reset_policy = "year"
     code = "CV"
@@ -135,6 +139,32 @@ def test_register_requires_subject(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(inc, "check_duplicates", lambda _db, _d: [])
     with pytest.raises(ValidationFailed):
         inc.register(FakeDB(doc=_doc(subject=None), dt=_DocType()), 5, doc_type_id=1, override_reason=None, actor_id=1, ip=None, ua=None, today=date(2026, 6, 27))  # type: ignore[arg-type]
+
+
+# ── auto vào sổ khi tải lên (02/07/2026) ────────────────────────────
+def test_auto_register_on_upload_allocates(monkeypatch: pytest.MonkeyPatch) -> None:
+    doc = _doc(status="draft", number=None, subject=None)  # chưa OCR → chưa có trích yếu
+    db = FakeDB(doc=doc, rows=[_DocType()])
+    monkeypatch.setattr(inc.numbering, "allocate_number", lambda _db, _dt, **k: (3, "003/2026/CV-DEN"))
+    inc._auto_register_on_upload(db, doc, actor_id=1, ip=None, ua=None)  # type: ignore[arg-type]
+    assert doc.status == "registered"  # cấp số dù CHƯA có trích yếu (điền sau)
+    assert doc.number == "003/2026/CV-DEN" and doc.number_int == 3
+    assert "incoming_register" in [getattr(a, "action", None) for a in db.added]
+
+
+def test_auto_register_no_doctype_keeps_draft() -> None:
+    doc = _doc(status="draft", number=None)
+    inc._auto_register_on_upload(FakeDB(doc=doc, rows=[]), doc, actor_id=1, ip=None, ua=None)  # type: ignore[arg-type]
+    assert doc.status == "draft" and doc.number is None  # chưa cấu hình sổ → để nháp
+
+
+# ── xoá mềm ─────────────────────────────────────────────────────────
+def test_soft_delete_marks_and_audits() -> None:
+    doc = _doc(status="registered", number="001/2026")
+    db = FakeDB(doc=doc)
+    inc.soft_delete(db, 5, actor_id=1, ip=None, ua=None)  # type: ignore[arg-type]
+    assert doc.deleted_at is not None and db.committed
+    assert "incoming_delete" in [getattr(a, "action", None) for a in db.added]
 
 
 # ── dedup ───────────────────────────────────────────────────────────

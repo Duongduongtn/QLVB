@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 from contextlib import suppress
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from typing import Any
 
@@ -51,6 +51,38 @@ def _lock(db: Session, doc_id: int) -> IncomingDocument:
     return doc
 
 
+def _auto_register_on_upload(
+    db: Session, doc: IncomingDocument, *, actor_id: int, ip: str | None, ua: str | None
+) -> None:
+    """Tự động vào sổ (cấp SỐ ĐẾN) ngay khi tải lên — quyết định 02/07/2026.
+
+    Bỏ ràng buộc trích yếu + KHÔNG chặn trùng (dedup thành cảnh báo, xem sau). Chưa cấu
+    hình sổ đến ('in' doc_type) → GIỮ nháp để vào sổ tay sau. Số đã cấp không tái dùng.
+    """
+    dt = db.scalars(
+        select(DocumentType).where(DocumentType.direction == "in").order_by(DocumentType.id)
+    ).first()
+    if dt is None:
+        return  # chưa cấu hình sổ đến → để nháp
+    today = datetime.now(_VN_TZ).date()
+    number_int, formatted = numbering.allocate_number(db, dt, unit_code=None, on_date=today)
+    doc.doc_type_id = dt.id
+    doc.number_int = number_int
+    doc.number = formatted
+    doc.period_key = numbering.period_key(dt.reset_policy, today)
+    doc.status = "registered"
+    log_action(
+        db,
+        action="incoming_register",
+        user_id=actor_id,
+        object_type="incoming_document",
+        object_id=doc.id,
+        ip=ip,
+        user_agent=ua,
+        detail={"number": formatted, "auto": True},
+    )
+
+
 def create_from_upload(
     db: Session, data: bytes, filename: str | None, *, actor_id: int, ip: str | None, ua: str | None
 ) -> tuple[IncomingDocument, str, str]:
@@ -90,6 +122,8 @@ def create_from_upload(
             user_agent=ua,
             detail={"size": enc.size_bytes},
         )
+        # Tự động vào sổ ngay khi tải lên (cấp số đến) — user điền/sửa metadata sau.
+        _auto_register_on_upload(db, doc, actor_id=actor_id, ip=ip, ua=ua)
         db.commit()
     except Exception:
         db.rollback()
@@ -305,6 +339,25 @@ def update(
     db.commit()
     db.refresh(doc)
     return doc
+
+
+def soft_delete(
+    db: Session, doc_id: int, *, actor_id: int, ip: str | None, ua: str | None
+) -> None:
+    """Xoá mềm công văn đến (ẩn khỏi sổ) — audit log giữ lại. Số đến đã cấp KHÔNG tái dùng."""
+    doc = _lock(db, doc_id)
+    doc.deleted_at = datetime.now(UTC)
+    log_action(
+        db,
+        action="incoming_delete",
+        user_id=actor_id,
+        object_type="incoming_document",
+        object_id=doc.id,
+        ip=ip,
+        user_agent=ua,
+        detail={"number": doc.number},
+    )
+    db.commit()
 
 
 def register(

@@ -472,6 +472,17 @@ function CongVanDenPage() {
     setSelected(null);
   };
 
+  async function deleteDoc(row: IncRow) {
+    if (!window.confirm(`Xoá công văn ${row.number ?? '(nháp)'} khỏi sổ? Số đến đã cấp sẽ không tái dùng.`)) return;
+    setActErr(null);
+    const { error } = await api.DELETE('/api/incoming/{doc_id}', { params: { path: { doc_id: row.id } } });
+    if (error) {
+      setActErr(errMsg(error, 'Xoá công văn thất bại'));
+      return;
+    }
+    await refresh();
+  }
+
   const toggleManagerOnly = useMutation({
     mutationFn: async (row: IncRow) => {
       const { error } = await api.POST('/api/incoming/{doc_id}/manager-only', {
@@ -752,6 +763,11 @@ function CongVanDenPage() {
                       {selected.status !== 'cancelled' && (
                         <button type="button" role="menuitem" className="nav-item w-full" style={{ borderLeft: 'none', color: 'var(--danger)' }} onClick={() => { setOverflowOpen(false); cancelDoc(selected); }}>
                           <Ban className="nav-icon" size={16} style={{ color: 'var(--danger)' }} /> Huỷ vào sổ
+                        </button>
+                      )}
+                      {me.role === 'manager' && (
+                        <button type="button" role="menuitem" className="nav-item w-full" style={{ borderLeft: 'none', color: 'var(--danger)' }} onClick={() => { setOverflowOpen(false); deleteDoc(selected); }}>
+                          <Trash2 className="nav-icon" size={16} style={{ color: 'var(--danger)' }} /> Xoá công văn
                         </button>
                       )}
                     </div>

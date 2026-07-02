@@ -27,12 +27,6 @@ export const Route = createFileRoute('/cong-van-den_/vao-so')({
   component: VaoSoPage,
 });
 
-interface DocTypeLite {
-  id: number;
-  name: string;
-  code: string;
-  direction: string;
-}
 interface Dup {
   layer: number;
   level: string;
@@ -213,17 +207,6 @@ function VaoSoPage() {
   });
   const orgs = useMemo(() => orgsQuery.data?.items ?? [], [orgsQuery.data]);
 
-  const typesQuery = useQuery({
-    queryKey: ['document-types', 'in'],
-    queryFn: async () => {
-      const res = await api.GET('/api/document-types', {});
-      const raw = (res.data ?? []) as DocTypeLite[] | { items: DocTypeLite[] };
-      const list = Array.isArray(raw) ? raw : raw.items;
-      return list.filter((t) => t.direction === 'in');
-    },
-  });
-  const incTypes = typesQuery.data ?? [];
-
   async function onPickFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     e.target.value = '';
@@ -352,21 +335,12 @@ function VaoSoPage() {
     });
   }
 
-  async function saveAndRegister() {
+  async function saveDoc() {
     if (!docId || !doc) return;
-    if (!doc.subject?.trim()) {
-      setErr('Nhập tiêu đề công văn');
-      return;
-    }
-    const typeId = incTypes[0]?.id;
-    if (!typeId) {
-      setErr('Chưa cấu hình loại văn bản đến (sổ đến) — vào Cấu hình → Sổ công văn');
-      return;
-    }
+    // Số đến đã cấp lúc tải lên (auto vào sổ) → đây chỉ LƯU thông tin đã điền/sửa.
     setErr(null);
     setBusy(true);
     try {
-      // 1) Lưu metadata
       const patch = await fetch(`/api/incoming/${docId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -384,40 +358,8 @@ function VaoSoPage() {
         }),
       });
       if (!patch.ok) throw new Error(await errBody(patch, 'Lưu thông tin thất bại'));
-
-      // 1b) Tái kiểm trùng sau khi user đã chọn cơ quan gửi (lớp 2 metadata mới đủ điều kiện).
-      const dupRes = await fetch(`/api/incoming/${docId}/duplicates`, { credentials: 'include' });
-      if (dupRes.ok) {
-        const soft = ((await dupRes.json()) as Dup[]).filter((d) => d.layer !== 1);
-        if (soft.length && !window.confirm(`Phát hiện ${soft.length} dấu hiệu trùng (metadata/nội dung). Vẫn vào sổ?`)) {
-          setBusy(false);
-          return;
-        }
-      }
-
-      // 2) Cấp số đến (trùng tuyệt đối → hỏi lý do rồi gửi lại)
-      let overrideReason: string | null = null;
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const reg = await fetch(`/api/incoming/${docId}/register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ doc_type_id: typeId, override_reason: overrideReason }),
-        });
-        if (reg.ok) {
-          const body = (await reg.json()) as { number: string | null };
-          setRegistered((r) => [...r, { fileName, number: body.number }]);
-          advanceOrFinish();
-          return;
-        }
-        if (reg.status === 409 && attempt === 0) {
-          const reason = window.prompt('Công văn TRÙNG trong sổ. Nhập lý do nếu vẫn muốn vào sổ:');
-          if (!reason?.trim()) return;
-          overrideReason = reason.trim();
-          continue;
-        }
-        throw new Error(await errBody(reg, 'Cấp số đến thất bại'));
-      }
+      setRegistered((r) => [...r, { fileName, number: doc.number }]);
+      advanceOrFinish();
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -447,7 +389,7 @@ function VaoSoPage() {
       <PageHeader
         breadcrumb={[{ label: 'Công văn đến', to: '/cong-van-den' }, { label: 'Thêm công văn' }]}
         title="Thêm công văn đến"
-        subhead="Tải PDF → tự đọc OCR + chữ ký số → xem trang đầu, bổ sung thông tin → cấp số đến"
+        subhead="Tải PDF là có số đến ngay → tự đọc OCR + chữ ký số → xem trang đầu, bổ sung thông tin rồi lưu"
         actions={
           <button className="btn-ghost" type="button" onClick={() => navigate({ to: '/cong-van-den' })}>
             <ArrowLeft size={14} /> Quay lại sổ
@@ -466,11 +408,11 @@ function VaoSoPage() {
           <WizardGuide
             storageKey="guide-vao-so"
             title="Hướng dẫn thêm công văn đến (cho người mới)"
-            intro="Tải file PDF, hệ thống tự đọc và điền sẵn thông tin. Bạn xem TRANG ĐẦU công văn ngay bên cạnh để đối chiếu, bổ sung nếu cần rồi cấp số đến."
+            intro="Tải file PDF là công văn được VÀO SỔ NGAY (có số đến). Hệ thống tự đọc và điền sẵn thông tin; bạn xem TRANG ĐẦU bên cạnh, bổ sung nếu cần rồi lưu. Sửa lại lúc nào cũng được trong sổ."
             steps={[
-              { label: 'Tải file PDF', detail: 'Chọn một hoặc nhiều file PDF của công văn nhận được (tối đa 50MB/file).' },
-              { label: 'Xem & bổ sung', detail: 'Mỗi file: xem trang đầu bên trái, form thông tin bên phải (đã tự điền từ OCR/chữ ký số). Kiểm tra rồi bấm “Lưu & cấp số đến”.' },
-              { label: 'Hoàn tất', detail: 'Hệ thống cấp số đến (sổ chung 2 đơn vị) và lưu vào sổ.' },
+              { label: 'Tải file PDF', detail: 'Chọn một hoặc nhiều file PDF của công văn nhận được (tối đa 50MB/file). Mỗi file được cấp số đến ngay.' },
+              { label: 'Xem & bổ sung', detail: 'Mỗi file: xem trang đầu bên trái, form thông tin bên phải (đã tự điền từ OCR/chữ ký số). Kiểm tra, bổ sung rồi bấm “Lưu”.' },
+              { label: 'Hoàn tất', detail: 'Xong. Có thể mở lại trong sổ để sửa thông tin hoặc phân công xử lý.' },
             ]}
           />
           <div className="card" style={{ padding: 28 }}>
@@ -590,6 +532,12 @@ function VaoSoPage() {
 
             {doc && (
               <>
+                {doc.number && (
+                  <div className="flex items-center" style={{ gap: 8, padding: 10, borderRadius: 6, background: 'var(--success-soft)', marginBottom: 12 }}>
+                    <Check size={15} style={{ color: 'var(--success)', flexShrink: 0 }} />
+                    <span style={{ fontSize: '0.85rem', color: 'var(--ink)' }}>Đã vào sổ · Số đến <b className="cell-mono num">{doc.number}</b></span>
+                  </div>
+                )}
                 <div className="eyebrow" style={{ margin: '4px 0 4px' }}>Thông tin công văn</div>
                 <p className="cell-meta" style={{ marginBottom: 12 }}>Đã tự điền từ OCR + chữ ký số — đối chiếu TRANG ĐẦU bên trái, bổ sung nếu cần.</p>
                 <div className="flex flex-col" style={{ gap: 12 }}>
@@ -652,8 +600,8 @@ function VaoSoPage() {
                     Bỏ qua
                   </button>
                 )}
-                <button className="btn-primary" type="button" disabled={busy || !ocrDone} onClick={saveAndRegister}>
-                  {busy ? 'Đang lưu…' : !ocrDone ? 'Đang đọc…' : queue.length > 1 && cursor + 1 < queue.length ? 'Lưu & file kế' : 'Lưu & cấp số đến'} <ArrowRight size={14} />
+                <button className="btn-primary" type="button" disabled={busy || !doc} onClick={saveDoc}>
+                  {busy ? 'Đang lưu…' : queue.length > 1 && cursor + 1 < queue.length ? 'Lưu & file kế' : 'Lưu & xong'} <ArrowRight size={14} />
                 </button>
               </div>
             </div>
