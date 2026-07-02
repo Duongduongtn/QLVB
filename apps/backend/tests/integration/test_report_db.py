@@ -102,9 +102,10 @@ def test_dashboard_g1_metrics(db_session: Session) -> None:
     assert any("Lao động" in t["name"] for t in s["top_senders"])
     assert any(t["name"] == "Công văn" and t["count"] >= 1 for t in s["by_type"])
 
-    # Toggle đơn vị: lọc CV đi + việc theo đơn vị GDNN → vẫn thấy; đơn vị khác (id giả) → 0 việc.
+    # Toggle đơn vị: CV đi lọc theo đơn vị (đơn vị khác id giả → 0 CV đi); còn CV ĐẾN + việc
+    # xử lý dùng CHUNG 2 đơn vị (task bỏ nhãn đơn vị) → số chưa xử lý GIỐNG mọi view.
     s_other = report.dashboard_stats(db_session, year=2026, today=today, unit_id=10_000_000)
-    assert s_other["kpi"]["chua_xu_ly"] == 0
+    assert s_other["kpi"]["chua_xu_ly"] == s["kpi"]["chua_xu_ly"]
     assert s_other["kpi"]["di_year"] == 0
 
 
