@@ -77,11 +77,11 @@ def _gets(active: bool = True) -> dict[str, Any]:
     return {"IncomingDocument": _Inc(), "Unit": _Unit(), "User": _User(active)}
 
 
-# ── assign ──────────────────────────────────────────────────────────
+# ── assign (1 người/CV) ─────────────────────────────────────────────
 def test_assign_creates_task_and_notifications() -> None:
-    db = FakeDB(gets=_gets())
-    out = svc.assign(db, 5, [{"unit_id": 1, "assignee_id": 2}], actor_id=9, ip=None, ua=None)  # type: ignore[arg-type]
-    assert len(out) == 1
+    db = FakeDB(gets=_gets())  # existing=None → tạo task mới
+    out = svc.assign(db, 5, assignee_id=2, deadline=None, note=None, actor_id=9, ip=None, ua=None)  # type: ignore[arg-type]
+    assert out.assignee_id == 2
     actions = [type(a).__name__ for a in db.added]
     assert "ProcessingTask" in actions
     assert "Notification" in actions  # noti người được giao
@@ -91,12 +91,19 @@ def test_assign_creates_task_and_notifications() -> None:
 def test_assign_locked_user_rejected() -> None:
     db = FakeDB(gets=_gets(active=False))
     with pytest.raises(ValidationFailed):
-        svc.assign(db, 5, [{"unit_id": 1, "assignee_id": 2}], actor_id=9, ip=None, ua=None)  # type: ignore[arg-type]
+        svc.assign(db, 5, assignee_id=2, deadline=None, note=None, actor_id=9, ip=None, ua=None)  # type: ignore[arg-type]
 
 
-def test_assign_empty_rejected() -> None:
-    with pytest.raises(ValidationFailed):
-        svc.assign(FakeDB(gets=_gets()), 5, [], actor_id=9, ip=None, ua=None)  # type: ignore[arg-type]
+def test_assign_existing_reassigns_and_notifies_old() -> None:
+    # CV đã có task (1 task/CV) → giao lại đổi người: mở lại task done + noti cả người cũ.
+    existing = ProcessingTask(id=1, incoming_id=5, assignee_id=2, status="done")
+    db = FakeDB(gets=_gets(), existing=existing)
+    out = svc.assign(db, 5, assignee_id=3, deadline=None, note=None, actor_id=9, ip=None, ua=None)  # type: ignore[arg-type]
+    assert out.assignee_id == 3
+    assert out.status == "new"  # giao lại done → mở lại
+    notis = [a for a in db.added if type(a).__name__ == "Notification"]
+    assert len(notis) == 2  # người cũ + người mới
+    assert db.committed
 
 
 # ── update_status ───────────────────────────────────────────────────

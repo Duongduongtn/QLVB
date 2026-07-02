@@ -1,7 +1,7 @@
 """Phân công + theo dõi xử lý CV đến — E2 (giao việc) + E3 (cập nhật trạng thái).
 
-1 CV đến → giao GDNN / DVDL / Cả 2: mỗi đơn vị 1 ProcessingTask độc lập. Giao lại =
-đổi assignee → noti cả người cũ + mới. Người được giao tự cập nhật trạng thái (E3).
+1 CV đến → 1 ProcessingTask giao cho 1 người (bỏ phân biệt đơn vị, quyết định 02/07/2026).
+Giao lại = đổi assignee → noti cả người cũ + mới. Người được giao tự cập nhật trạng thái (E3).
 """
 
 from __future__ import annotations

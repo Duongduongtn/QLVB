@@ -26,9 +26,14 @@ def upgrade() -> None:
         "processing_tasks", "unit_id", existing_type=sa.BigInteger(), nullable=True
     )
     op.create_unique_constraint("uq_task_incoming", "processing_tasks", ["incoming_id"])
+    # uq_task_incoming tự tạo B-tree index trên incoming_id → idx_task_incoming dư thừa.
+    op.drop_index("idx_task_incoming", table_name="processing_tasks")
 
 
 def downgrade() -> None:
+    # LƯU Ý: downgrade chỉ an toàn khi CHƯA có task unit_id=NULL (task tạo sau upgrade),
+    # vì khôi phục NOT NULL sẽ fail nếu tồn tại giá trị NULL.
+    op.create_index("idx_task_incoming", "processing_tasks", ["incoming_id"])
     op.drop_constraint("uq_task_incoming", "processing_tasks", type_="unique")
     op.alter_column(
         "processing_tasks", "unit_id", existing_type=sa.BigInteger(), nullable=False

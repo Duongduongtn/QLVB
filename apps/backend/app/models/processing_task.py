@@ -33,9 +33,9 @@ class ProcessingTask(Base, TimestampMixin):
     __table_args__ = (
         CheckConstraint("status IN ('new','in_progress','done')", name="ck_task_status"),
         # 1 task / 1 CV đến (phân công 1 người — bỏ ràng buộc theo đơn vị E2 cũ).
+        # Unique(incoming_id) đã tự tạo index → không cần Index("idx_task_incoming") riêng.
         UniqueConstraint("incoming_id", name="uq_task_incoming"),
         Index("idx_task_assignee_status", "assignee_id", "status"),
-        Index("idx_task_incoming", "incoming_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)

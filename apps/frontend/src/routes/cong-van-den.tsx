@@ -712,7 +712,12 @@ function CongVanDenPage() {
                 <Eye size={14} /> Xem nội dung
               </button>
               {selected.status === 'registered' && (
-                <button className="btn-secondary" style={{ height: 32 }} type="button" onClick={() => setAssignOpen(true)}>
+                <button
+                  className="btn-secondary"
+                  style={{ height: 32 }}
+                  type="button"
+                  onClick={() => { setAssignee(''); setAssignDeadline(''); setAssignNote(''); setAssignOpen(true); }}
+                >
                   <UserPlus size={14} /> Phân công
                 </button>
               )}
@@ -906,7 +911,7 @@ function CongVanDenPage() {
         actions={
           <>
             <button className="btn-secondary" type="button" onClick={() => setAssignOpen(false)}>Huỷ</button>
-            <button className="btn-primary" type="button" disabled={assignMut.isPending || !selected} onClick={() => selected && assignMut.mutate(selected.id)}>
+            <button className="btn-primary" type="button" disabled={assignMut.isPending || !selected || !assignee} onClick={() => selected && assignMut.mutate(selected.id)}>
               {assignMut.isPending ? 'Đang giao…' : 'Giao việc'}
             </button>
           </>

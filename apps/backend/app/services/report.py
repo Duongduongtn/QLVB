@@ -413,8 +413,9 @@ def dashboard_stats(
     db: Session, *, year: int, today: date, unit_id: int | None = None
 ) -> dict[str, Any]:
     """Dashboard G1 (manager-only → đếm mọi CV). KPI + 12 tháng CV đi/đến + việc chưa xử lý/quá
-    hạn + top cơ quan gửi + cơ cấu loại VB đi. `unit_id` (toggle đơn vị) lọc CV ĐI + việc xử lý
-    theo đơn vị; CV ĐẾN dùng chung 2 đơn vị nên KHÔNG lọc (top cơ quan gửi luôn gồm cả 2)."""
+    hạn + top cơ quan gửi + cơ cấu loại VB đi. `unit_id` (toggle đơn vị) CHỈ lọc CV ĐI; CV ĐẾN
+    + việc xử lý dùng chung 2 đơn vị nên KHÔNG lọc (số việc chưa xử lý/quá hạn giống nhau ở mọi
+    view; top cơ quan gửi luôn gồm cả 2)."""
     lo, hi = _year_range(year)
 
     def _monthly(date_col: Any, conds: list[Any]) -> dict[int, int]:
