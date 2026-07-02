@@ -446,22 +446,21 @@ def dashboard_stats(
     cur_m = today.month if today.year == year else 0
 
     # ── Việc xử lý chưa xong / quá hạn (E2/E3) — đếm theo CV ĐẾN đã vào sổ (registered, loại
-    #    nháp + huỷ), năm tiếp nhận theo giờ VN. "Chưa xử lý" = còn việc mở HOẶC chưa giao việc
-    #    nào (chỉ tính CV-chưa-giao khi xem TOÀN BỘ — CV chưa giao không thuộc đơn vị nào nên
-    #    view theo đơn vị chỉ đếm việc mở của đơn vị đó). "Quá hạn" = có việc mở đã quá deadline.
+    #    nháp + huỷ), năm tiếp nhận theo giờ VN. Sổ đến dùng CHUNG 2 đơn vị và task KHÔNG còn
+    #    gắn đơn vị (phân công 1 người) → số liệu tính chung, không lọc theo đơn vị: "Chưa xử
+    #    lý" = còn việc mở HOẶC chưa giao việc nào; "Quá hạn" = có việc mở đã quá deadline.
     reg_conds = [
         IncomingDocument.deleted_at.is_(None),
         IncomingDocument.status == "registered",
         inc_vn >= lo,
         inc_vn < hi,
     ]
-    task_unit = [ProcessingTask.unit_id == unit_id] if unit_id is not None else []
 
     def _task_exists(*extra: Any) -> Any:
         return (
             select(1)
             .select_from(ProcessingTask)
-            .where(ProcessingTask.incoming_id == IncomingDocument.id, *task_unit, *extra)
+            .where(ProcessingTask.incoming_id == IncomingDocument.id, *extra)
             .exists()
         )
 
@@ -471,7 +470,7 @@ def dashboard_stats(
         ProcessingTask.deadline.is_not(None),
         ProcessingTask.deadline < today,
     )
-    unprocessed = open_exists if unit_id is not None else or_(open_exists, ~_task_exists())
+    unprocessed = or_(open_exists, ~_task_exists())
     chua_xu_ly = (
         db.scalar(select(func.count()).select_from(IncomingDocument).where(*reg_conds, unprocessed))
         or 0

@@ -16,7 +16,6 @@ from sqlalchemy.orm import Session
 from app.core.errors import Conflict, NotFound, PermissionDenied, ValidationFailed
 from app.models.incoming_document import IncomingDocument
 from app.models.processing_task import ProcessingTask
-from app.models.unit import Unit
 from app.models.user import User
 from app.services import notification
 from app.services import push as push_service
@@ -73,66 +72,54 @@ def summary_for_incomings(db: Session, incoming_ids: list[int]) -> dict[int, dic
 def assign(
     db: Session,
     incoming_id: int,
-    assignments: list[dict[str, Any]],
     *,
+    assignee_id: int,
+    deadline: date | None,
+    note: str | None,
     actor_id: int,
     ip: str | None,
     ua: str | None,
-) -> list[ProcessingTask]:
-    """Giao việc: mỗi phần tử {unit_id, assignee_id, deadline?, note?}. 1 task/đơn vị —
-    đã có thì đổi người (reassign + noti người cũ). Mọi thay đổi đều noti người mới."""
+) -> ProcessingTask:
+    """Giao việc xử lý CV đến cho 1 người. Mỗi CV tối đa 1 task — đã có thì đổi người
+    (noti người cũ). Bỏ phân biệt đơn vị (quyết định 02/07/2026)."""
     inc = db.get(IncomingDocument, incoming_id)
     if inc is None or inc.deleted_at is not None:
         raise NotFound("Không tìm thấy công văn đến")
-    if not assignments:
-        raise ValidationFailed("Chọn ít nhất 1 đơn vị xử lý")
+    _active_user(db, assignee_id)
 
-    tasks: list[ProcessingTask] = []
-    for a in assignments:
-        unit_id = int(a["unit_id"])
-        assignee_id = int(a["assignee_id"])
-        if db.get(Unit, unit_id) is None:
-            raise NotFound("Không tìm thấy đơn vị xử lý")
-        _active_user(db, assignee_id)
-        deadline = a.get("deadline")
-        note = a.get("note")
-
-        existing = db.scalars(
-            select(ProcessingTask).where(
-                ProcessingTask.incoming_id == incoming_id, ProcessingTask.unit_id == unit_id
+    existing = db.scalars(
+        select(ProcessingTask).where(ProcessingTask.incoming_id == incoming_id)
+    ).first()
+    if existing is not None:
+        old_assignee = existing.assignee_id
+        existing.assignee_id = assignee_id
+        existing.deadline = deadline
+        existing.note = note
+        if existing.status == "done":
+            existing.status = "new"  # giao lại → mở lại việc
+        if old_assignee is not None and old_assignee != assignee_id:
+            notification.create(
+                db, user_id=old_assignee, type="task_reassigned",
+                message=f"Việc xử lý CV đến {inc.number or '(nháp)'} đã chuyển cho người khác",
+                link="/viec-cua-toi",
             )
-        ).first()
-        if existing is not None:
-            old_assignee = existing.assignee_id
-            existing.assignee_id = assignee_id
-            existing.deadline = deadline
-            existing.note = note
-            if existing.status == "done":
-                existing.status = "new"  # giao lại → mở lại việc
-            if old_assignee is not None and old_assignee != assignee_id:
-                notification.create(
-                    db, user_id=old_assignee, type="task_reassigned",
-                    message=f"Việc xử lý CV đến {inc.number or '(nháp)'} đã chuyển cho người khác",
-                    link="/viec-cua-toi",
-                )
-            tasks.append(existing)
-        else:
-            t = ProcessingTask(
-                incoming_id=incoming_id,
-                unit_id=unit_id,
-                assignee_id=assignee_id,
-                status="new",
-                deadline=deadline,
-                note=note,
-                assigned_by=actor_id,
-            )
-            db.add(t)
-            tasks.append(t)
-        notification.create(
-            db, user_id=assignee_id, type="task_assigned",
-            message=f"Bạn được giao xử lý CV đến {inc.number or '(nháp)'}",
-            link="/viec-cua-toi",
+        task = existing
+    else:
+        task = ProcessingTask(
+            incoming_id=incoming_id,
+            unit_id=None,
+            assignee_id=assignee_id,
+            status="new",
+            deadline=deadline,
+            note=note,
+            assigned_by=actor_id,
         )
+        db.add(task)
+    notification.create(
+        db, user_id=assignee_id, type="task_assigned",
+        message=f"Bạn được giao xử lý CV đến {inc.number or '(nháp)'}",
+        link="/viec-cua-toi",
+    )
 
     log_action(
         db,
@@ -142,16 +129,15 @@ def assign(
         object_id=incoming_id,
         ip=ip,
         user_agent=ua,
-        detail={"units": [int(a["unit_id"]) for a in assignments]},
+        detail={"assignee_id": assignee_id},
     )
     try:
         db.commit()
-    except IntegrityError as exc:  # đua tạo task trùng (incoming, unit)
+    except IntegrityError as exc:  # đua tạo task trùng cho cùng 1 CV
         db.rollback()
-        raise Conflict("Công văn vừa được phân công cho đơn vị này, thử lại") from exc
-    for t in tasks:
-        db.refresh(t)
-    return tasks
+        raise Conflict("Công văn vừa được phân công, thử lại") from exc
+    db.refresh(task)
+    return task
 
 
 def list_for_incoming(db: Session, incoming_id: int) -> list[ProcessingTask]:
@@ -159,7 +145,7 @@ def list_for_incoming(db: Session, incoming_id: int) -> list[ProcessingTask]:
         db.scalars(
             select(ProcessingTask)
             .where(ProcessingTask.incoming_id == incoming_id)
-            .order_by(ProcessingTask.unit_id)
+            .order_by(ProcessingTask.id)
         ).all()
     )
 

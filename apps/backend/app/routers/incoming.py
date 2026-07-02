@@ -145,27 +145,34 @@ def ocr_status(
     }
 
 
-@router.post("/{doc_id}/assign", response_model=list[TaskOut])
+@router.post("/{doc_id}/assign", response_model=TaskOut)
 def assign_incoming(
     doc_id: int,
     payload: AssignRequest,
     request: Request,
     db: Session = Depends(get_db),
     actor: User = Depends(current_user),
-) -> list[TaskOut]:
-    """E2 — phân công xử lý cho 1 hoặc cả 2 đơn vị (mỗi đơn vị 1 task độc lập)."""
+) -> TaskOut:
+    """E2 — phân công xử lý CV đến cho 1 người (bỏ phân biệt đơn vị)."""
     doc = _visible(inc_service.get_incoming(db, doc_id), actor)
     ip, ua = _ctx(request)
-    tasks = task_service.assign(
-        db, doc_id, [a.model_dump() for a in payload.assignments], actor_id=actor.id, ip=ip, ua=ua
+    task = task_service.assign(
+        db,
+        doc_id,
+        assignee_id=payload.assignee_id,
+        deadline=payload.deadline,
+        note=payload.note,
+        actor_id=actor.id,
+        ip=ip,
+        ua=ua,
     )
-    # Web Push (L1) — đẩy nền sau khi giao xong, không chặn response. 1 push/người được giao.
-    number = doc.number or "(nháp)"
-    for assignee_id in {t.assignee_id for t in tasks if t.assignee_id is not None}:
+    # Web Push (L1) — đẩy nền sau khi giao xong, không chặn response.
+    if task.assignee_id is not None:
         send_web_push.delay(
-            assignee_id, "Việc mới được giao", f"Bạn được giao xử lý CV đến {number}", "/viec-cua-toi"
+            task.assignee_id, "Việc mới được giao",
+            f"Bạn được giao xử lý CV đến {doc.number or '(nháp)'}", "/viec-cua-toi",
         )
-    return [TaskOut.model_validate(t) for t in tasks]
+    return TaskOut.model_validate(task)
 
 
 @router.get("/{doc_id}/tasks", response_model=list[TaskOut])

@@ -32,8 +32,8 @@ class ProcessingTask(Base, TimestampMixin):
     __tablename__ = "processing_tasks"
     __table_args__ = (
         CheckConstraint("status IN ('new','in_progress','done')", name="ck_task_status"),
-        # Mỗi đơn vị chỉ 1 task / 1 CV đến (bất biến E2) — chống đua tạo trùng ở DB.
-        UniqueConstraint("incoming_id", "unit_id", name="uq_task_incoming_unit"),
+        # 1 task / 1 CV đến (phân công 1 người — bỏ ràng buộc theo đơn vị E2 cũ).
+        UniqueConstraint("incoming_id", name="uq_task_incoming"),
         Index("idx_task_assignee_status", "assignee_id", "status"),
         Index("idx_task_incoming", "incoming_id"),
     )
@@ -42,7 +42,8 @@ class ProcessingTask(Base, TimestampMixin):
     incoming_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("incoming_documents.id", ondelete="CASCADE"), nullable=False
     )
-    unit_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("units.id"), nullable=False)
+    # Không còn gắn đơn vị (phân công 1 người) — giữ cột nullable cho dữ liệu cũ + downgrade.
+    unit_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("units.id"))
     assignee_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
     status: Mapped[str] = mapped_column(String(12), nullable=False, default="new")
     deadline: Mapped[date | None] = mapped_column(Date)

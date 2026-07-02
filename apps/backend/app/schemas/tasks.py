@@ -10,15 +10,12 @@ from pydantic import BaseModel, ConfigDict, Field
 TaskStatus = Literal["new", "in_progress", "done"]
 
 
-class AssignmentItem(BaseModel):
-    unit_id: int
+class AssignRequest(BaseModel):
+    """Phân công 1 người xử lý 1 CV đến (bỏ phân biệt đơn vị)."""
+
     assignee_id: int
     deadline: date | None = None
     note: Annotated[str | None, Field(max_length=1000)] = None
-
-
-class AssignRequest(BaseModel):
-    assignments: Annotated[list[AssignmentItem], Field(min_length=1)]
 
 
 class TaskStatusUpdate(BaseModel):
@@ -35,7 +32,7 @@ class TaskOut(BaseModel):
 
     id: int
     incoming_id: int
-    unit_id: int
+    unit_id: int | None
     assignee_id: int | None
     status: str
     deadline: date | None
@@ -48,7 +45,6 @@ class TaskOut(BaseModel):
 class MyTaskItem(BaseModel):
     id: int
     incoming_id: int
-    unit_id: int
     status: str
     deadline: date | None
     overdue: bool

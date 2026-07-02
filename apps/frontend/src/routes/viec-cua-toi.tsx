@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, ClipboardList, Clock, PlayCircle } from 'lucide-react';
@@ -19,7 +19,6 @@ type TaskStatus = 'new' | 'in_progress' | 'done';
 interface MyTask {
   id: number;
   incoming_id: number;
-  unit_id: number;
   status: TaskStatus;
   deadline: string | null;
   overdue: boolean;
@@ -27,12 +26,6 @@ interface MyTask {
   subject: string | null;
   sender_org_id: number | null;
   urgency: string;
-}
-
-interface UnitLite {
-  id: number;
-  short_name: string | null;
-  code: string;
 }
 
 const STATUS_PILL: Record<TaskStatus, { label: string; variant: string; dot: boolean }> = {
@@ -51,13 +44,6 @@ function ViecCuaToiPage() {
   const [status, setStatus] = useState<TaskStatus | 'all'>('all');
   const [selected, setSelected] = useState<MyTask | null>(null);
   const [actErr, setActErr] = useState<string | null>(null);
-
-  const unitsQuery = useQuery({
-    queryKey: ['units'],
-    queryFn: async () => (await api.GET('/api/units', {})).data as { items: UnitLite[] },
-  });
-  const units = useMemo(() => unitsQuery.data?.items ?? [], [unitsQuery.data]);
-  const unitName = (id: number) => units.find((u) => u.id === id)?.short_name ?? units.find((u) => u.id === id)?.code ?? '—';
 
   const tasksQuery = useQuery({
     queryKey: ['my-tasks', status],
@@ -129,7 +115,6 @@ function ViecCuaToiPage() {
               <tr>
                 <th style={{ width: 110, paddingLeft: 24 }}>Số đến</th>
                 <th>Trích yếu</th>
-                <th style={{ width: 90 }}>Đơn vị</th>
                 <th style={{ width: 120 }}>Hạn xử lý</th>
                 <th style={{ width: 140 }}>Trạng thái</th>
                 <th style={{ width: 200, paddingRight: 24 }}>Thao tác</th>
@@ -143,7 +128,6 @@ function ViecCuaToiPage() {
                     <span className="subject">{t.subject ?? '(chưa có trích yếu)'}</span>
                     {t.urgency !== 'normal' && <Pill variant="warning">{URGENCY_LABEL[t.urgency] ?? t.urgency}</Pill>}
                   </td>
-                  <td><span className="cell-meta">{unitName(t.unit_id)}</span></td>
                   <td>
                     {t.deadline ? (
                       <span style={{ color: t.overdue ? 'var(--danger)' : 'var(--ink-body)', fontWeight: t.overdue ? 600 : 400 }}>
@@ -187,7 +171,6 @@ function ViecCuaToiPage() {
             <div className="subject" style={{ fontWeight: 500, marginBottom: 12 }}>{selected.subject ?? '(chưa có trích yếu)'}</div>
             <div className="card" style={{ padding: 16 }}>
               <InfoRow label="Số đến"><span className="cell-mono num">{selected.number ?? '—'}</span></InfoRow>
-              <InfoRow label="Đơn vị xử lý">{unitName(selected.unit_id)}</InfoRow>
               <InfoRow label="Mức độ khẩn">{URGENCY_LABEL[selected.urgency] ?? selected.urgency}</InfoRow>
               <InfoRow label="Hạn xử lý">
                 {selected.deadline ? (

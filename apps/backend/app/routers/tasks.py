@@ -44,7 +44,6 @@ def my_tasks(
         MyTaskItem(
             id=t.id,
             incoming_id=t.incoming_id,
-            unit_id=t.unit_id,
             status=t.status,
             deadline=t.deadline,
             overdue=task_service.overdue(t, today=today),

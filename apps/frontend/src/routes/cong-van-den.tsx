@@ -6,7 +6,7 @@ import { Ban, ChevronLeft, ChevronRight, Download, Eye, EyeOff, FileArchive, His
 import { api, type ApiErrorEnvelope } from '~/lib/api';
 import { useAuth } from '~/stores/auth';
 import { fmtDate, fmtDateTime, fmtInt, fmtNum } from '~/lib/format';
-import { EmptyState, FilterMenu, InfoRow, PageHeader, Pill } from '~/components/ui';
+import { EmptyState, FilterMenu, PageHeader, Pill } from '~/components/ui';
 import { Drawer } from '~/components/Drawer';
 import { Modal } from '~/components/Modal';
 import { PdfViewerModal } from '~/components/PdfViewerModal';
@@ -55,11 +55,17 @@ const HIST_ACTION_LABEL: Record<string, string> = {
   incoming_download: 'tải file', incoming_download_raw: 'tải bản gốc (không watermark)',
 };
 
-interface UnitLite2 {
-  id: number;
-  short_name: string | null;
-  code: string;
+/** 1 trường chi tiết ở drawer — nhãn nhỏ in hoa phía trên, giá trị lớn rõ phía dưới
+ *  (tách bạch từng trường, không dồn nhãn–giá trị 1 hàng dễ lẫn). */
+function DetailField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="eyebrow" style={{ marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: '0.9rem', color: 'var(--ink)', wordBreak: 'break-word' }}>{children}</div>
+    </div>
+  );
 }
+
 interface UserLite {
   id: number;
   username: string;
@@ -316,12 +322,6 @@ function CongVanDenPage() {
   });
   const tasks = tasksQuery.data ?? [];
 
-  const unitsQuery = useQuery({
-    queryKey: ['units'],
-    queryFn: async () => (await api.GET('/api/units', {})).data as { items: UnitLite2[] },
-  });
-  const allUnits = useMemo(() => unitsQuery.data?.items ?? [], [unitsQuery.data]);
-
   const usersQuery = useQuery({
     queryKey: ['users', 'assignee'],
     enabled: !!me,
@@ -440,36 +440,24 @@ function CongVanDenPage() {
     ]);
   }
 
-  // ── Phân công (E2) ──
+  // ── Phân công (1 người/CV, bỏ đơn vị) ──
   const [assignOpen, setAssignOpen] = useState(false);
-  const [assignUnits, setAssignUnits] = useState<'first' | 'second' | 'both'>('first');
-  const [assignee1, setAssignee1] = useState<number | ''>('');
-  const [assignee2, setAssignee2] = useState<number | ''>('');
+  const [assignee, setAssignee] = useState<number | ''>('');
   const [assignDeadline, setAssignDeadline] = useState('');
   const [assignNote, setAssignNote] = useState('');
 
   const assignMut = useMutation({
     mutationFn: async (docId: number) => {
-      const u1 = allUnits[0];
-      const u2 = allUnits[1];
-      const list: { unit_id: number; assignee_id: number; deadline: string | null; note: string | null }[] = [];
-      if ((assignUnits === 'first' || assignUnits === 'both') && u1 && assignee1) {
-        list.push({ unit_id: u1.id, assignee_id: assignee1, deadline: assignDeadline || null, note: assignNote || null });
-      }
-      if ((assignUnits === 'second' || assignUnits === 'both') && u2 && assignee2) {
-        list.push({ unit_id: u2.id, assignee_id: assignee2, deadline: assignDeadline || null, note: assignNote || null });
-      }
-      if (list.length === 0) throw new Error('Chọn đơn vị và người xử lý');
+      if (!assignee) throw new Error('Chọn người xử lý');
       const { error } = await api.POST('/api/incoming/{doc_id}/assign', {
         params: { path: { doc_id: docId } },
-        body: { assignments: list },
+        body: { assignee_id: assignee, deadline: assignDeadline || null, note: assignNote || null },
       });
       if (error) throw new Error(errMsg(error, 'Phân công thất bại'));
     },
     onSuccess: async () => {
       setAssignOpen(false);
-      setAssignee1('');
-      setAssignee2('');
+      setAssignee('');
       setAssignDeadline('');
       setAssignNote('');
       // Refresh cả task chi tiết LẪN sổ (badge "Đã giao" cập nhật ngay sau khi giao).
@@ -778,17 +766,19 @@ function CongVanDenPage() {
                 )}
               </div>
               {!editing ? (
-                <>
-                  <InfoRow label="Đơn vị phát hành">
-                    <span className="flex items-center" style={{ gap: 6 }}>
-                      {selected.sender_org_id ? orgName(selected.sender_org_id) : (detail?.sender_org_name ?? '—')}
-                      {selected.signature_status === 'valid' && <ShieldCheck size={14} style={{ color: 'var(--success)', flexShrink: 0 }} aria-label="Đã ký số hợp lệ" />}
+                <div className="flex flex-col" style={{ gap: 14, marginTop: 4 }}>
+                  <DetailField label="Đơn vị phát hành">
+                    <span className="flex items-start" style={{ gap: 6 }}>
+                      <span style={{ minWidth: 0 }}>{selected.sender_org_id ? orgName(selected.sender_org_id) : (detail?.sender_org_name ?? '—')}</span>
+                      {selected.signature_status === 'valid' && <ShieldCheck size={14} style={{ color: 'var(--success)', flexShrink: 0, marginTop: 2 }} aria-label="Đã ký số hợp lệ" />}
                     </span>
-                  </InfoRow>
-                  <InfoRow label="Ngày phát hành">{selected.document_date ? fmtDate(selected.document_date) : '—'}</InfoRow>
-                  <InfoRow label="Tiêu đề công văn">{selected.subject ?? '—'}</InfoRow>
-                  <InfoRow label="Số công văn"><span className="cell-mono">{selected.reference_number ?? '—'}</span></InfoRow>
-                </>
+                  </DetailField>
+                  <DetailField label="Ngày phát hành">{selected.document_date ? fmtDate(selected.document_date) : '—'}</DetailField>
+                  <DetailField label="Tiêu đề công văn">{selected.subject ?? '—'}</DetailField>
+                  <DetailField label="Số công văn">
+                    <span className="cell-mono" style={{ fontSize: '0.9rem', fontWeight: 500 }}>{selected.reference_number ?? '—'}</span>
+                  </DetailField>
+                </div>
               ) : (
                 <div className="flex flex-col" style={{ gap: 12 }}>
                   <div>
@@ -923,31 +913,12 @@ function CongVanDenPage() {
         }
       >
         <div>
-          <label className="field-label">Đơn vị xử lý</label>
-          <div className="seg">
-            <button type="button" data-active={assignUnits === 'first' ? 'true' : undefined} onClick={() => setAssignUnits('first')}>{allUnits[0]?.short_name ?? 'Đơn vị 1'}</button>
-            <button type="button" data-active={assignUnits === 'second' ? 'true' : undefined} onClick={() => setAssignUnits('second')}>{allUnits[1]?.short_name ?? 'Đơn vị 2'}</button>
-            <button type="button" data-active={assignUnits === 'both' ? 'true' : undefined} onClick={() => setAssignUnits('both')}>Cả 2 đơn vị</button>
-          </div>
+          <label className="field-label">Người xử lý</label>
+          <select className="text-input" value={assignee} onChange={(e) => setAssignee(e.target.value ? Number(e.target.value) : '')}>
+            <option value="">— Chọn người —</option>
+            {users.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+          </select>
         </div>
-        {(assignUnits === 'first' || assignUnits === 'both') && (
-          <div>
-            <label className="field-label">Người xử lý — {allUnits[0]?.short_name ?? 'Đơn vị 1'}</label>
-            <select className="text-input" value={assignee1} onChange={(e) => setAssignee1(e.target.value ? Number(e.target.value) : '')}>
-              <option value="">— Chọn người —</option>
-              {users.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
-            </select>
-          </div>
-        )}
-        {(assignUnits === 'second' || assignUnits === 'both') && (
-          <div>
-            <label className="field-label">Người xử lý — {allUnits[1]?.short_name ?? 'Đơn vị 2'}</label>
-            <select className="text-input" value={assignee2} onChange={(e) => setAssignee2(e.target.value ? Number(e.target.value) : '')}>
-              <option value="">— Chọn người —</option>
-              {users.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
-            </select>
-          </div>
-        )}
         <div>
           <label className="field-label">Hạn xử lý</label>
           <input className="text-input" type="date" value={assignDeadline} onChange={(e) => setAssignDeadline(e.target.value)} />
@@ -956,7 +927,7 @@ function CongVanDenPage() {
           <label className="field-label">Ghi chú phân công</label>
           <textarea className="text-input" rows={3} value={assignNote} onChange={(e) => setAssignNote(e.target.value)} placeholder="Nội dung cần xử lý…" />
         </div>
-        <p className="cell-meta">Chọn “Cả 2 đơn vị” sẽ tạo 2 việc xử lý độc lập.</p>
+        <p className="cell-meta">Mỗi công văn giao cho 1 người xử lý. Giao lại sẽ thay người cũ.</p>
       </Modal>
     </>
   );
