@@ -13,6 +13,7 @@ import {
   Home,
   Inbox,
   KeyRound,
+  Loader2,
   LogOut,
   Menu,
   MonitorSmartphone,
@@ -112,9 +113,12 @@ function RootLayout() {
   const user = useAuth((s) => s.user);
   const setUser = useAuth((s) => s.setUser);
   const clear = useAuth((s) => s.clear);
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isLoginPage = pathname === '/login';
 
   // Hydrate user từ cookie session (HttpOnly) khi tải app — phiên sống qua refresh.
   // 401 (chưa đăng nhập) trả về null, không retry.
+  // `me === undefined` ⇒ đang gọi /me lần đầu (chưa biết còn phiên hay không).
   const { data: me } = useQuery({
     queryKey: ['me'],
     queryFn: async () => {
@@ -127,10 +131,26 @@ function RootLayout() {
 
   useEffect(() => {
     if (me) setUser({ ...me, role: me.role as Role });
-    // PWA L1: chưa/đã hết đăng nhập (me === null, không phải undefined-đang-tải) → dọn cache
-    // API offline để thiết bị chung không phục vụ lại CV của phiên trước (gồm CV mật).
-    else if (me === null && 'caches' in window) void caches.delete('qlcv-api');
-  }, [me, setUser]);
+    else if (me === null) {
+      // Hết/không có phiên → dọn store để UI không giữ user cũ.
+      clear();
+      // PWA L1: dọn cache API offline để thiết bị chung không phục vụ lại CV của
+      // phiên trước (gồm CV mật).
+      if ('caches' in window) void caches.delete('qlcv-api');
+    }
+  }, [me, setUser, clear]);
+
+  // Cổng xác thực: chưa đăng nhập → ép về /login; đã đăng nhập mà mở /login → về
+  // trang chính. Chờ biết trạng thái phiên (me !== undefined) mới điều hướng để
+  // không nháy nhầm màn hình.
+  useEffect(() => {
+    if (me === undefined) return;
+    if (me && isLoginPage) {
+      navigate({ to: '/', replace: true });
+    } else if (me === null && !isLoginPage) {
+      navigate({ to: '/login', replace: true });
+    }
+  }, [me, isLoginPage, navigate]);
 
   async function handleLogout() {
     // Xoá phiên ở server trước; dù lỗi mạng vẫn dọn client + về trang login.
@@ -148,12 +168,30 @@ function RootLayout() {
     }
   }
 
-  // Chưa đăng nhập → render trang trần (login full-screen, không khung app).
-  if (!user) {
-    return <Outlet />;
+  // Đang xác định phiên (gọi /me lần đầu) — tránh nháy nhầm login/trang chính.
+  if (me === undefined) {
+    return <FullScreenLoader />;
   }
 
-  return <AppShell user={user} onLogout={handleLogout} />;
+  // Đã đăng nhập.
+  if (me) {
+    // Đang chuyển hướng khỏi /login về trang chính → giữ loader, không render login.
+    if (isLoginPage) return <FullScreenLoader />;
+    const current = user ?? { ...me, role: me.role as Role };
+    return <AppShell user={current} onLogout={handleLogout} />;
+  }
+
+  // Chưa đăng nhập: chỉ render trang login trần; path khác đang được ép về /login.
+  return isLoginPage ? <Outlet /> : <FullScreenLoader />;
+}
+
+/* Loader toàn màn — hiển thị khi chưa biết trạng thái phiên hoặc đang điều hướng. */
+function FullScreenLoader() {
+  return (
+    <div className="login-bg flex items-center justify-center" style={{ minHeight: '100vh' }}>
+      <Loader2 size={28} className="animate-spin" style={{ color: 'var(--ink-muted)' }} />
+    </div>
+  );
 }
 
 /* ------------------------------------------------------------------ */
